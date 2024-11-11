@@ -36,24 +36,21 @@ ProxyPoint& ProxyPoint::operator=(const ProxyPoint &other)
     return *this;
 }
 
-Eigen::Vector2f ProxyPoint::getPos() const
+PointVector2r ProxyPoint::getPos() const
 {
-    Eigen::Vector2f result;
-    for(int i=0; i<icy::SimParams::dim;i++)
-        result[i] = getValue(icy::SimParams::posx+i);
+    PointVector2r result;
+    for(int i=0;i<SimParams::dim;i++) result[i] = getValue(SimParams::posx+i);
     return result;
 }
 
-Eigen::Vector2f ProxyPoint::getVelocity() const
+PointVector2r ProxyPoint::getVelocity() const
 {
-    Eigen::Vector2f result;
-    for(int i=0; i<icy::SimParams::dim;i++)
-        result[i] = getValue(icy::SimParams::velx+i);
+    PointVector2r result;
+    for(int i=0;i<SimParams::dim;i++) result[i] = getValue(SimParams::velx+i);
     return result;
 }
 
-
-float ProxyPoint::getValue(size_t valueIdx) const
+t_PointReal ProxyPoint::getValue(size_t valueIdx) const
 {
     if(isReference)
         return soa[pos + pitch*valueIdx];
@@ -62,7 +59,7 @@ float ProxyPoint::getValue(size_t valueIdx) const
 }
 
 
-void ProxyPoint::setValue(size_t valueIdx, float value)
+void ProxyPoint::setValue(size_t valueIdx, t_PointReal value)
 {
     if(isReference)
         soa[pos + pitch*valueIdx] = value;
@@ -70,39 +67,74 @@ void ProxyPoint::setValue(size_t valueIdx, float value)
         data[valueIdx] = value;
 }
 
+uint32_t ProxyPoint::getValueInt(size_t valueIdx) const
+{
+    if(isReference)
+        return *reinterpret_cast<uint32_t*>(&soa[pos + pitch*valueIdx]);
+    else
+        return *reinterpret_cast<uint32_t*>(&data[valueIdx]);
+}
+
+void ProxyPoint::setValueInt(size_t valueIdx, uint32_t value)
+{
+    if(isReference)
+        *reinterpret_cast<uint32_t*>(&soa[pos + pitch*valueIdx]) = value;
+    else
+        *reinterpret_cast<uint32_t*>(&data[valueIdx]) = value;
+}
+
 
 bool ProxyPoint::getCrushedStatus()
 {
-    float dval = getValue(icy::SimParams::idx_utility_data);
-    uint32_t val = *reinterpret_cast<uint32_t*>(&dval);
+    uint32_t val = getValueInt(SimParams::idx_utility_data);
     return (val & 0x10000);
 }
 
 bool ProxyPoint::getDisabledStatus()
 {
-    float dval = getValue(icy::SimParams::idx_utility_data);
-    uint32_t val = *reinterpret_cast<uint32_t*>(&dval);
-    return (val & 0x20000) == 0x20000;
+    uint32_t val = getValueInt(SimParams::idx_utility_data);
+    return (val & 0x20000);
 }
-
 
 uint16_t ProxyPoint::getGrain()
 {
-    float dval = getValue(icy::SimParams::idx_utility_data);
-    uint32_t val = *reinterpret_cast<uint32_t*>(&dval);
+    uint32_t val = getValueInt(SimParams::idx_utility_data);
     return (val & 0xffff);
 }
 
-int ProxyPoint::getCellIndex(float hinv, unsigned GridY)
+int ProxyPoint::getCellIndex(unsigned GridY)
 {
-    Eigen::Vector2f v = getPos();
-    Eigen::Vector2i idx = (v*hinv + Eigen::Vector2f::Constant(0.5)).cast<int>();
-    return idx[0]*GridY + idx[1];
+//    Eigen::Vector2f v = getPos();
+//    Eigen::Vector2i idx = (v*hinv + Eigen::Vector2f::Constant(0.5f)).cast<int>();
+//    return idx[0]*GridY + idx[1];
+
+    uint32_t cell = getValueInt(SimParams::integer_cell_idx);
+    uint32_t x_idx = cell & 0xffff;
+    uint32_t y_idx = (cell >> 16);
+    return x_idx*GridY + y_idx;
 }
 
-int ProxyPoint::getXIndex(float hinv) const
+void ProxyPoint::ConvertToIntegerCellFormat(t_PointReal h)
 {
-    float x = getValue(icy::SimParams::posx);
-    int x_idx = (int)(x*hinv + 0.5f);
-    return x_idx;
+    const t_PointReal hinv = 1.0f/h;
+    t_PointReal x = getValue(SimParams::posx);
+    t_PointReal y = getValue(SimParams::posx+1);
+    uint32_t x_idx = (uint32_t)(x*hinv + 0.5);
+    uint32_t y_idx = (uint32_t)(y*hinv + 0.5);
+    uint32_t cell = (y_idx << 16) | x_idx;
+    setValueInt(SimParams::integer_cell_idx, cell);
+
+    x = x*hinv - (t_PointReal)x_idx;
+    y = y*hinv - (t_PointReal)y_idx;
+    setValue(SimParams::posx, x);
+    setValue(SimParams::posx+1, y);
+}
+
+PointVector2r ProxyPoint::getPos(t_PointReal cellsize) const
+{
+    uint32_t cell = getValueInt(SimParams::integer_cell_idx);
+    uint32_t x_idx = cell & 0xffff;
+    uint32_t y_idx = (cell >> 16);
+    PointVector2r cell_pos(x_idx, y_idx);
+    return (getPos() + cell_pos) * cellsize;
 }

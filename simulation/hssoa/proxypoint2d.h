@@ -7,11 +7,11 @@
 
 struct ProxyPoint
 {
-    constexpr static unsigned nArrays = icy::SimParams::nPtsArrays;  // count of arrays in SOA
+    constexpr static unsigned nArrays = SimParams::nPtsArrays;  // count of arrays in SOA
     bool isReference = false;
     unsigned pos, pitch;    // element # and capacity of each array in SOA
-    float *soa;            // reference to SOA (assume contiguous space of size nArrays*pitch)
-    float data[nArrays];    // local copy of the data when isReference==true
+    t_PointReal *soa;            // reference to SOA (assume contiguous space of size nArrays*pitch)
+    t_PointReal data[nArrays];    // local copy of the data when isReference==true
 
     ProxyPoint() { isReference = false; }
 
@@ -19,15 +19,22 @@ struct ProxyPoint
     ProxyPoint& operator=(const ProxyPoint &other);
 
     // access data
-    float getValue(size_t valueIdx) const;   // valueIdx < nArrays
-    void setValue(size_t valueIdx, float value);
-    Eigen::Vector2f getPos() const;
-    Eigen::Vector2f getVelocity() const;
+    t_PointReal getValue(size_t valueIdx) const;   // valueIdx < nArrays
+    void setValue(size_t valueIdx, t_PointReal value);
+    uint32_t getValueInt(size_t valueIdx) const;
+    void setValueInt(size_t valueIdx, uint32_t value);
+
+    PointVector2r getPos() const;
+    PointVector2r getPos(t_PointReal cellsize) const;
+    PointVector2r getVelocity() const;
     bool getCrushedStatus();
     bool getDisabledStatus();
     uint16_t getGrain();
-    int getCellIndex(float hinv, unsigned GridY);  // index of the grid cell at the point's location
-    int getXIndex(float hinv) const;                     // x-index of the grid cell
+
+    int getCellIndex(unsigned GridY);  // index of the grid cell at the point's location
+
+    // other
+    void ConvertToIntegerCellFormat(t_PointReal h);
 };
 
 #endif

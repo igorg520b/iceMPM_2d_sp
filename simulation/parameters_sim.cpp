@@ -2,7 +2,7 @@
 #include <spdlog/spdlog.h>
 
 
-void icy::SimParams::Reset()
+void SimParams::Reset()
 {
     nPtsTotal = 0;
     n_indenter_subdivisions = 100;
@@ -43,8 +43,6 @@ void icy::SimParams::Reset()
     SetupType = 0;
     GrainVariability = 0.50;
 
-    nPartitions = 3;        // one partition of single-gpu; >1 for multi-gpu
-
     ComputeLame();
     ComputeCamClayParams2();
     ComputeHelperVariables();
@@ -52,7 +50,7 @@ void icy::SimParams::Reset()
 }
 
 
-std::string icy::SimParams::ParseFile(std::string fileName)
+std::string SimParams::ParseFile(std::string fileName)
 {
     spdlog::info("SimParams ParseFile {}",fileName);
     if(!std::filesystem::exists(fileName)) throw std::runtime_error("configuration file is not found");
@@ -93,8 +91,6 @@ std::string icy::SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("tpb_P2G")) tpb_P2G = doc["tpb_P2G"].GetInt();
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();
     if(doc.HasMember("tpb_G2P")) tpb_G2P = doc["tpb_G2P"].GetInt();
-    if(doc.HasMember("nPartitions")) nPartitions = doc["nPartitions"].GetInt();
-
 
     ComputeCamClayParams2();
     ComputeHelperVariables();
@@ -114,14 +110,14 @@ std::string icy::SimParams::ParseFile(std::string fileName)
     return result;
 }
 
-void icy::SimParams::ComputeLame()
+void SimParams::ComputeLame()
 {
     lambda = YoungsModulus*PoissonsRatio/((1+PoissonsRatio)*(1-2*PoissonsRatio));
     mu = YoungsModulus/(2*(1+PoissonsRatio));
     kappa = mu*2./3. + lambda;
 }
 
-void icy::SimParams::ComputeHelperVariables()
+void SimParams::ComputeHelperVariables()
 {
     ParticleMass = ParticleVolume * Density;
 
@@ -136,7 +132,7 @@ void icy::SimParams::ComputeHelperVariables()
     vmax_squared = vmax*vmax;
 }
 
-void icy::SimParams::ComputeCamClayParams2()
+void SimParams::ComputeCamClayParams2()
 {
     ComputeLame();
     NACC_beta = IceTensileStrength/IceCompressiveStrength;
@@ -148,7 +144,7 @@ void icy::SimParams::ComputeCamClayParams2()
     spdlog::info("ComputeCamClayParams2() done");
 }
 
-void icy::SimParams::ComputeIntegerBlockCoords()
+void SimParams::ComputeIntegerBlockCoords()
 {
     nxmin = floor(xmin/cellsize);
     nxmax = ceil(xmax/cellsize);

@@ -17,19 +17,19 @@
 
 
 // kernels
-__global__ void partition_kernel_p2g(const int gridX, const int gridX_offset, const int pitch_grid,
+__global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
                               const int count_pts, const int pitch_pts,
-                                     const float *buffer_pts, float *buffer_grid);
+                                     const t_PointReal *buffer_pts, t_GridReal *buffer_grid);
 
-__global__ void partition_kernel_update_nodes(const Eigen::Vector2f indCenter,
-                                              const int nNodes, const int gridX_offset, const int pitch_grid,
-                                              float *_buffer_grid, float *indenter_force_accumulator,
-                                              float simulation_time);
+__global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
+                                              const int nNodes, const int pitch_grid,
+                                              t_GridReal *_buffer_grid, t_PointReal *indenter_force_accumulator,
+                                              t_PointReal simulation_time);
 
-__global__ void partition_kernel_g2p(const bool recordPQ, const bool enablePointTransfer,
-                                     const int gridX, const int gridX_offset, const int pitch_grid,
+__global__ void partition_kernel_g2p(const bool recordPQ,
+                                     const int gridX, const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
-                                     float *buffer_pts, const float *buffer_grid);
+                                     t_PointReal *buffer_pts, const t_GridReal *buffer_grid);
 
 
 
@@ -37,16 +37,22 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const bool enablePoint
 __device__ void svd(const float a[4], float u[4], float sigma[2], float v[4]);
 __device__ void svd2x2(const Eigen::Matrix2f &mA, Eigen::Matrix2f &mU, Eigen::Vector2f &mS, Eigen::Matrix2f &mV);
 
-__device__ void Wolper_Drucker_Prager(icy::Point &p);
-__device__ void CheckIfPointIsInsideFailureSurface(icy::Point &p);
+__device__ void Wolper_Drucker_Prager(const t_PointReal &p_tr, const t_PointReal &q_tr, const t_PointReal &Je_tr,
+                                      const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquared, const PointVector2r &v_s_hat_tr,
+                                      PointMatrix2r &Fe, t_PointReal &Jp_inv);
+__device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const uint16_t &grain,
+                                                   const t_PointReal &p, const t_PointReal &q);
 __device__ Eigen::Matrix2f KirchhoffStress_Wolper(const Eigen::Matrix2f &F);
 
 __device__ void ComputeSVD(icy::Point &p, const float &kappa, const float &mu);
-__device__ void ComputePQ(icy::Point &p, const float &kappa, const float &mu);
+__device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_tr,
+                          const float &kappa, const float &mu, const PointMatrix2r &F);
 __device__ void GetParametersForGrain(short grain, float &pmin, float &pmax, float &qmax, float &beta, float &mSq, float &pmin2);
 
 __device__ Eigen::Vector2f dev_d(Eigen::Vector2f Adiag);
 __device__ Eigen::Matrix2f dev(Eigen::Matrix2f A);
+
+__device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3]);
 
 
 struct GPU_Partition
@@ -76,7 +82,7 @@ struct GPU_Partition
     // host-side data
     int PartitionID;
     int Device;
-    static icy::SimParams *prms;
+    static SimParams *prms;
 
     size_t nPtsPitch, nGridPitch; // in number of elements(!), for coalesced access on the device
     int nPts_partition;    // actual number of points (including disabled)
@@ -101,7 +107,8 @@ struct GPU_Partition
     uint8_t error_code = 0;
 
     // device-side data
-    float *pts_array, *grid_array, *indenter_force_accumulator;
+    float *pts_array, *indenter_force_accumulator;
+    t_GridReal *grid_array;
 
     // frame analysis
     float timing_10_P2GAndHalo;

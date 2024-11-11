@@ -179,7 +179,7 @@ void icy::VisualRepresentation::SynchronizeValues()
     {
         SOAIterator s = model->gpu.hssoa.begin()+i;
         if(s->getDisabledStatus()) continue;
-        Eigen::Vector2f pos = s->getPos();
+        Eigen::Vector2f pos = s->getPos(model->prms.cellsize);
         points->SetPoint((vtkIdType)activePtsCount, pos[0], pos[1], 0);
 //        spdlog::info("setting point {}; {} - {}", activePtsCount, pos[0], pos[1]);
         activePtsCount++;
@@ -230,7 +230,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             if(s->getDisabledStatus()) continue;
-            double value = s->getValue(icy::SimParams::idx_Jp_inv)-1;
+            double value = s->getValue(SimParams::idx_Jp_inv)-1;
             visualized_values->SetValue((vtkIdType)activePtsCount++, (float)value);
         }
         if(activePtsCount != model->prms.nPtsTotal) throw std::runtime_error("SynchronizeValues() point count mismatch");

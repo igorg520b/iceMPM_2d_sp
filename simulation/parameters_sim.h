@@ -14,18 +14,25 @@
 
 // variables related to the formulation of the model
 
-namespace icy { struct SimParams; }
+typedef double t_GridReal;      // data type for grid data
+typedef double t_PointReal;     // data type to store point data
+typedef Eigen::Matrix<t_GridReal, 2, 1> GridVector2r;
+typedef Eigen::Matrix<t_GridReal, 2, 2> GridMatrix2r;
+typedef Eigen::Matrix<t_PointReal, 2, 1> PointVector2r;
+typedef Eigen::Matrix<t_PointReal, 2, 2> PointMatrix2r;
+typedef Eigen::Array<t_PointReal, 2, 1> PointArray2r;
 
-struct icy::SimParams
+struct SimParams
 {
 public:
-    constexpr static float pi = 3.14159265358979323846;
+    constexpr static t_PointReal pi = 3.14159265358979323846;
     constexpr static int dim = 2;
     constexpr static int nGridArrays = 3;
 
     // index of the corresponding array in SoA
     constexpr static size_t idx_utility_data = 0;
-    constexpr static size_t idx_P = idx_utility_data + 1;
+    constexpr static size_t integer_cell_idx = idx_utility_data + 1;
+    constexpr static size_t idx_P = integer_cell_idx + 1;
     constexpr static size_t idx_Q = idx_P + 1;
     constexpr static size_t idx_Jp_inv = idx_Q + 1;
     constexpr static size_t posx = idx_Jp_inv + 1;
@@ -39,40 +46,38 @@ public:
 
     int nPtsTotal;
     int GridXTotal, GridY, GridTotal;
-    float GridXDimension;
+    t_PointReal GridXDimension;
 
-    float InitialTimeStep, SimulationEndTime;
+    t_PointReal InitialTimeStep, SimulationEndTime;
     int UpdateEveryNthStep; // run N steps without update
     int SimulationStep;
-    float SimulationTime;
+    t_PointReal SimulationTime;
 
     // material properties
-    float Gravity, Density, PoissonsRatio, YoungsModulus;
-    float lambda, mu, kappa; // Lame
+    t_PointReal Gravity, Density, PoissonsRatio, YoungsModulus;
+    t_PointReal lambda, mu, kappa; // Lame
 
-    float IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2;
-    float NACC_beta, NACC_M, NACC_Msq;     // these are all computed
+    t_PointReal IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2;
+    t_PointReal NACC_beta, NACC_M, NACC_Msq;     // these are all computed
 
-    float DP_tan_phi, DP_threshold_p;
+    t_PointReal DP_tan_phi, DP_threshold_p;
 
     // indentation params
-    float IndDiameter, IndRSq, IndVelocity, IndDepth;
+    t_PointReal IndDiameter, IndRSq, IndVelocity, IndDepth;
 
-    float cellsize, cellsize_inv, Dp_inv;
-    float xmin, xmax, ymin, ymax;            // bounding box of the material
+    t_PointReal cellsize, cellsize_inv, Dp_inv;
+    t_PointReal xmin, xmax, ymin, ymax;            // bounding box of the material
     int nxmin, nxmax, nymin, nymax;         // same, but nuber of grid cells
 
-    float ParticleVolume, ParticleMass, ParticleViewSize;
+    t_PointReal ParticleVolume, ParticleMass, ParticleViewSize;
 
-    float indenter_x, indenter_x_initial, indenter_y, indenter_y_initial;
-    float Volume;  // total volume (area) of the object
+    t_PointReal indenter_x, indenter_x_initial, indenter_y, indenter_y_initial;
+    t_PointReal Volume;  // total volume (area) of the object
     int SetupType;  // 0 - ice block horizontal indentation; 1 - cone uniaxial compression
-    float GrainVariability;
-
-    int nPartitions; // number of partitions (ideally, one partition per device)
+    t_PointReal GrainVariability;
 
     // computed parameters/properties
-    float dt_vol_Dpinv, dt_Gravity, vmax, vmax_squared;
+    t_PointReal dt_vol_Dpinv, dt_Gravity, vmax, vmax_squared;
 
     void Reset();
     std::string ParseFile(std::string fileName);

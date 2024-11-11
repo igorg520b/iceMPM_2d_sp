@@ -63,12 +63,13 @@ public:
     void RemoveDisabledAndSort(float hinv, unsigned GridY);
     void InitializeBlock(); // set the matrices that are supposed to be identity, i.e. Fe
 
-    float* getPointerToPosX() {return host_buffer + capacity*icy::SimParams::posx;}
-    float* getPointerToPosY() {return host_buffer + capacity*(icy::SimParams::posx+1);}
+    float* getPointerToPosX() {return host_buffer + capacity*SimParams::posx;}
+    float* getPointerToPosY() {return host_buffer + capacity*(SimParams::posx+1);}
     float* getPointerToLine(int idxLine) {return host_buffer + capacity*idxLine;}
 
     std::pair<Eigen::Vector2f, Eigen::Vector2f> getBlockDimensions();
     void offsetBlock(Eigen::Vector2f offset);
+    void convertToIntegerCellFormat(float h);
 };
 
 #endif // HOSTSIDESOA_H

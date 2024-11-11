@@ -1,167 +1,153 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include "point.h"
-
+//#include "point.h"
 
 
 using namespace Eigen;
 
-constexpr float d = 2; // dimensions
-constexpr float coeff1 = 1.4142135623730950; // sqrt((6-d)/2.);
-constexpr float coeff1_inv = 0.7071067811865475;
+constexpr t_PointReal d = 2; // dimensions
+constexpr t_PointReal coeff1 = 1.4142135623730950; // sqrt((6-d)/2.);
+constexpr t_PointReal coeff1_inv = 0.7071067811865475;
 constexpr uint32_t status_crushed = 0x10000;
 constexpr uint32_t status_disabled = 0x20000;
 
 __device__ uint8_t gpu_error_indicator;
-__constant__ icy::SimParams gprms;
+__constant__ SimParams gprms;
 
-
-__device__ Matrix2f KirchhoffStress_Wolper(const Matrix2f &F)
+__device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3])
 {
-    const float &kappa = gprms.kappa;
-    const float &mu = gprms.mu;
-
-    // Kirchhoff stress as per Wolper (2019)
-    float Je = F.determinant();
-    Matrix2f b = F*F.transpose();
-    Matrix2f PFt = mu*(1/Je)*dev(b) + kappa*0.5f*(Je*Je-1.f)*Matrix2f::Identity();
-    return PFt;
+    // optimized method of computing the quadratic (!) weight function (no conditional operators)
+    PointArray2r arr_v0 = 0.5 - pos.array();
+    PointArray2r arr_v1 = pos.array();
+    PointArray2r arr_v2 = pos.array() + 0.5;
+    ww[3] = {0.5*arr_v0*arr_v0, 0.75-arr_v1*arr_v1, 0.5*arr_v2*arr_v2};
 }
 
 
-__global__ void partition_kernel_p2g(const int gridX, const int gridX_offset, const int pitch_grid,
+__global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
-                                     const float *buffer_pts, float *buffer_grid)
+                                     const t_PointReal *buffer_pts, t_GridReal *buffer_grid)
 {
     int pt_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(pt_idx >= count_pts) return;
 
-    const uint32_t* ptr = reinterpret_cast<const uint32_t*>(&buffer_pts[pitch_pts*icy::SimParams::idx_utility_data]);
-    uint32_t utility_data = ptr[pt_idx];
+    uint32_t utility_data = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]);
     if(utility_data & status_disabled) return; // point is disabled
 
-    const float &h = gprms.cellsize;
-    const float &h_inv = gprms.cellsize_inv;
-    const float particle_mass = gprms.ParticleMass;
+    const t_PointReal &h = gprms.cellsize;
+    const t_PointReal &h_inv = gprms.cellsize_inv;
+    const t_PointReal &particle_mass = gprms.ParticleMass;
 
     const int &gridY = gprms.GridY;
 
     // pull point data from SOA
-    Vector2f pos, velocity;
-    Matrix2f Bp, Fe;
+    PointVector2r pos, velocity;
+    PointMatrix2r Bp, Fe;
 
-    for(int i=0; i<icy::SimParams::dim; i++)
+    for(int i=0; i<SimParams::dim; i++)
     {
-        pos[i] = buffer_pts[pt_idx + pitch_pts*(icy::SimParams::posx+i)];
-        velocity[i] = buffer_pts[pt_idx + pitch_pts*(icy::SimParams::velx+i)];
-        for(int j=0; j<icy::SimParams::dim; j++)
+        pos[i] = buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)];
+        velocity[i] = buffer_pts[pt_idx + pitch_pts*(SimParams::velx+i)];
+        for(int j=0; j<SimParams::dim; j++)
         {
-            Fe(i,j) = buffer_pts[pt_idx + pitch_pts*(icy::SimParams::Fe00 + i*icy::SimParams::dim + j)];
-            Bp(i,j) = buffer_pts[pt_idx + pitch_pts*(icy::SimParams::Bp00 + i*icy::SimParams::dim + j)];
+            Fe(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)];
+            Bp(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Bp00 + i*SimParams::dim + j)];
         }
     }
 
-    Matrix2f PFt;
-    PFt = KirchhoffStress_Wolper(Fe);
+    const uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
+    Eigen::Vector2i cell_i((int)(cell & 0xffff), (int)(cell >> 16));
 
-    Matrix2f subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv)*PFt;
+    PointMatrix2r PFt = KirchhoffStress_Wolper(Fe);
+    PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv)*PFt;
 
-    Eigen::Vector2i base_coord_i = (pos*h_inv - Vector2f::Constant(0.5f)).cast<int>(); // coords of base grid node for point
-    Vector2f base_coord = base_coord_i.cast<float>();
-    Vector2f fx = pos*h_inv - base_coord;
+    PointArray2r ww[3];
+    CalculateWeightCoeffs(pos, ww);
 
-    if(base_coord_i.x() - gridX_offset < 0) gpu_error_indicator = 70;
-    if(base_coord_i.y()<0) gpu_error_indicator = 71;
-    if(base_coord_i.x() - gridX_offset>(gridX-3)) gpu_error_indicator = 72;
-    if(base_coord_i.y()>gridY-3) gpu_error_indicator = 73;
-
-    // optimized method of computing the quadratic (!) weight function (no conditional operators)
-    Array2f arr_v0 = 1.5f-fx.array();
-    Array2f arr_v1 = fx.array() - 1.0f;
-    Array2f arr_v2 = fx.array() - 0.5f;
-    Array2f ww[3] = {0.5f*arr_v0*arr_v0, 0.75f-arr_v1*arr_v1, 0.5f*arr_v2*arr_v2};
-
-    for (int i = 0; i < 3; i++)
-        for (int j = 0; j < 3; j++)
+    for (int i = -1; i <= 1; i++)
+        for (int j = -1; j <= 1; j++)
         {
-            float Wip = ww[i][0]*ww[j][1];
-            Vector2f dpos((i-fx[0])*h, (j-fx[1])*h);
-            Vector2f incV = Wip*(velocity*particle_mass + subterm2*dpos);
-            float incM = Wip*particle_mass;
+            t_PointReal Wip = ww[i+1][0]*ww[j+1][1];
+            t_PointReal incM = Wip*particle_mass;
+            PointVector2r dpos((i-pos[0])*h, (j-pos[1])*h);
+            PointVector2r incV = Wip*(velocity*particle_mass + subterm2*dpos);
 
             // the x-index of the cell takes into accout the partition's offset of the gird fragment
-            int i2 = i+base_coord_i[0] - gridX_offset;
-            int j2 = j+base_coord_i[1];
-            int idx_gridnode = j2 + i2*gridY;
+            int idx_gridnode = (j+cell_i[1]) + (i+cell_i[0])*gridY;
+
             // Udpate mass, velocity and force
-            atomicAdd(&buffer_grid[0*pitch_grid + idx_gridnode], incM);
-            atomicAdd(&buffer_grid[1*pitch_grid + idx_gridnode], incV[0]);
-            atomicAdd(&buffer_grid[2*pitch_grid + idx_gridnode], incV[1]);
+            atomicAdd(&buffer_grid[0*pitch_grid + idx_gridnode], (t_GridReal)incM);
+            atomicAdd(&buffer_grid[1*pitch_grid + idx_gridnode], (t_GridReal)incV[0]);
+            atomicAdd(&buffer_grid[2*pitch_grid + idx_gridnode], (t_GridReal)incV[1]);
         }
+
+    // check if a point is out of bounds of the grid box
+    if(cell_i[0] < 1) gpu_error_indicator = 70;
+    if(cell_i[1] < 1) gpu_error_indicator = 71;
+    if(cell_i[0] > (gridX-2)) gpu_error_indicator = 72;
+    if(cell_i[1] > gridY-2) gpu_error_indicator = 73;
 }
 
 
 
 
-__global__ void partition_kernel_update_nodes(const Eigen::Vector2f indCenter,
-                                              const int nNodes, const int gridX_offset, const int pitch_grid,
-                                              float *buffer_grid, float *indenter_force_accumulator,
-                                              float simulation_time)
+__global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
+                                              const int nNodes, const int pitch_grid,
+                                              t_GridReal *buffer_grid, t_PointReal *indenter_force_accumulator,
+                                              t_PointReal simulation_time)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= nNodes) return;
 
     const int &gridY = gprms.GridY;
 
-    float mass = buffer_grid[idx];
-    float vx = buffer_grid[1*pitch_grid + idx];
-    float vy = buffer_grid[2*pitch_grid + idx];
+    t_GridReal mass = buffer_grid[idx];
     if(mass == 0) return;
 
-    const float &indRsq = gprms.IndRSq;
-    const float &dt = gprms.InitialTimeStep;
-    const float &ind_velocity = gprms.IndVelocity;
-    const float &cellsize = gprms.cellsize;
-    const float &vmax = gprms.vmax;
-    const float &vmax_squared = gprms.vmax_squared;
+    t_GridReal vx = buffer_grid[1*pitch_grid + idx];
+    t_GridReal vy = buffer_grid[2*pitch_grid + idx];
+
+    const t_PointReal &indRsq = gprms.IndRSq;
+    const t_PointReal &dt = gprms.InitialTimeStep;
+    const t_PointReal &ind_velocity = gprms.IndVelocity;
+    const t_PointReal &cellsize = gprms.cellsize;
+    const t_PointReal &vmax = gprms.vmax;
+    const t_PointReal &vmax_squared = gprms.vmax_squared;
     const int &gridXTotal = gprms.GridXTotal;
 
-    const Vector2f vco(ind_velocity,0);  // velocity of the collision object (indenter)
+    const GridVector2r vco(ind_velocity,0);  // velocity of the collision object (indenter)
 
-    Vector2i gi(idx/gridY+gridX_offset, idx%gridY);   // integer x-y index of the grid node
-    Vector2f gnpos = gi.cast<float>()*cellsize;    // position of the grid node in the whole grid
+    Vector2i gi(idx/gridY, idx%gridY);   // integer x-y index of the grid node
+    GridVector2r gnpos = gi.cast<t_GridReal>()*cellsize;    // position of the grid node in the whole grid
 
-    Vector2f velocity(vx, vy);
+    GridVector2r velocity(vx, vy);
     velocity /= mass;
     velocity[1] -= gprms.dt_Gravity;
 
-
-
     if(velocity.squaredNorm() > vmax_squared) velocity = velocity.normalized()*vmax;
 
-
     // indenter
-    Vector2f n = gnpos - indCenter;
+    GridVector2r n = gnpos - indCenter;
     if(n.squaredNorm() < indRsq)
     {
         // grid node is inside the indenter
-        Vector2f vrel = velocity - vco;
+        GridVector2r vrel = velocity - vco;
         n.normalize();
-        float vn = vrel.dot(n);   // normal component of the velocity
+        t_GridReal vn = vrel.dot(n);   // normal component of the velocity
         if(vn < 0)
         {
-            Vector2f vt = vrel - n*vn;   // tangential portion of relative velocity
-            Vector2f prev_velocity = velocity;
+            GridVector2r vt = vrel - n*vn;   // tangential portion of relative velocity
+            GridVector2r prev_velocity = velocity;
             velocity = vco + vt;
 
             // force on the indenter
-            Vector2f force = (prev_velocity-velocity)*mass/dt;
+            GridVector2r force = (prev_velocity-velocity)*mass/dt;
             float angle = atan2f((float)n[0],(float)n[1]);
-            angle += icy::SimParams::pi;
-            angle *= gprms.n_indenter_subdivisions/ (2*icy::SimParams::pi);
+            angle += SimParams::pi;
+            angle *= gprms.n_indenter_subdivisions/ (2*SimParams::pi);
             int index = min(max((int)angle, 0), gprms.n_indenter_subdivisions-1);
-            atomicAdd(&indenter_force_accumulator[0+2*index], force[0]);
-            atomicAdd(&indenter_force_accumulator[1+2*index], force[1]);
+            atomicAdd(&indenter_force_accumulator[0+2*index], (t_PointReal)force[0]);
+            atomicAdd(&indenter_force_accumulator[1+2*index], (t_PointReal)force[1]);
         }
     }
 
@@ -175,108 +161,126 @@ __global__ void partition_kernel_update_nodes(const Eigen::Vector2f indCenter,
     // side boundary conditions would go here
 
     // write the updated grid velocity back to memory
-    buffer_grid[1*pitch_grid + idx] = velocity[0];
-    buffer_grid[2*pitch_grid + idx] = velocity[1];
+    buffer_grid[1*pitch_grid + idx] = (t_GridReal)velocity[0];
+    buffer_grid[2*pitch_grid + idx] = (t_GridReal)velocity[1];
 }
 
 
 
-__global__ void partition_kernel_g2p(const bool recordPQ, const bool enablePointTransfer,
-                                     const int gridX, const int gridX_offset, const int pitch_grid,
+__global__ void partition_kernel_g2p(const bool recordPQ,
+                                     const int gridX, const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
-                                     float *buffer_pts, const float *buffer_grid)
+                                     t_PointReal *buffer_pts, const t_GridReal *buffer_grid)
 {
     const int pt_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(pt_idx >= count_pts) return;
 
     // skip if a point is disabled
-    icy::Point p;
-    uint32_t* ptr = reinterpret_cast<uint32_t*>(&buffer_pts[pt_idx + pitch_pts*icy::SimParams::idx_utility_data]);
-    p.utility_data = *ptr;
-    if(p.utility_data & status_disabled) return; // point is disabled
+    uint32_t utility_data = *reinterpret_cast<uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]);
+    if(utility_data & status_disabled) return; // point is disabled
 
-    const float &h_inv = gprms.cellsize_inv;
-    const float &dt = gprms.InitialTimeStep;
+    const t_PointReal &h_inv = gprms.cellsize_inv;
+    const t_PointReal &dt = gprms.InitialTimeStep;
+    const t_PointReal &mu = gprms.mu;
+    const t_PointReal &kappa = gprms.kappa;
     const int &gridY = gprms.GridY;
-    const float &mu = gprms.mu;
-    const float &kappa = gprms.kappa;
+
+    PointVector2r pos;
+    PointMatrix2r Fe;
 
     // pull point data from SOA
-    for(int i=0; i<icy::SimParams::dim; i++)
+    for(int i=0; i<SimParams::dim; i++)
     {
-        p.pos[i] = buffer_pts[pt_idx + pitch_pts*(icy::SimParams::posx+i)];
-        for(int j=0; j<icy::SimParams::dim; j++)
+        pos[i] = buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)];
+        for(int j=0; j<SimParams::dim; j++)
         {
-            p.Fe(i,j) = buffer_pts[pt_idx + pitch_pts*(icy::SimParams::Fe00 + i*icy::SimParams::dim + j)];
+            Fe(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)];
         }
     }
-    p.Jp_inv = buffer_pts[pt_idx + pitch_pts*icy::SimParams::idx_Jp_inv];
-    p.grain = (short)p.utility_data;
+    t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
+    uint16_t grain = (unit16_t) (utility_data && 0xffff);
 
-    // coords of base grid node for point
-    Eigen::Vector2i base_coord_i = (p.pos*h_inv - Vector2f::Constant(0.5f)).cast<int>();
-    Vector2f base_coord = base_coord_i.cast<float>();
-    Vector2f fx = p.pos*h_inv - base_coord;
+    uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
+    // coords of grid node for point
+    Eigen::Vector2i cell_i((int)(cell & 0xffff), (int)(cell >> 16));
 
     // optimized method of computing the quadratic weight function without conditional operators
-    Array2f arr_v0 = 1.5f - fx.array();
-    Array2f arr_v1 = fx.array() - 1.0f;
-    Array2f arr_v2 = fx.array() - 0.5f;
-    Array2f ww[3] = {0.5f*arr_v0*arr_v0, 0.75f-arr_v1*arr_v1, 0.5f*arr_v2*arr_v2};
+    PointArray2r ww[3];
+    CalculateWeightCoeffs(pos, ww);
 
-    p.velocity.setZero();
-    p.Bp.setZero();
+    PointVector2r p_velocity;
+    PointMatrix2r p_Bp;
+    p_velocity.setZero(); p_Bp.setZero();
 
-    for (int i = 0; i < 3; i++)
-        for (int j = 0; j < 3; j++)
+    for (int i = -1; i <= 1; i++)
+        for (int j = -1; j <= 1; j++)
         {
-            Vector2f dpos = Vector2f(i, j) - fx;
-            float weight = ww[i][0]*ww[j][1];
+            PointVector2r dpos = PointVector2r(i, j) - pos;
+            t_PointReal weight = ww[i+1][0]*ww[j+1][1];
 
-            int i2 = i+base_coord_i[0]-gridX_offset;
-            int j2 = j+base_coord_i[1];
-            int idx_gridnode = j2 + i2*gridY;
+            int idx_gridnode = (j+cell_i[1]) + (i+cell_i[0])*gridY; // grid node index within the 3x3 loop
 
-            Vector2f node_velocity;
-            node_velocity[0] = buffer_grid[1*pitch_grid + idx_gridnode];
-            node_velocity[1] = buffer_grid[2*pitch_grid + idx_gridnode];
-            p.velocity += weight * node_velocity;
-            p.Bp += (4.f*h_inv)*weight *(node_velocity*dpos.transpose());
+            PointVector2r node_velocity;
+            node_velocity[0] = (t_PointReal)buffer_grid[1*pitch_grid + idx_gridnode];
+            node_velocity[1] = (t_PointReal)buffer_grid[2*pitch_grid + idx_gridnode];
+            p_velocity += weight * node_velocity;
+            p_Bp += (4.f*h_inv*weight) * (node_velocity*dpos.transpose());
         }
 
     // Advection and update of the deformation gradient
-    p.pos += p.velocity * dt;
-    p.Fe = (Matrix2f::Identity() + dt*p.Bp) * p.Fe;     // p.Bp is the gradient of the velocity vector (it seems)
+    pos += p_velocity * (dt*h_inv); // position is in local cell coordinates [-0.5 to 0.5]
 
-    ComputePQ(p, kappa, mu);    // pre-computes USV, p, q, etc.
-    if(!(p.utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(p);
-    if(p.utility_data & status_crushed)
+    // encode the position of the point as coordinates + cell index
+    bool cell_updated = false;
+    if(pos.x() > 0.5) { pos.x() -= 1.0; cell_i.x()++; cell_updated = true; }
+    else if(pos.x() < -0.5) { pos.x() += 1.0; cell_i.x()--; cell_updated = true; }
+    if(pos.y() > 0.5) { pos.y() -= 1.0; cell_i.y()++; cell_updated = true; }
+    else if(pos.y() < -0.5) { pos.y() += 1.0; cell_i.y()--; cell_updated = true; }
+
+    Fe = (PointMatrix2r::Identity() + dt*p_Bp) * Fe;     // p.Bp is the gradient of the velocity vector (it seems)
+
+    t_PointReal Je_tr, p_tr, q_tr;
+
+    ComputePQ(Je_tr, p_tr, q_tr, kappa, mu, Fe);    // computes P, Q, J
+
+
+    if(!(utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(utility_data, grain, p_tr, q_tr);
+    if(utility_data & status_crushed)
     {
-        ComputeSVD(p, kappa, mu);    // pre-computes USV, p, q, etc.
-        Wolper_Drucker_Prager(p);
+        PointMatrix2r U, V;
+        PointVector2r vSigmaSquared, v_s_hat_tr;
+        ComputeSVD(p, kappa, mu);
+
+        Wolper_Drucker_Prager(p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
     }
 
-
     // distribute the values of p back into GPU memory: pos, velocity, BP, Fe, Jp_inv, PQ
-    for(int i=0; i<icy::SimParams::dim; i++)
+    for(int i=0; i<SimParams::dim; i++)
     {
-        buffer_pts[pt_idx + pitch_pts*(icy::SimParams::posx+i)] = p.pos[i];
-        buffer_pts[pt_idx + pitch_pts*(icy::SimParams::velx+i)] = p.velocity[i];
-        for(int j=0; j<icy::SimParams::dim; j++)
+        buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)] = pos[i];
+        buffer_pts[pt_idx + pitch_pts*(SimParams::velx+i)] = p_velocity[i];
+        for(int j=0; j<SimParams::dim; j++)
         {
-            buffer_pts[pt_idx + pitch_pts*(icy::SimParams::Fe00 + i*icy::SimParams::dim + j)] = p.Fe(i,j);
-            buffer_pts[pt_idx + pitch_pts*(icy::SimParams::Bp00 + i*icy::SimParams::dim + j)] = p.Bp(i,j);
+            buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)] = Fe(i,j);
+            buffer_pts[pt_idx + pitch_pts*(SimParams::Bp00 + i*SimParams::dim + j)] = p_Bp(i,j);
         }
     }
 
-    buffer_pts[pt_idx + pitch_pts*icy::SimParams::idx_Jp_inv] = p.Jp_inv;
-    *ptr = p.utility_data; // includes crushed/disable status and grain number
+    buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv] = Jp_inv;
+    // save crushed/disabled status
+    *reinterpret_cast<uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]) = utility_data;
+
+    if(cell_updated)
+    {
+        cell = ((uint32_t)cell_i[1] << 16) | (uint32_t)cell_i[0];
+        *reinterpret_cast<uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]) = cell;
+    }
 
     // at the end of each cycle, PQ are recorded for visualization
     if(recordPQ)
     {
-        buffer_pts[pt_idx + pitch_pts*icy::SimParams::idx_P] = p.p_tr;
-        buffer_pts[pt_idx + pitch_pts*icy::SimParams::idx_Q] = p.q_tr;
+        buffer_pts[pt_idx + pitch_pts*SimParams::idx_P] = p_tr;
+        buffer_pts[pt_idx + pitch_pts*SimParams::idx_Q] = q_tr;
     }
 }
 
@@ -313,14 +317,14 @@ __device__ void ComputeSVD(icy::Point &p, const float &kappa, const float &mu)
     p.v_s_hat_tr = mu/p.Je_tr * dev_d(p.vSigmaSquared); //mu * pow(Je_tr,-2./d)* dev(SigmaSquared);
 }
 
-__device__ void ComputePQ(icy::Point &p, const float &kappa, const float &mu)
-{
-    Matrix2f &F = p.Fe;
-    p.Je_tr = F.determinant();
-    p.p_tr = -(kappa/2.f) * (p.Je_tr*p.Je_tr - 1.f);
 
-    p.q_tr = coeff1*mu*(1.f/p.Je_tr)*dev(F*F.transpose()).norm();
-//    p.v_s_hat_tr = mu/p.Je_tr * dev_d(p.vSigmaSquared); //mu * pow(Je_tr,-2./d)* dev(SigmaSquared);
+
+__device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_tr,
+    const float &kappa, const float &mu, const PointMatrix2r &F)
+{
+    Je_tr = F.determinant();
+    p_tr = -(kappa/2.) * (Je_tr*Je_tr - 1.);
+    q_tr = coeff1*mu*(1./Je_tr)*dev(F*F.transpose()).norm();
 }
 
 
@@ -359,80 +363,92 @@ __device__ Eigen::Matrix2f dev(Eigen::Matrix2f A)
 
 
 
-__device__ void CheckIfPointIsInsideFailureSurface(icy::Point &p)
+__device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const uint16_t &grain,
+                            const t_PointReal &p, const t_PointReal &q)
 {
     float beta, M_sq, pmin, pmax, qmax, pmin2;
-    GetParametersForGrain(p.grain, pmin, pmax, qmax, beta, M_sq, pmin2);
+    GetParametersForGrain(grain, pmin, pmax, qmax, beta, M_sq, pmin2);
 
-    if(p.p_tr<0)
+    if(p<0)
     {
-        if(p.p_tr<pmin2) {p.utility_data |= status_crushed; return;}
-        float q0 = 2*sqrt(-pmax*pmin)*qmax/(pmax-pmin);
-        float k = -q0/pmin2;
-        float q_limit = k*(p.p_tr-pmin2);
-        if(p.q_tr > q_limit) {p.utility_data |= status_crushed; return;}
+        if(p<pmin2) { utility_data |= status_crushed; return; }
+        t_PointReal q0 = 2*sqrt(-pmax*pmin)*qmax/(pmax-pmin);
+        t_PointReal k = -q0/pmin2;
+        t_PointReal q_limit = k*(p-pmin2);
+        if(q > q_limit) { utility_data |= status_crushed; return; }
     }
     else
     {
-        float y = (1.f+2.f*beta)*p.q_tr*p.q_tr + M_sq*(p.p_tr + beta*pmax)*(p.p_tr - pmax);
-        if(y > 0)
-        {
-            p.utility_data |= status_crushed;
-        }
+        t_PointReal y = (1.+2.*beta)*q*q + M_sq*(p+beta*pmax) * (p-pmax);
+        if(y > 0) utility_data |= status_crushed;
     }
 }
 
 
 
-__device__ void Wolper_Drucker_Prager(icy::Point &p)
+__device__ void Wolper_Drucker_Prager(const t_PointReal &p_tr, const t_PointReal &q_tr, const t_PointReal &Je_tr,
+const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquared, const PointVector2r &v_s_hat_tr,
+                                      PointMatrix2r &Fe, t_PointReal &Jp_inv)
 {
-    const float &mu = gprms.mu;
-    const float &kappa = gprms.kappa;
-    const float &tan_phi = gprms.DP_tan_phi;
-    const float &DP_threshold_p = gprms.DP_threshold_p;
+    const t_PointReal &mu = gprms.mu;
+    const t_PointReal &kappa = gprms.kappa;
+    const t_PointReal &tan_phi = gprms.DP_tan_phi;
+    const t_PointReal &DP_threshold_p = gprms.DP_threshold_p;
 
-    const float &pmax = gprms.IceCompressiveStrength;
-    const float &qmax = gprms.IceShearStrength;
+    const t_PointReal &pmax = gprms.IceCompressiveStrength;
+    const t_PointReal &qmax = gprms.IceShearStrength;
 
-
-    if(p.p_tr < -DP_threshold_p || p.Jp_inv < 1.f)
+    if(p_tr < -DP_threshold_p || Jp_inv < 1)
     {
         // tear in tension or compress until original state
-        float p_new = -DP_threshold_p;
-        float Je_new = sqrt(-2.f*p_new/kappa + 1.f);
-        float sqrt_Je_new = sqrt(Je_new);
+        t_PointReal p_new = -DP_threshold_p;
+        t_PointReal Je_new = sqrt(-2*p_new/kappa + 1);
+        t_PointReal sqrt_Je_new = sqrt(Je_new);
 
-        Vector2f vSigma_new(sqrt_Je_new,sqrt_Je_new); //= Vector2d::Constant(1.)*sqrt(Je_new);  //Matrix2d::Identity() * pow(Je_new, 1./(double)d);
-        p.Fe = p.U*vSigma_new.asDiagonal()*p.V.transpose();
-        p.Jp_inv *= Je_new/p.Je_tr;
+        PointVector2r vSigma_new(sqrt_Je_new,sqrt_Je_new); //= Vector2d::Constant(1.)*sqrt(Je_new);  //Matrix2d::Identity() * pow(Je_new, 1./(double)d);
+        Fe = U*vSigma_new.asDiagonal()*V.transpose();
+        Jp_inv *= Je_new/Je_tr;
     }
     else
     {
-        float q_n_1;
+        t_PointReal q_n_1;
 
-        if(p.p_tr > pmax)
+        if(p_tr > pmax)
         {
             q_n_1 = 0;
         }
         else
         {
-            float q_from_dp = (p.p_tr+DP_threshold_p)*tan_phi;
+            t_PointReal q_from_dp = (p_tr+DP_threshold_p)*tan_phi;
             //q_n_1 = min(q_from_dp,qmax);
 
-            const float pmin = -gprms.IceTensileStrength;
-            float q_from_failure_surface = 2.f*sqrt((pmax-p.p_tr)*(p.p_tr-pmin))*qmax/(pmax-pmin);
+            const t_PointReal pmin = -gprms.IceTensileStrength;
+            t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_tr)*(p_tr-pmin))*qmax/(pmax-pmin);
             q_n_1 = min(q_from_failure_surface, q_from_dp);
         }
 
-        if(p.q_tr >= q_n_1)
+        if(q_tr >= q_n_1)
         {
             // project onto YS
-            float s_hat_n_1_norm = q_n_1*coeff1_inv;
+            t_PointReal s_hat_n_1_norm = q_n_1*coeff1_inv;
             //Matrix2d B_hat_E_new = s_hat_n_1_norm*(pow(Je_tr,2./d)/mu)*s_hat_tr.normalized() + Matrix2d::Identity()*(SigmaSquared.trace()/d);
-            Vector2f vB_hat_E_new = s_hat_n_1_norm*(p.Je_tr/mu)*p.v_s_hat_tr.normalized() +
-                                    Vector2f::Constant(1.f)*(p.vSigmaSquared.sum()/d);
-            Vector2f vSigma_new = vB_hat_E_new.array().sqrt().matrix();
-            p.Fe = p.U*vSigma_new.asDiagonal()*p.V.transpose();
+            PointVector2r vB_hat_E_new = s_hat_n_1_norm*(Je_tr/mu)*v_s_hat_tr.normalized() +
+                                    PointVector2r::Constant(1)*(vSigmaSquared.sum()/d);
+            PointVector2r vSigma_new = vB_hat_E_new.array().sqrt().matrix();
+            Fe = U*vSigma_new.asDiagonal()*V.transpose();
         }
     }
+}
+
+
+__device__ Matrix2f KirchhoffStress_Wolper(const Matrix2f &F)
+{
+    const float &kappa = gprms.kappa;
+    const float &mu = gprms.mu;
+
+    // Kirchhoff stress as per Wolper (2019)
+    float Je = F.determinant();
+    Matrix2f b = F*F.transpose();
+    Matrix2f PFt = mu*(1/Je)*dev(b) + kappa*0.5f*(Je*Je-1.f)*Matrix2f::Identity();
+    return PFt;
 }

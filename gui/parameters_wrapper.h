@@ -12,7 +12,7 @@ class ParamsWrapper : public QObject
 {
     Q_OBJECT
 
-    icy::SimParams *prms;
+    SimParams *prms;
 
     Q_PROPERTY(double in_TimeStep READ getTimeStep WRITE setTimeStep NOTIFY propertyChanged)
     double getTimeStep() {return prms->InitialTimeStep;}
@@ -89,8 +89,8 @@ class ParamsWrapper : public QObject
     void setDP_threshold_p(double val) {prms->DP_threshold_p = val;}
 
     Q_PROPERTY(double DP_phi READ getDPPhi WRITE setDPPhi NOTIFY propertyChanged)
-    double getDPPhi() {return std::atan(prms->DP_tan_phi)*180/icy::SimParams::pi;}
-    void setDPPhi(double val) {prms->DP_tan_phi = tan(val*icy::SimParams::pi/180);}
+    double getDPPhi() {return std::atan(prms->DP_tan_phi)*180/SimParams::pi;}
+    void setDPPhi(double val) {prms->DP_tan_phi = tan(val*SimParams::pi/180);}
 
     Q_PROPERTY(double DP_tan_phi READ getDPTanPhi NOTIFY propertyChanged)
     double getDPTanPhi() {return prms->DP_tan_phi;}
@@ -130,7 +130,7 @@ class ParamsWrapper : public QObject
 
 
 public:
-    ParamsWrapper(icy::SimParams *p)
+    ParamsWrapper(SimParams *p)
     {
         this->prms = p;
         Reset();

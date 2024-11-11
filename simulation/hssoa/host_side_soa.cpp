@@ -4,13 +4,13 @@
 std::pair<Eigen::Vector2f, Eigen::Vector2f> HostSideSOA::getBlockDimensions()
 {
     Eigen::Vector2f result[2];
-    for(int k=0;k<icy::SimParams::dim;k++)
+    for(int k=0;k<SimParams::dim;k++)
     {
         std::pair<SOAIterator, SOAIterator> it_res = std::minmax_element(begin(), end(),
                                                                          [k](ProxyPoint &p1, ProxyPoint &p2)
-                                                                         {return p1.getValue(icy::SimParams::posx+k)<p2.getValue(icy::SimParams::posx+k);});
-        result[0][k] = (*it_res.first).getValue(icy::SimParams::posx+k);
-        result[1][k] = (*it_res.second).getValue(icy::SimParams::posx+k);
+                                                                         {return p1.getValue(SimParams::posx+k)<p2.getValue(SimParams::posx+k);});
+        result[0][k] = (*it_res.first).getValue(SimParams::posx+k);
+        result[1][k] = (*it_res.second).getValue(SimParams::posx+k);
     }
     return {result[0], result[1]};
 }
@@ -21,22 +21,32 @@ void HostSideSOA::offsetBlock(Eigen::Vector2f offset)
     {
         ProxyPoint &p = *it;
         Eigen::Vector2f pos = p.getPos() + offset;
-        p.setValue(icy::SimParams::posx, pos.x());
-        p.setValue(icy::SimParams::posx+1, pos.y());
+        p.setValue(SimParams::posx, pos.x());
+        p.setValue(SimParams::posx+1, pos.y());
+    }
+}
+
+void HostSideSOA::convertToIntegerCellFormat(float h)
+{
+    for(SOAIterator it = begin(); it!=end(); ++it)
+    {
+        ProxyPoint &p = *it;
+        p.ConvertToIntegerCellFormat(h);
     }
 }
 
 
+
 void HostSideSOA::RemoveDisabledAndSort(float hinv, unsigned GridY)
 {
-    spdlog::info("RemoveDisabledAndSort; nPtsArrays {}", icy::SimParams::nPtsArrays);
+    spdlog::info("RemoveDisabledAndSort; nPtsArrays {}", SimParams::nPtsArrays);
     unsigned size_before = size;
     SOAIterator it_result = std::remove_if(begin(), end(), [](ProxyPoint &p){return p.getDisabledStatus();});
     size = it_result.m_point.pos;
     spdlog::info("RemoveDisabledAndSort: {} removed; new size {}", size_before-size, size);
     std::sort(begin(), end(),
-              [&hinv,&GridY](ProxyPoint &p1, ProxyPoint &p2)
-              {return p1.getCellIndex(hinv,GridY)<p2.getCellIndex(hinv,GridY);});
+              [&](ProxyPoint &p1, ProxyPoint &p2)
+              {return p1.getCellIndex(GridY)<p2.getCellIndex(GridY);});
     spdlog::info("RemoveDisabledAndSort done");
 }
 
@@ -45,7 +55,7 @@ void HostSideSOA::Allocate(unsigned capacity)
 {
     cudaFreeHost(host_buffer);
     this->capacity = capacity;
-    size_t allocation_size = sizeof(float)*capacity*icy::SimParams::nPtsArrays;
+    size_t allocation_size = sizeof(float)*capacity*SimParams::nPtsArrays;
     cudaError_t err = cudaMallocHost(&host_buffer, allocation_size);
     if(err != cudaSuccess)
     {
@@ -64,9 +74,9 @@ void HostSideSOA::InitializeBlock()
     for(SOAIterator it = begin(); it!=end(); ++it)
     {
         ProxyPoint &p = *it;
-        p.setValue(icy::SimParams::idx_Jp_inv, 1.f);
-        for(int i=0; i<icy::SimParams::dim; i++)
-                p.setValue(icy::SimParams::Fe00+i*2+i, 1.f);
+        p.setValue(SimParams::idx_Jp_inv, 1.f);
+        for(int i=0; i<SimParams::dim; i++)
+                p.setValue(SimParams::Fe00+i*2+i, 1.f);
     }
     spdlog::info("HostSideSOA::InitializeBlock() done");
 }

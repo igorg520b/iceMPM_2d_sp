@@ -5,7 +5,7 @@
 
 
 
-icy::SimParams *GPU_Partition::prms;
+SimParams *GPU_Partition::prms;
 
 
 
@@ -19,7 +19,7 @@ void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offse
     err = cudaSetDevice(Device);
     if(err != cudaSuccess) throw std::runtime_error("transfer_from_device() set");
 
-    for(int j=0;j<icy::SimParams::nPtsArrays;j++)
+    for(int j=0;j<SimParams::nPtsArrays;j++)
     {
         if((point_idx_offset + nPts_partition) > hssoa.capacity)
             throw std::runtime_error("transfer_from_device() HSSOA capacity");
@@ -53,7 +53,7 @@ void GPU_Partition::transfer_points_from_soa_to_device(HostSideSOA &hssoa, int p
     if(err != cudaSuccess) throw std::runtime_error("transfer_points_from_soa_to_device");
 
     // due to the layout of host-side SOA, we transfer the pts arrays one-by-one
-    for(int i=0;i<icy::SimParams::nPtsArrays;i++)
+    for(int i=0;i<SimParams::nPtsArrays;i++)
     {
         float *ptr_dst = pts_array + i*nPtsPitch;
         float *ptr_src = hssoa.getPointerToLine(i)+point_idx_offset;
@@ -136,16 +136,11 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
     const int &gy = prms->GridY;
 
     size_t total_device = 0;
-    size_t grid_size_local_requested = sizeof(float) * gy * gx;
-    err = cudaMallocPitch (&grid_array, &nGridPitch, grid_size_local_requested, icy::SimParams::nGridArrays);
-    total_device += nGridPitch * icy::SimParams::nGridArrays;
-    if(err != cudaSuccess)
-    {
-        const char *s = cudaGetErrorString(err);
-        spdlog::error("err {}: {}", err, s);
-        throw std::runtime_error("GPU_Partition allocate grid array");
-    }
-    nGridPitch /= sizeof(float); // assume that this divides without remainder
+    size_t grid_size_local_requested = sizeof(t_GridReal) * gy * gx;
+    err = cudaMallocPitch (&grid_array, &nGridPitch, grid_size_local_requested, SimParams::nGridArrays);
+    total_device += nGridPitch * SimParams::nGridArrays;
+    if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid array");
+    nGridPitch /= sizeof(t_GridReal); // assume that this divides without remainder
 
     // host-side indenter accumulator
     err = cudaMallocHost(&host_side_indenter_force_accumulator, prms->IndenterArraySize());
@@ -158,8 +153,8 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
 
     // points
     const size_t pts_buffer_requested = sizeof(float) * n_points_capacity;
-    err = cudaMallocPitch(&pts_array, &nPtsPitch, pts_buffer_requested, icy::SimParams::nPtsArrays);
-    total_device += nPtsPitch * icy::SimParams::nPtsArrays;
+    err = cudaMallocPitch(&pts_array, &nPtsPitch, pts_buffer_requested, SimParams::nPtsArrays);
+    total_device += nPtsPitch * SimParams::nPtsArrays;
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate");
     nPtsPitch /= sizeof(float);
 
@@ -175,7 +170,7 @@ void GPU_Partition::update_constants()
     cudaSetDevice(Device);
     cudaError_t err = cudaMemcpyToSymbol(gpu_error_indicator, &error_code, sizeof(error_code));
     if(err != cudaSuccess) throw std::runtime_error("gpu_error_indicator initialization");
-    err = cudaMemcpyToSymbol(gprms, prms, sizeof(icy::SimParams));
+    err = cudaMemcpyToSymbol(gprms, prms, sizeof(SimParams));
     if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: gprms");
     spdlog::info("Constant symbols copied to device {}; partition {}", Device, PartitionID);
 }
@@ -195,7 +190,7 @@ void GPU_Partition::reset_grid()
 {
     cudaError_t err;
     cudaSetDevice(Device);
-    size_t gridArraySize = nGridPitch * icy::SimParams::nGridArrays * sizeof(float);
+    size_t gridArraySize = nGridPitch * SimParams::nGridArrays * sizeof(t_GridReal);
     err = cudaMemsetAsync(grid_array, 0, gridArraySize, streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("cuda_reset_grid error");
 }
@@ -204,12 +199,11 @@ void GPU_Partition::p2g()
 {
     cudaSetDevice(Device);
     const int gridX = prms->GridXTotal; // todo: change to gridx_partition
-    const int gridXoffset = GridX_offset;
 
     const int &n = nPts_partition;
     const int &tpb = prms->tpb_P2G;
     const int blocksPerGrid = (n + tpb - 1) / tpb;
-    partition_kernel_p2g<<<blocksPerGrid, tpb, 0, streamCompute>>>(gridX, gridXoffset, nGridPitch,
+    partition_kernel_p2g<<<blocksPerGrid, tpb, 0, streamCompute>>>(gridX, nGridPitch,
                          nPts_partition, nPtsPitch, pts_array, grid_array);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("p2g kernel");
 }
@@ -223,7 +217,7 @@ void GPU_Partition::update_nodes(float simulation_time)
     int nBlocks = (nGridNodes + tpb - 1) / tpb;
     Eigen::Vector2f ind_center(prms->indenter_x, prms->indenter_y);
 
-    partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(ind_center, nGridNodes, GridX_offset,
+    partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(ind_center, nGridNodes,
                                                                       nGridPitch, grid_array, indenter_force_accumulator,
                                                                       simulation_time);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
@@ -240,7 +234,7 @@ void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer)
     const int nBlocks = (n + tpb - 1) / tpb;
 
     partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ, enablePointTransfer,
-                                                             GridX_partition, GridX_offset, nGridPitch,
+                                                             GridX_partition, nGridPitch,
                                                              nPts_partition, nPtsPitch,
                                                              pts_array, grid_array);
 

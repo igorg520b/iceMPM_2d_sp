@@ -42,7 +42,7 @@ public:
 
     void UnlockCycleMutex();
 
-    icy::SimParams prms;
+    SimParams prms;
     GPU_Implementation5 gpu;
     bool SyncTopologyRequired;
 

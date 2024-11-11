@@ -64,6 +64,7 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
 
     Eigen::Vector2f offset(x_offset, y_offset);
     if(!offsetIncluded) model->gpu.hssoa.offsetBlock(offset);
+    model->gpu.hssoa.convertToIntegerCellFormat(model->prms.cellsize);
     model->gpu.hssoa.RemoveDisabledAndSort(model->prms.cellsize_inv, model->prms.GridY);
     model->gpu.hssoa.InitializeBlock();
 
