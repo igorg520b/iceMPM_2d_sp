@@ -76,7 +76,7 @@ void GPU_Implementation5::record_timings(const bool enablePointTransfer)
 
 void GPU_Implementation5::initialize()
 {
-    const int &nPartitions = model->prms.nPartitions;
+    const int nPartitions = 1;
 
     // count available GPUs
     int deviceCount = 0;
@@ -97,9 +97,8 @@ void GPU_Implementation5::initialize()
 void GPU_Implementation5::split_hssoa_into_partitions()
 {
     spdlog::info("split_hssoa_into_partitions() start");
-    const float &hinv = model->prms.cellsize_inv;
+    const t_PointReal &hinv = model->prms.cellsize_inv;
     const int &GridXTotal = model->prms.GridXTotal;
-    const int &nPartitions = model->prms.nPartitions;
 
     GPU_Partition &p = partitions.front();
     p.nPts_disabled = 0;

@@ -19,14 +19,14 @@ struct ProxyPoint
     ProxyPoint& operator=(const ProxyPoint &other);
 
     // access data
-    t_PointReal getValue(size_t valueIdx) const;   // valueIdx < nArrays
+    t_PointReal getValue(size_t valueIdx);   // valueIdx < nArrays
     void setValue(size_t valueIdx, t_PointReal value);
-    uint32_t getValueInt(size_t valueIdx) const;
+    uint32_t getValueInt(size_t valueIdx);
     void setValueInt(size_t valueIdx, uint32_t value);
 
-    PointVector2r getPos() const;
-    PointVector2r getPos(t_PointReal cellsize) const;
-    PointVector2r getVelocity() const;
+    PointVector2r getPos();
+    PointVector2r getPos(t_PointReal cellsize);
+    PointVector2r getVelocity();
     bool getCrushedStatus();
     bool getDisabledStatus();
     uint16_t getGrain();

@@ -1,6 +1,6 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
-//#include "point.h"
+#include "parameters_sim.h"
 
 
 using namespace Eigen;
@@ -20,7 +20,9 @@ __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[
     PointArray2r arr_v0 = 0.5 - pos.array();
     PointArray2r arr_v1 = pos.array();
     PointArray2r arr_v2 = pos.array() + 0.5;
-    ww[3] = {0.5*arr_v0*arr_v0, 0.75-arr_v1*arr_v1, 0.5*arr_v2*arr_v2};
+    ww[0] = 0.5*arr_v0*arr_v0;
+    ww[1] = 0.75-arr_v1*arr_v1;
+    ww[2] = 0.5*arr_v2*arr_v2;
 }
 
 
@@ -198,7 +200,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
         }
     }
     t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
-    uint16_t grain = (unit16_t) (utility_data && 0xffff);
+    uint16_t grain = (uint16_t) (utility_data && 0xffff);
 
     uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
     // coords of grid node for point
@@ -248,9 +250,9 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
     if(utility_data & status_crushed)
     {
         PointMatrix2r U, V;
-        PointVector2r vSigmaSquared, v_s_hat_tr;
-        ComputeSVD(p, kappa, mu);
+        PointVector2r vSigma, vSigmaSquared, v_s_hat_tr;
 
+        ComputeSVD(Fe, U, vSigma, V, vSigmaSquared, v_s_hat_tr, kappa, mu, Je_tr);
         Wolper_Drucker_Prager(p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
     }
 
@@ -291,36 +293,11 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
 
 
 
-__device__ void svd(const float a[4], float u[4], float sigma[2], float v[4])
-{
-    GivensRotation<float> gv(0, 1);
-    GivensRotation<float> gu(0, 1);
-    singular_value_decomposition(a, gu, sigma, gv);
-    gu.template fill<2, float>(u);
-    gv.template fill<2, float>(v);
-}
-
-__device__ void svd2x2(const Matrix2f &mA, Matrix2f &mU, Vector2f &mS, Matrix2f &mV)
-{
-    float U[4], V[4], S[2];
-    float a[4] = {mA(0,0), mA(0,1), mA(1,0), mA(1,1)};
-    svd(a, U, S, V);
-    mU << U[0],U[1],U[2],U[3];
-    mS << S[0],S[1];
-    mV << V[0],V[1],V[2],V[3];
-}
-
-__device__ void ComputeSVD(icy::Point &p, const float &kappa, const float &mu)
-{
-    svd2x2(p.Fe, p.U, p.vSigma, p.V);
-    p.vSigmaSquared = p.vSigma.array().square().matrix();
-    p.v_s_hat_tr = mu/p.Je_tr * dev_d(p.vSigmaSquared); //mu * pow(Je_tr,-2./d)* dev(SigmaSquared);
-}
 
 
 
 __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_tr,
-    const float &kappa, const float &mu, const PointMatrix2r &F)
+    const t_PointReal &kappa, const t_PointReal &mu, const PointMatrix2r &F)
 {
     Je_tr = F.determinant();
     p_tr = -(kappa/2.) * (Je_tr*Je_tr - 1.);
@@ -328,11 +305,11 @@ __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_
 }
 
 
-__device__ void GetParametersForGrain(short grain, float &pmin, float &pmax, float &qmax,
-                                      float &beta, float &mSq, float &pmin2)
+__device__ void GetParametersForGrain(uint32_t grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
+                                      t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2)
 {
-    float var2 = 1.0f + gprms.GrainVariability*0.033f*(-15 + (grain+3)%30);
-    float var3 = 1.0f + gprms.GrainVariability*0.1f*(-10 + (grain+4)%11);
+    t_PointReal var2 = 1.0 + gprms.GrainVariability*0.033*(-15 + (grain+3)%30);
+    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + (grain+4)%11);
 
     pmax = gprms.IceCompressiveStrength;// * var1;
     pmin = -gprms.IceTensileStrength;// * var2;
@@ -340,7 +317,7 @@ __device__ void GetParametersForGrain(short grain, float &pmin, float &pmax, flo
     pmin2 = -gprms.IceTensileStrength2 * var2;
 
     beta = gprms.NACC_beta;
-    mSq = (4.f*qmax*qmax*(1.f+2.f*beta))/((pmax-pmin)*(pmax-pmin));
+    mSq = (4.*qmax*qmax*(1.+2.*beta))/((pmax-pmin)*(pmax-pmin));
 }
 
 
@@ -348,25 +325,13 @@ __device__ void GetParametersForGrain(short grain, float &pmin, float &pmax, flo
 
 
 
-
-
-// deviatoric part of a diagonal matrix
-__device__ Vector2f dev_d(Vector2f Adiag)
-{
-    return Adiag - Adiag.sum()/2.f*Vector2f::Constant(1.f);
-}
-
-__device__ Eigen::Matrix2f dev(Eigen::Matrix2f A)
-{
-    return A - A.trace()/2*Eigen::Matrix2f::Identity();
-}
 
 
 
 __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const uint16_t &grain,
                             const t_PointReal &p, const t_PointReal &q)
 {
-    float beta, M_sq, pmin, pmax, qmax, pmin2;
+    t_PointReal beta, M_sq, pmin, pmax, qmax, pmin2;
     GetParametersForGrain(grain, pmin, pmax, qmax, beta, M_sq, pmin2);
 
     if(p<0)
@@ -441,14 +406,59 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
 }
 
 
-__device__ Matrix2f KirchhoffStress_Wolper(const Matrix2f &F)
+__device__ void svd(const t_PointReal a[4], t_PointReal u[4], t_PointReal sigma[2], t_PointReal v[4])
 {
-    const float &kappa = gprms.kappa;
-    const float &mu = gprms.mu;
+    GivensRotation<t_PointReal> gv(0, 1);
+    GivensRotation<t_PointReal> gu(0, 1);
+    singular_value_decomposition(a, gu, sigma, gv);
+    gu.template fill<2, t_PointReal>(u);
+    gv.template fill<2, t_PointReal>(v);
+}
+
+__device__ void svd2x2(const PointMatrix2r &mA, PointMatrix2r &mU, PointVector2r &mS, PointMatrix2r &mV)
+{
+    t_PointReal U[4], V[4], S[2];
+    t_PointReal a[4] {mA(0,0), mA(0,1), mA(1,0), mA(1,1)};
+    svd(a, U, S, V);
+    mU << U[0],U[1],U[2],U[3];
+    mS << S[0],S[1];
+    mV << V[0],V[1],V[2],V[3];
+}
+
+__device__ void ComputeSVD(const PointMatrix2r &Fe, PointMatrix2r &U, PointVector2r &vSigma, PointMatrix2r &V,
+                            PointVector2r &vSigmaSquared, PointVector2r v_s_hat_tr,
+                            const t_PointReal &kappa, const t_PointReal &mu, const t_PointReal &Je_tr)
+{
+    svd2x2(Fe, U, vSigma, V);
+    vSigmaSquared = vSigma.array().square().matrix();
+    v_s_hat_tr = mu/Je_tr * dev_d(vSigmaSquared); //mu * pow(Je_tr,-2./d)* dev(SigmaSquared);
+}
+
+
+
+// deviatoric part of a diagonal matrix
+__device__ PointVector2r dev_d(PointVector2r Adiag)
+{
+    return Adiag - Adiag.sum()/2.*PointVector2r::Constant(1.);
+}
+
+__device__ PointMatrix2r dev(PointMatrix2r A)
+{
+    return A - A.trace()/2*PointMatrix2r::Identity();
+}
+
+
+
+__device__ PointMatrix2r KirchhoffStress_Wolper(const PointMatrix2r &F)
+{
+    const t_PointReal &kappa = gprms.kappa;
+    const t_PointReal &mu = gprms.mu;
 
     // Kirchhoff stress as per Wolper (2019)
-    float Je = F.determinant();
-    Matrix2f b = F*F.transpose();
-    Matrix2f PFt = mu*(1/Je)*dev(b) + kappa*0.5f*(Je*Je-1.f)*Matrix2f::Identity();
+    t_PointReal Je = F.determinant();
+    PointMatrix2r b = F*F.transpose();
+    PointMatrix2r PFt = mu*(1./Je)*dev(b) + kappa*0.5*(Je*Je-1.)*PointMatrix2r::Identity();
     return PFt;
 }
+
+

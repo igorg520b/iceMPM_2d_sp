@@ -34,23 +34,32 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
 
 
 
-__device__ void svd(const float a[4], float u[4], float sigma[2], float v[4]);
-__device__ void svd2x2(const Eigen::Matrix2f &mA, Eigen::Matrix2f &mU, Eigen::Vector2f &mS, Eigen::Matrix2f &mV);
+__device__ void svd(const t_PointReal a[4], t_PointReal u[4], t_PointReal sigma[2], t_PointReal v[4]);
+
+__device__ void svd2x2(const PointMatrix2r &mA, PointMatrix2r &mU, PointVector2r &mS, PointMatrix2r &mV);
 
 __device__ void Wolper_Drucker_Prager(const t_PointReal &p_tr, const t_PointReal &q_tr, const t_PointReal &Je_tr,
                                       const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquared, const PointVector2r &v_s_hat_tr,
                                       PointMatrix2r &Fe, t_PointReal &Jp_inv);
+
 __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const uint16_t &grain,
                                                    const t_PointReal &p, const t_PointReal &q);
-__device__ Eigen::Matrix2f KirchhoffStress_Wolper(const Eigen::Matrix2f &F);
 
-__device__ void ComputeSVD(icy::Point &p, const float &kappa, const float &mu);
+__device__ void ComputeSVD(const PointMatrix2r &Fe, PointMatrix2r &U, PointVector2r &vSigma, PointMatrix2r &V,
+                           PointVector2r &vSigmaSquared, PointVector2r v_s_hat_tr,
+                           const t_PointReal &kappa, const t_PointReal &mu, const t_PointReal &Je_tr);
+
 __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_tr,
-                          const float &kappa, const float &mu, const PointMatrix2r &F);
-__device__ void GetParametersForGrain(short grain, float &pmin, float &pmax, float &qmax, float &beta, float &mSq, float &pmin2);
+                          const t_PointReal &kappa, const t_PointReal &mu, const PointMatrix2r &F);
 
-__device__ Eigen::Vector2f dev_d(Eigen::Vector2f Adiag);
-__device__ Eigen::Matrix2f dev(Eigen::Matrix2f A);
+__device__ void GetParametersForGrain(uint32_t grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
+                                      t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2);
+
+__device__ PointMatrix2r KirchhoffStress_Wolper(const PointMatrix2r &F);
+
+__device__ PointVector2r dev_d(PointVector2r Adiag);
+
+__device__ PointMatrix2r dev(PointMatrix2r A);
 
 __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3]);
 
@@ -90,7 +99,7 @@ struct GPU_Partition
     int GridX_partition;   // size of the portion of the grid for which this partition is "responsible"
     int GridX_offset;      // index where the grid starts in this partition
 
-    float *host_side_indenter_force_accumulator;
+    t_PointReal *host_side_indenter_force_accumulator;
 
     // stream and events
     cudaStream_t streamCompute;
@@ -107,7 +116,7 @@ struct GPU_Partition
     uint8_t error_code = 0;
 
     // device-side data
-    float *pts_array, *indenter_force_accumulator;
+    t_PointReal *pts_array, *indenter_force_accumulator;
     t_GridReal *grid_array;
 
     // frame analysis

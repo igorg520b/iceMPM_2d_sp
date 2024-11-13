@@ -26,7 +26,7 @@ public:
 
     ProxyPoint m_point;
 
-    SOAIterator(unsigned pos, float *soa_data, unsigned pitch);
+    SOAIterator(unsigned pos, t_PointReal *soa_data, unsigned pitch);
     SOAIterator(const SOAIterator& other);
     SOAIterator& operator=(const SOAIterator& other);
     SOAIterator() {};
@@ -52,7 +52,7 @@ public:
 class HostSideSOA
 {
 public:
-    float *host_buffer = nullptr; // buffer in page-locked memory for transferring the data between device and host
+    t_PointReal *host_buffer = nullptr; // buffer in page-locked memory for transferring the data between device and host
     unsigned capacity;  // max number of points that the host-side buffer can hold
     unsigned size = 0;      // the number of points, including "disabled" ones, in the host buffer (may fluctuate)
 
@@ -60,16 +60,16 @@ public:
     SOAIterator end(){return SOAIterator(size, host_buffer, capacity);}
 
     void Allocate(unsigned capacity);
-    void RemoveDisabledAndSort(float hinv, unsigned GridY);
+    void RemoveDisabledAndSort(unsigned GridY);
     void InitializeBlock(); // set the matrices that are supposed to be identity, i.e. Fe
 
-    float* getPointerToPosX() {return host_buffer + capacity*SimParams::posx;}
-    float* getPointerToPosY() {return host_buffer + capacity*(SimParams::posx+1);}
-    float* getPointerToLine(int idxLine) {return host_buffer + capacity*idxLine;}
+    t_PointReal* getPointerToPosX() {return host_buffer + capacity*SimParams::posx;}
+    t_PointReal* getPointerToPosY() {return host_buffer + capacity*(SimParams::posx+1);}
+    t_PointReal* getPointerToLine(int idxLine) {return host_buffer + capacity*idxLine;}
 
-    std::pair<Eigen::Vector2f, Eigen::Vector2f> getBlockDimensions();
-    void offsetBlock(Eigen::Vector2f offset);
-    void convertToIntegerCellFormat(float h);
+    std::pair<PointVector2r, PointVector2r> getBlockDimensions();
+    void offsetBlock(PointVector2r offset);
+    void convertToIntegerCellFormat(t_PointReal h);
 };
 
 #endif // HOSTSIDESOA_H

@@ -88,7 +88,7 @@ public:
     void ComputeIntegerBlockCoords();
     float PointsPerCell() {return nPtsTotal/(Volume/(cellsize*cellsize));}
     int AnimationFrameNumber() { return SimulationStep / UpdateEveryNthStep;}
-    size_t IndenterArraySize() { return sizeof(float)*n_indenter_subdivisions*dim; }
+    size_t IndenterArraySize() { return sizeof(t_PointReal)*n_indenter_subdivisions*dim; }
 };
 
 #endif

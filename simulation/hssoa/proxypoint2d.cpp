@@ -36,21 +36,21 @@ ProxyPoint& ProxyPoint::operator=(const ProxyPoint &other)
     return *this;
 }
 
-PointVector2r ProxyPoint::getPos() const
+PointVector2r ProxyPoint::getPos()
 {
     PointVector2r result;
     for(int i=0;i<SimParams::dim;i++) result[i] = getValue(SimParams::posx+i);
     return result;
 }
 
-PointVector2r ProxyPoint::getVelocity() const
+PointVector2r ProxyPoint::getVelocity()
 {
     PointVector2r result;
     for(int i=0;i<SimParams::dim;i++) result[i] = getValue(SimParams::velx+i);
     return result;
 }
 
-t_PointReal ProxyPoint::getValue(size_t valueIdx) const
+t_PointReal ProxyPoint::getValue(size_t valueIdx)
 {
     if(isReference)
         return soa[pos + pitch*valueIdx];
@@ -67,7 +67,7 @@ void ProxyPoint::setValue(size_t valueIdx, t_PointReal value)
         data[valueIdx] = value;
 }
 
-uint32_t ProxyPoint::getValueInt(size_t valueIdx) const
+uint32_t ProxyPoint::getValueInt(size_t valueIdx)
 {
     if(isReference)
         return *reinterpret_cast<uint32_t*>(&soa[pos + pitch*valueIdx]);
@@ -130,7 +130,7 @@ void ProxyPoint::ConvertToIntegerCellFormat(t_PointReal h)
     setValue(SimParams::posx+1, y);
 }
 
-PointVector2r ProxyPoint::getPos(t_PointReal cellsize) const
+PointVector2r ProxyPoint::getPos(t_PointReal cellsize)
 {
     uint32_t cell = getValueInt(SimParams::integer_cell_idx);
     uint32_t x_idx = cell & 0xffff;

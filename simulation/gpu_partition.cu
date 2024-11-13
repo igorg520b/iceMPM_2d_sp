@@ -24,10 +24,10 @@ void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offse
         if((point_idx_offset + nPts_partition) > hssoa.capacity)
             throw std::runtime_error("transfer_from_device() HSSOA capacity");
 
-        float *ptr_src = pts_array + j*nPtsPitch;
-        float *ptr_dst = hssoa.getPointerToLine(j)+point_idx_offset;
+        t_PointReal *ptr_src = pts_array + j*nPtsPitch;
+        t_PointReal *ptr_dst = hssoa.getPointerToLine(j)+point_idx_offset;
 
-        err = cudaMemcpyAsync(ptr_dst, ptr_src, nPts_partition*sizeof(float), cudaMemcpyDeviceToHost, streamCompute);
+        err = cudaMemcpyAsync(ptr_dst, ptr_src, nPts_partition*sizeof(t_PointReal), cudaMemcpyDeviceToHost, streamCompute);
         if(err != cudaSuccess)
         {
             const char *errorString = cudaGetErrorString(err);
@@ -55,9 +55,9 @@ void GPU_Partition::transfer_points_from_soa_to_device(HostSideSOA &hssoa, int p
     // due to the layout of host-side SOA, we transfer the pts arrays one-by-one
     for(int i=0;i<SimParams::nPtsArrays;i++)
     {
-        float *ptr_dst = pts_array + i*nPtsPitch;
-        float *ptr_src = hssoa.getPointerToLine(i)+point_idx_offset;
-        err = cudaMemcpyAsync(ptr_dst, ptr_src, nPts_partition*sizeof(float), cudaMemcpyHostToDevice, streamCompute);
+        t_PointReal *ptr_dst = pts_array + i*nPtsPitch;
+        t_PointReal *ptr_src = hssoa.getPointerToLine(i)+point_idx_offset;
+        err = cudaMemcpyAsync(ptr_dst, ptr_src, nPts_partition*sizeof(t_PointReal), cudaMemcpyHostToDevice, streamCompute);
         if(err != cudaSuccess)
         {
             const char* errorString = cudaGetErrorString(err);
@@ -152,7 +152,7 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
     if(err != cudaSuccess) throw std::runtime_error("cuda_allocate_arrays");
 
     // points
-    const size_t pts_buffer_requested = sizeof(float) * n_points_capacity;
+    const size_t pts_buffer_requested = sizeof(t_PointReal) * n_points_capacity;
     err = cudaMallocPitch(&pts_array, &nPtsPitch, pts_buffer_requested, SimParams::nPtsArrays);
     total_device += nPtsPitch * SimParams::nPtsArrays;
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate");
@@ -233,7 +233,7 @@ void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer)
     const int &tpb = prms->tpb_G2P;
     const int nBlocks = (n + tpb - 1) / tpb;
 
-    partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ, enablePointTransfer,
+    partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ,
                                                              GridX_partition, nGridPitch,
                                                              nPts_partition, nPtsPitch,
                                                              pts_array, grid_array);
@@ -260,7 +260,7 @@ void GPU_Partition::record_timings(const bool enablePointTransfer)
         throw std::runtime_error("record_timings 1");
     }
 
-    if(prms->nPartitions > 1)
+    if(false)
     {
         err = cudaEventElapsedTime(&_acceptHalo, event_20_grid_halo_sent, event_30_halo_accepted);
         if(err != cudaSuccess) throw std::runtime_error("record_timings 2");

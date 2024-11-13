@@ -28,10 +28,24 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     model->gpu.hssoa.Allocate(nPoints);
     model->gpu.hssoa.size = nPoints;
 
+    std::vector<float> buffer(nPoints);
+
     // read
-    file.openDataSet("x").read(model->gpu.hssoa.getPointerToPosX(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("y").read(model->gpu.hssoa.getPointerToPosY(), H5::PredType::NATIVE_FLOAT);
-    dataset_grains.read(model->gpu.hssoa.host_buffer, H5::PredType::NATIVE_UINT32);
+    file.openDataSet("x").read(buffer.data(), H5::PredType::NATIVE_FLOAT);
+    t_PointReal *hssoa_ptr = model->gpu.hssoa.getPointerToPosX();
+    for(int i=0;i<nPoints;i++) hssoa_ptr[i] = (t_PointReal)buffer[i];
+
+    file.openDataSet("y").read(buffer.data(), H5::PredType::NATIVE_FLOAT);
+    hssoa_ptr = model->gpu.hssoa.getPointerToPosY();
+    for(int i=0;i<nPoints;i++) hssoa_ptr[i] = (t_PointReal)buffer[i];
+
+    std::vector<uint32_t> buffer2(nPoints);
+    dataset_grains.read(buffer2.data(), H5::PredType::NATIVE_UINT32);
+    hssoa_ptr = model->gpu.hssoa.getPointerToLine(SimParams::idx_utility_data);
+    for(int i=0;i<nPoints;i++)
+    {
+        *reinterpret_cast<uint32_t*>(&hssoa_ptr[i]) = buffer2[i];
+    }
 
     // read volume attribute
     H5::Attribute att_volume = dataset_grains.openAttribute("volume");
@@ -56,16 +70,16 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     spdlog::info("block extent x: [{}, {}], y: [{}, {}]", model->prms.xmin, model->prms.xmax, model->prms.ymin, model->prms.ymax);
 
 
-    const float &h = model->prms.cellsize;
-    const float box_x = model->prms.GridXTotal*h;
-    const float length = model->prms.xmax - model->prms.xmin;
-    const float x_offset = (box_x - length)/2;
-    const float y_offset = 2*h;
+    const t_PointReal &h = model->prms.cellsize;
+    const t_PointReal box_x = model->prms.GridXTotal*h;
+    const t_PointReal length = model->prms.xmax - model->prms.xmin;
+    const t_PointReal x_offset = (box_x - length)/2;
+    const t_PointReal y_offset = 2*h;
 
-    Eigen::Vector2f offset(x_offset, y_offset);
+    PointVector2r offset(x_offset, y_offset);
     if(!offsetIncluded) model->gpu.hssoa.offsetBlock(offset);
     model->gpu.hssoa.convertToIntegerCellFormat(model->prms.cellsize);
-    model->gpu.hssoa.RemoveDisabledAndSort(model->prms.cellsize_inv, model->prms.GridY);
+    model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY);
     model->gpu.hssoa.InitializeBlock();
 
     // set indenter starting position

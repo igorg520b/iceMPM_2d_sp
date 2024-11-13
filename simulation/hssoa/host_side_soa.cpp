@@ -1,9 +1,9 @@
 #include "host_side_soa.h"
 
 
-std::pair<Eigen::Vector2f, Eigen::Vector2f> HostSideSOA::getBlockDimensions()
+std::pair<PointVector2r, PointVector2r> HostSideSOA::getBlockDimensions()
 {
-    Eigen::Vector2f result[2];
+    PointVector2r result[2];
     for(int k=0;k<SimParams::dim;k++)
     {
         std::pair<SOAIterator, SOAIterator> it_res = std::minmax_element(begin(), end(),
@@ -15,18 +15,18 @@ std::pair<Eigen::Vector2f, Eigen::Vector2f> HostSideSOA::getBlockDimensions()
     return {result[0], result[1]};
 }
 
-void HostSideSOA::offsetBlock(Eigen::Vector2f offset)
+void HostSideSOA::offsetBlock(PointVector2r offset)
 {
     for(SOAIterator it = begin(); it!=end(); ++it)
     {
         ProxyPoint &p = *it;
-        Eigen::Vector2f pos = p.getPos() + offset;
+        PointVector2r pos = p.getPos() + offset;
         p.setValue(SimParams::posx, pos.x());
         p.setValue(SimParams::posx+1, pos.y());
     }
 }
 
-void HostSideSOA::convertToIntegerCellFormat(float h)
+void HostSideSOA::convertToIntegerCellFormat(t_PointReal h)
 {
     for(SOAIterator it = begin(); it!=end(); ++it)
     {
@@ -37,7 +37,7 @@ void HostSideSOA::convertToIntegerCellFormat(float h)
 
 
 
-void HostSideSOA::RemoveDisabledAndSort(float hinv, unsigned GridY)
+void HostSideSOA::RemoveDisabledAndSort(unsigned GridY)
 {
     spdlog::info("RemoveDisabledAndSort; nPtsArrays {}", SimParams::nPtsArrays);
     unsigned size_before = size;
@@ -55,7 +55,7 @@ void HostSideSOA::Allocate(unsigned capacity)
 {
     cudaFreeHost(host_buffer);
     this->capacity = capacity;
-    size_t allocation_size = sizeof(float)*capacity*SimParams::nPtsArrays;
+    size_t allocation_size = sizeof(t_PointReal)*capacity*SimParams::nPtsArrays;
     cudaError_t err = cudaMallocHost(&host_buffer, allocation_size);
     if(err != cudaSuccess)
     {
@@ -86,7 +86,7 @@ void HostSideSOA::InitializeBlock()
 
 // ==================================================== SOAIterator
 
-SOAIterator::SOAIterator(unsigned pos, float *soa_data, unsigned pitch)
+SOAIterator::SOAIterator(unsigned pos, t_PointReal *soa_data, unsigned pitch)
 {
     m_point.isReference = true;
     m_point.pos = pos;

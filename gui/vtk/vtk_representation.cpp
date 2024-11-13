@@ -142,7 +142,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
 
     int gx = model->prms.GridXTotal;
     int gy = model->prms.GridY;
-    float &h = model->prms.cellsize;
+    t_PointReal &h = model->prms.cellsize;
     structuredGrid->SetDimensions(gx, gy, 1);
 
     grid_points->SetNumberOfPoints(gx*gy);
@@ -179,7 +179,7 @@ void icy::VisualRepresentation::SynchronizeValues()
     {
         SOAIterator s = model->gpu.hssoa.begin()+i;
         if(s->getDisabledStatus()) continue;
-        Eigen::Vector2f pos = s->getPos(model->prms.cellsize);
+        PointVector2r pos = s->getPos(model->prms.cellsize);
         points->SetPoint((vtkIdType)activePtsCount, pos[0], pos[1], 0);
 //        spdlog::info("setting point {}; {} - {}", activePtsCount, pos[0], pos[1]);
         activePtsCount++;
@@ -277,7 +277,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             if(s->getDisabledStatus()) continue;
-            Eigen::Vector2f vel = s->getVelocity();
+            PointVector2r vel = s->getVelocity();
             float value = (float)vel.norm();
             if(value>=1.9) value=1.9;
             visualized_values->SetValue((vtkIdType)activePtsCount++, (float)value);

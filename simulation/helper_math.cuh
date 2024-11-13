@@ -80,34 +80,40 @@ template <typename T> __device__ void inline my_swap(T& a, T& b)
 template<typename T>
 __forceinline__ __device__ void singular_value_decomposition(
         const T aa[4],
-        GivensRotation<float>& u,
+        GivensRotation<t_PointReal>& u,
         T sigma[2],
-        GivensRotation<float>& v) {
-
-    float s_sym[4];///< column-major
-    float a[4] {aa[0], aa[2], aa[1], aa[3]};
+        GivensRotation<t_PointReal>& v)
+{
+    t_PointReal s_sym[4];///< column-major
+    t_PointReal a[4] {aa[0], aa[2], aa[1], aa[3]};
     polar_decomposition(a, u, s_sym);
-    float cosine;
-    float sine;
-    float x  = s_sym[0];
-    float y  = s_sym[2];
-    float z  = s_sym[3];
-    float y2 = y * y;
-    if(y2 == 0) {
+    t_PointReal cosine;
+    t_PointReal sine;
+    t_PointReal x  = s_sym[0];
+    t_PointReal y  = s_sym[2];
+    t_PointReal z  = s_sym[3];
+    t_PointReal y2 = y * y;
+    if(y2 == 0)
+    {
         // S is already diagonal
         cosine	 = 1;
         sine	 = 0;
         sigma[0] = x;
         sigma[1] = z;
-    } else {
-        float tau = T(0.5) * (x - z);
-        float w   = sqrt(tau * tau + y2);
+    }
+    else
+    {
+        t_PointReal tau = T(0.5) * (x - z);
+        t_PointReal w   = sqrt(tau * tau + y2);
         // w > y > 0
-        float t;
-        if(tau > 0) {
+        t_PointReal t;
+        if(tau > 0)
+        {
             // tau + w > w > y > 0 ==> division is safe
             t = y / (tau + w);
-        } else {
+        }
+        else
+        {
             // tau - w < -w < -y < 0 ==> division is safe
             t = y / (tau - w);
         }
@@ -118,9 +124,9 @@ __forceinline__ __device__ void singular_value_decomposition(
       sigma = v'SV. Only compute the diagonals for efficiency.
       Also utilize symmetry of S and don't form v yet.
     */
-        float c2  = cosine * cosine;
-        float csy = 2 * cosine * sine * y;
-        float s2  = sine * sine;
+        t_PointReal c2  = cosine * cosine;
+        t_PointReal csy = 2 * cosine * sine * y;
+        t_PointReal s2  = sine * sine;
         sigma[0]   = c2 * x - csy + s2 * z;
         sigma[1]   = s2 * x + csy + c2 * z;
     }
