@@ -28,7 +28,7 @@ public:
     icy::Model *model;
     std::vector<GPU_Partition> partitions;
     HostSideSOA hssoa;
-    Eigen::Vector2f indenter_force;
+    PointVector2r indenter_force;
 
     std::function<void()> transfer_completion_callback;
 

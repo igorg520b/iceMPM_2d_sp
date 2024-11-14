@@ -37,7 +37,7 @@ void HostSideSOA::convertToIntegerCellFormat(t_PointReal h)
 
 
 
-void HostSideSOA::RemoveDisabledAndSort(unsigned GridY)
+void HostSideSOA::RemoveDisabledAndSort(int GridY)
 {
     spdlog::info("RemoveDisabledAndSort; nPtsArrays {}", SimParams::nPtsArrays);
     unsigned size_before = size;

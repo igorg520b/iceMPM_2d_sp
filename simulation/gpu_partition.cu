@@ -156,7 +156,7 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
     err = cudaMallocPitch(&pts_array, &nPtsPitch, pts_buffer_requested, SimParams::nPtsArrays);
     total_device += nPtsPitch * SimParams::nPtsArrays;
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate");
-    nPtsPitch /= sizeof(float);
+    nPtsPitch /= sizeof(t_PointReal);
 
     spdlog::info("allocate: P {}-{}:  GridPitch/Y {}; Pts {}; total {:.2} Mb",
                  PartitionID, Device,
@@ -215,7 +215,7 @@ void GPU_Partition::update_nodes(float simulation_time)
 
     int tpb = prms->tpb_Upd;
     int nBlocks = (nGridNodes + tpb - 1) / tpb;
-    Eigen::Vector2f ind_center(prms->indenter_x, prms->indenter_y);
+    GridVector2r ind_center(prms->indenter_x, prms->indenter_y);
 
     partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(ind_center, nGridNodes,
                                                                       nGridPitch, grid_array, indenter_force_accumulator,
@@ -227,7 +227,7 @@ void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer)
 {
     cudaError_t err;
     err = cudaSetDevice(Device);
-    if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("g2p cudaSetDevice");
+    if(err != cudaSuccess) throw std::runtime_error("g2p cudaSetDevice");
 
     const int &n = nPts_partition;
     const int &tpb = prms->tpb_G2P;

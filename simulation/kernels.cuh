@@ -14,7 +14,7 @@ constexpr uint32_t status_disabled = 0x20000;
 __device__ uint8_t gpu_error_indicator;
 __constant__ SimParams gprms;
 
-__device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3])
+__forceinline__ __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3])
 {
     // optimized method of computing the quadratic (!) weight function (no conditional operators)
     PointArray2r arr_v0 = 0.5 - pos.array();
@@ -37,7 +37,7 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
     if(utility_data & status_disabled) return; // point is disabled
 
     const t_PointReal &h = gprms.cellsize;
-    const t_PointReal &h_inv = gprms.cellsize_inv;
+//    const t_PointReal &h_inv = gprms.cellsize_inv;
     const t_PointReal &particle_mass = gprms.ParticleMass;
 
     const int &gridY = gprms.GridY;
@@ -60,7 +60,9 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
     const uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
     Eigen::Vector2i cell_i((int)(cell & 0xffff), (int)(cell >> 16));
 
-    PointMatrix2r PFt = KirchhoffStress_Wolper(Fe);
+    PointMatrix2r PFt;
+    PFt = KirchhoffStress_Wolper(Fe);
+    // PFt = Water(buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv]);
     PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv)*PFt;
 
     PointArray2r ww[3];
@@ -117,7 +119,7 @@ __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
     const t_PointReal &vmax_squared = gprms.vmax_squared;
     const int &gridXTotal = gprms.GridXTotal;
 
-    const GridVector2r vco(ind_velocity,0);  // velocity of the collision object (indenter)
+    GridVector2r vco(ind_velocity,0);  // velocity of the collision object (indenter)
 
     Vector2i gi(idx/gridY, idx%gridY);   // integer x-y index of the grid node
     GridVector2r gnpos = gi.cast<t_GridReal>()*cellsize;    // position of the grid node in the whole grid
@@ -141,6 +143,7 @@ __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
             GridVector2r vt = vrel - n*vn;   // tangential portion of relative velocity
             GridVector2r prev_velocity = velocity;
             velocity = vco + vt;
+            if(velocity.squaredNorm() > vmax_squared) velocity = velocity.normalized()*vmax;
 
             // force on the indenter
             GridVector2r force = (prev_velocity-velocity)*mass/dt;
@@ -150,6 +153,7 @@ __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
             int index = min(max((int)angle, 0), gprms.n_indenter_subdivisions-1);
             atomicAdd(&indenter_force_accumulator[0+2*index], (t_PointReal)force[0]);
             atomicAdd(&indenter_force_accumulator[1+2*index], (t_PointReal)force[1]);
+
         }
     }
 
@@ -241,7 +245,11 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
 
     Fe = (PointMatrix2r::Identity() + dt*p_Bp) * Fe;     // p.Bp is the gradient of the velocity vector (it seems)
 
+    // water
+//    Jp_inv *= (PointMatrix2r::Identity() + dt*p_Bp).determinant();  // for water model
+
     t_PointReal Je_tr, p_tr, q_tr;
+
 
     ComputePQ(Je_tr, p_tr, q_tr, kappa, mu, Fe);    // computes P, Q, J
 
@@ -305,11 +313,11 @@ __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_
 }
 
 
-__device__ void GetParametersForGrain(uint32_t grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
+ __device__ void GetParametersForGrain(int grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
                                       t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2)
 {
-    t_PointReal var2 = 1.0 + gprms.GrainVariability*0.033*(-15 + (grain+3)%30);
-    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + (grain+4)%11);
+    t_PointReal var2 = 1.0 + gprms.GrainVariability*0.033*(-15 + ((int)grain+3)%30);
+    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + ((int)grain+4)%11);
 
     pmax = gprms.IceCompressiveStrength;// * var1;
     pmin = -gprms.IceTensileStrength;// * var2;
@@ -406,27 +414,23 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
 }
 
 
-__device__ void svd(const t_PointReal a[4], t_PointReal u[4], t_PointReal sigma[2], t_PointReal v[4])
-{
-    GivensRotation<t_PointReal> gv(0, 1);
-    GivensRotation<t_PointReal> gu(0, 1);
-    singular_value_decomposition(a, gu, sigma, gv);
-    gu.template fill<2, t_PointReal>(u);
-    gv.template fill<2, t_PointReal>(v);
-}
-
 __device__ void svd2x2(const PointMatrix2r &mA, PointMatrix2r &mU, PointVector2r &mS, PointMatrix2r &mV)
 {
     t_PointReal U[4], V[4], S[2];
-    t_PointReal a[4] {mA(0,0), mA(0,1), mA(1,0), mA(1,1)};
-    svd(a, U, S, V);
+
+    GivensRotation<t_PointReal> gv(0, 1);
+    GivensRotation<t_PointReal> gu(0, 1);
+    singular_value_decomposition(mA.data(), gu, S, gv);
+    gu.template fill<2, t_PointReal>(U);
+    gv.template fill<2, t_PointReal>(V);
+
     mU << U[0],U[1],U[2],U[3];
     mS << S[0],S[1];
     mV << V[0],V[1],V[2],V[3];
 }
 
 __device__ void ComputeSVD(const PointMatrix2r &Fe, PointMatrix2r &U, PointVector2r &vSigma, PointMatrix2r &V,
-                            PointVector2r &vSigmaSquared, PointVector2r v_s_hat_tr,
+                            PointVector2r &vSigmaSquared, PointVector2r &v_s_hat_tr,
                             const t_PointReal &kappa, const t_PointReal &mu, const t_PointReal &Je_tr)
 {
     svd2x2(Fe, U, vSigma, V);
@@ -461,4 +465,11 @@ __device__ PointMatrix2r KirchhoffStress_Wolper(const PointMatrix2r &F)
     return PFt;
 }
 
+__device__ PointMatrix2r Water(const t_PointReal J)
+{
+    constexpr t_PointReal gamma = 5;
+    const t_PointReal &kappa = gprms.kappa;
 
+    PointMatrix2r PFt = kappa*(1.-pow(J,-gamma))*PointMatrix2r::Identity();
+    return PFt;
+}

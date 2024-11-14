@@ -102,12 +102,8 @@ uint16_t ProxyPoint::getGrain()
     return (val & 0xffff);
 }
 
-int ProxyPoint::getCellIndex(unsigned GridY)
+int ProxyPoint::getCellIndex(int GridY)
 {
-//    Eigen::Vector2f v = getPos();
-//    Eigen::Vector2i idx = (v*hinv + Eigen::Vector2f::Constant(0.5f)).cast<int>();
-//    return idx[0]*GridY + idx[1];
-
     uint32_t cell = getValueInt(SimParams::integer_cell_idx);
     uint32_t x_idx = cell & 0xffff;
     uint32_t y_idx = (cell >> 16);

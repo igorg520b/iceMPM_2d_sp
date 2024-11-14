@@ -60,7 +60,7 @@ public:
     SOAIterator end(){return SOAIterator(size, host_buffer, capacity);}
 
     void Allocate(unsigned capacity);
-    void RemoveDisabledAndSort(unsigned GridY);
+    void RemoveDisabledAndSort(int GridY);
     void InitializeBlock(); // set the matrices that are supposed to be identity, i.e. Fe
 
     t_PointReal* getPointerToPosX() {return host_buffer + capacity*SimParams::posx;}

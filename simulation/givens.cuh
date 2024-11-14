@@ -35,29 +35,29 @@ public:
     T s;
     T r;
 
-    __host__ __device__
+    __forceinline__ __host__ __device__
     GivensRotation (int rowi_in, int rowk_in)
         : rowi (rowi_in), rowk (rowk_in), c (1), s (0)
     {
     }
 
-    __host__ __device__
+    __forceinline__ __host__ __device__
     GivensRotation (T a, T b, int rowi_in, int rowk_in)
         : rowi (rowi_in), rowk (rowk_in)
     {
         compute (a, b);
     }
 
-    __host__ __device__ ~GivensRotation () {}
+    __forceinline__ __host__ __device__ ~GivensRotation () {}
 
-    __host__ __device__ void
+    __forceinline__ __host__ __device__ void
     set_identity ()
     {
         c = 1;
         s = 0;
     }
 
-    __host__ __device__ void
+    __forceinline__ __host__ __device__ void
     transpose_in_place ()
     {
         s = -s;
@@ -69,7 +69,7 @@ public:
           s  c     b       ( 0 )
           */
     template <typename TT>
-    __host__ __device__
+    __forceinline__ __host__ __device__
         std::enable_if_t<std::disjunction<std::is_same<TT, float>,
                                           std::is_same<TT, double> >::value,
                          void>
@@ -116,7 +116,7 @@ public:
         Fill the R with the entries of this rotation
           */
     template <int Dim, typename T1>
-    __host__ __device__ void
+    __forceinline__ __host__ __device__ void
     fill (T1 a[Dim * Dim]) const
     {
         for (int i = 0; i < Dim * Dim; ++i)
@@ -127,6 +127,7 @@ public:
         {
             a[i] = 1;
         }
+
         a[rowi + rowi * Dim] = c;
         a[rowk + rowi * Dim] = s;
         a[rowi + rowk * Dim] = -s;
@@ -141,7 +142,7 @@ public:
           It only affects row i and row k of A.
           */
     template <int Dim, typename T1>
-    __host__ __device__ void
+    __forceinline__ __host__ __device__ void
     mat_rotation (T1 a[Dim * Dim]) const
     {
         for (int d = 0; d < Dim; d++)
@@ -187,7 +188,7 @@ public:
     /**
         Multiply givens must be for same row and column
         **/
-    __host__ __device__ void
+    __forceinline__ __host__ __device__ void
     operator*= (const GivensRotation<T> &a)
     {
         T new_c = c * a.c - s * a.s;
@@ -199,7 +200,7 @@ public:
     /**
         Multiply givens must be for same row and column
         **/
-    __host__ __device__ GivensRotation<T>
+    __forceinline__ __host__ __device__ GivensRotation<T>
     operator* (const GivensRotation<T> &a) const
     {
         GivensRotation<T> r (*this);

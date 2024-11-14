@@ -13,16 +13,11 @@ namespace icy { struct Point; }
 
 struct icy::Point
 {
-    Eigen::Vector2f pos, velocity;
-    Eigen::Matrix2f Bp, Fe; // refer to "The Material Point Method for Simulating Continuum Materials"
+    PointVector2r pos, velocity, vSigma, vSigmaSquared, v_s_hat_tr;
+    PointMatrix2r Bp, Fe, U, V; // refer to "The Material Point Method for Simulating Continuum Materials"
 
-    float Jp_inv; // track the change in det(Fp)
-    short grain;
-
-    float p_tr, q_tr, Je_tr;
-    Eigen::Matrix2f U, V;
-    Eigen::Vector2f vSigma, vSigmaSquared, v_s_hat_tr;
-
+    t_PointReal Jp_inv, p_tr, q_tr, Je_tr;
+    int grain;
     uint32_t utility_data;
 };
 

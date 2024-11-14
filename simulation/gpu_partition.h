@@ -34,8 +34,6 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
 
 
 
-__device__ void svd(const t_PointReal a[4], t_PointReal u[4], t_PointReal sigma[2], t_PointReal v[4]);
-
 __device__ void svd2x2(const PointMatrix2r &mA, PointMatrix2r &mU, PointVector2r &mS, PointMatrix2r &mV);
 
 __device__ void Wolper_Drucker_Prager(const t_PointReal &p_tr, const t_PointReal &q_tr, const t_PointReal &Je_tr,
@@ -46,13 +44,13 @@ __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const
                                                    const t_PointReal &p, const t_PointReal &q);
 
 __device__ void ComputeSVD(const PointMatrix2r &Fe, PointMatrix2r &U, PointVector2r &vSigma, PointMatrix2r &V,
-                           PointVector2r &vSigmaSquared, PointVector2r v_s_hat_tr,
+                           PointVector2r &vSigmaSquared, PointVector2r &v_s_hat_tr,
                            const t_PointReal &kappa, const t_PointReal &mu, const t_PointReal &Je_tr);
 
 __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_tr,
                           const t_PointReal &kappa, const t_PointReal &mu, const PointMatrix2r &F);
 
-__device__ void GetParametersForGrain(uint32_t grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
+__device__ void GetParametersForGrain(int grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
                                       t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2);
 
 __device__ PointMatrix2r KirchhoffStress_Wolper(const PointMatrix2r &F);
@@ -62,6 +60,8 @@ __device__ PointVector2r dev_d(PointVector2r Adiag);
 __device__ PointMatrix2r dev(PointMatrix2r A);
 
 __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3]);
+
+__device__ PointMatrix2r Water(const t_PointReal J);
 
 
 struct GPU_Partition

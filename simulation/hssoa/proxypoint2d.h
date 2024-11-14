@@ -31,7 +31,7 @@ struct ProxyPoint
     bool getDisabledStatus();
     uint16_t getGrain();
 
-    int getCellIndex(unsigned GridY);  // index of the grid cell at the point's location
+    int getCellIndex(int GridY);  // index of the grid cell at the point's location
 
     // other
     void ConvertToIntegerCellFormat(t_PointReal h);

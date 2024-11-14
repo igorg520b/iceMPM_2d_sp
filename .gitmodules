@@ -1,0 +1,3 @@
+[submodule "External/PBrowser"]
+	path = External/PBrowser
+	url = https://github.com/igorg520b/PBrowser.git

@@ -98,6 +98,8 @@ std::string SimParams::ParseFile(std::string fileName)
     std::cout << "loaded parameters file " << fileName << std::endl;
     std::cout << "GridXDimension " << GridXDimension << std::endl;
     std::cout << "cellsize " << cellsize << std::endl;
+    std::cout << "IndVelocity " << IndVelocity << std::endl;
+    std::cout << '\n';
 
     if(!doc.HasMember("InputRawPoints"))
     {

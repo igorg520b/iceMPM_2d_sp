@@ -59,7 +59,7 @@ add_executable(cm2
     simulation/hssoa/proxypoint2d.cpp
 )
 
-set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80")
+set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
 set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 # spdlog
@@ -153,7 +153,7 @@ if(BUILD_GUI_VERSION)
 
     )
 
-    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80")
+    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
     set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
     target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa)
@@ -173,10 +173,11 @@ if(BUILD_GUI_VERSION)
         target_include_directories(gm2 PRIVATE "C:\\libraries\\PBrowser\\propertybrowser")
         target_include_directories(gm2 PRIVATE "C:\\libraries\\PBrowser\\objectpropertybrowser")
     else()
-        target_link_directories(gm2 PRIVATE "/home/s2/Projects-Libraries/build-PBrowser-Desktop_Qt_5_15_2_GCC_64bit-Release")
-        target_include_directories(gm2 PRIVATE /home/s2/Projects-Libraries/PBrowser/objectpropertybrowser)
-        target_include_directories(gm2 PRIVATE /home/s2/Projects-Libraries/PBrowser/propertybrowser)
-        target_include_directories(gm2 PRIVATE /home/s2/Projects-Libraries/PBrowser)
+#        target_link_directories(gm2 PRIVATE "/home/s2/Projects-Libraries/build-PBrowser-Desktop_Qt_5_15_2_GCC_64bit-Release")
+        target_include_directories(gm2 PRIVATE External/PBrowser/objectpropertybrowser)
+        target_include_directories(gm2 PRIVATE External/PBrowser/propertybrowser)
+        target_include_directories(gm2 PRIVATE External/PBrowser)
+        add_subdirectory(External/PBrowser)
     endif()
     target_link_libraries(gm2 PRIVATE PBrowser)
 

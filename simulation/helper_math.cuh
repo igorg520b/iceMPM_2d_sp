@@ -27,8 +27,8 @@ template<typename T>
 __device__ void polar_decomposition(const T a[4],
                 GivensRotation<T>& r,
                 T s[4]) {
-    float x[2]		   = {a[0] + a[3], a[1] - a[2]};
-    float denominator = sqrt(x[0] * x[0] + x[1] * x[1]);
+    T x[2]		   = {a[0] + a[3], a[1] - a[2]};
+    T denominator = sqrt(x[0] * x[0] + x[1] * x[1]);
     r.c				   = (T) 1;
     r.s				   = (T) 0;
     if(denominator != 0) {
@@ -79,13 +79,12 @@ template <typename T> __device__ void inline my_swap(T& a, T& b)
 */
 template<typename T>
 __forceinline__ __device__ void singular_value_decomposition(
-        const T aa[4],
+        const T a[4],
         GivensRotation<t_PointReal>& u,
         T sigma[2],
         GivensRotation<t_PointReal>& v)
 {
     t_PointReal s_sym[4];///< column-major
-    t_PointReal a[4] {aa[0], aa[2], aa[1], aa[3]};
     polar_decomposition(a, u, s_sym);
     t_PointReal cosine;
     t_PointReal sine;
