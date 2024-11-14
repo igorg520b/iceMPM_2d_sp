@@ -20,6 +20,8 @@ set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda")
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 
+
+
 find_package(Eigen3 REQUIRED NO_MODULE HINTS "C:\\libraries\\eigen-build")
 if(WIN32)
     add_compile_definitions(H5_BUILT_AS_DYNAMIC_LIB)
@@ -87,8 +89,16 @@ endif()
 
 
 if(BUILD_GUI_VERSION)
-
 # Qt GUI executable
+
+include(FetchContent)
+FetchContent_Declare(
+    PBrowser
+    GIT_REPOSITORY https://github.com/igorg520b/PBrowser.git
+    GIT_TAG        master
+)
+FetchContent_MakeAvailable(PBrowser)
+
 
     find_package(VTK 9.1 HINTS "C:\\libraries\\vtk-build\\lib\\cmake\\vtk-9.1" REQUIRED COMPONENTS
       CommonColor
@@ -153,21 +163,10 @@ if(BUILD_GUI_VERSION)
 
     )
 
-    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
-    set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
-
-    target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa)
-    target_link_libraries(gm2 PRIVATE Qt5::Widgets Qt5::Core)
-
-    # Eigen
-    find_package(Eigen3 REQUIRED NO_MODULE HINTS "C:\\libraries\\eigen-build")
-    target_link_libraries(gm2 PRIVATE Eigen3::Eigen)
-
-    # VTK
-    target_link_libraries(gm2 PRIVATE ${VTK_LIBRARIES})
-
+    target_include_directories(gm2 PRIVATE ${MyLibrary_SOURCE_DIR} ${MyLibrary_SOURCE_DIR}/propertybrowser)
+    target_include_directories(gm2 PRIVATE ${MyLibrary_SOURCE_DIR}/objectpropertybrowser)
     #PBrowser
-    if(WIN32)
+#[[    if(WIN32)
         target_link_directories(gm2 PRIVATE "C:\\libraries\\pbrowser-build")
         target_include_directories(gm2 PRIVATE "C:\\libraries\\PBrowser")
         target_include_directories(gm2 PRIVATE "C:\\libraries\\PBrowser\\propertybrowser")
@@ -180,6 +179,21 @@ if(BUILD_GUI_VERSION)
         add_subdirectory(External/PBrowser)
     endif()
     target_link_libraries(gm2 PRIVATE PBrowser)
+#]]
+
+    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
+    set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+
+    target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa External)
+    target_link_libraries(gm2 PRIVATE Qt5::Widgets Qt5::Core)
+
+    # Eigen
+    find_package(Eigen3 REQUIRED NO_MODULE HINTS "C:\\libraries\\eigen-build")
+    target_link_libraries(gm2 PRIVATE Eigen3::Eigen)
+
+    # VTK
+    target_link_libraries(gm2 PRIVATE ${VTK_LIBRARIES})
+
 
 
     # HDF5
