@@ -13,21 +13,17 @@ struct Triangle
 
 class GrainProcessor2D
 {
-
 public:
     std::string outputFileName, meshFileName, landPNGFileName;
     float scale; // for scaling grains
     float block_length;
     float requestedPointsPerCell;
 
-    int gridx, gridy, channels;   // from PNG
-
 
     void load_png();
     void print_out_parameters();
     void generate_block_and_write();
 
-    std::vector<std::array<float, 2>> buffer;   // result from poisson disk sampler
     std::vector<short> grainID;
 
     // SOA format (to be written as HDF5)
@@ -48,8 +44,12 @@ private:
     static bool PointInsideTriangle(Eigen::Vector2f point, Eigen::Vector2f triangle[3]);
 
     unsigned char* png_data;
-    int nLandNodes;
+    int nLandNodes, nWaterNodes;
     float volume = -1;
+    int gridx, gridy, channels;   // from PNG
+    std::vector<std::array<float, 2>> buffer;   // result from poisson disk sampler
+    std::vector<uint32_t> grid_buffer;
+
     std::vector<BVHN2D*> leaves;
     BVHN2D root;
 };

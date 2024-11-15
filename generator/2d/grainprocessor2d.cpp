@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <iostream>
+#include <algorithm>
 
 #include <H5Cpp.h>
 #include <gmsh.h>
@@ -23,7 +24,7 @@ void GrainProcessor2D::print_out_parameters()
     spdlog::info("requestedPointsPerCell {}", requestedPointsPerCell);
     spdlog::info("grid dimensions {} x {}", gridx, gridy);
     spdlog::info("proportion of landmass {}",(float)nLandNodes/(gridx*gridy));
-    spdlog::info("expected points {}", nLandNodes*requestedPointsPerCell);
+    spdlog::info("expected points {}", (gridx*gridy-nLandNodes)*requestedPointsPerCell);
     spdlog::info("grain scale {}", scale);
     spdlog::info("output file: {}", outputFileName);
 }
@@ -31,23 +32,38 @@ void GrainProcessor2D::print_out_parameters()
 
 void GrainProcessor2D::load_png()
 {
+    spdlog::info("load_png");
     const char* filename = landPNGFileName.c_str();
     png_data = stbi_load(filename, &gridx, &gridy, &channels, 1);  // Request 1 channel (grayscale)
 
-    if (!png_data) {
+    if (!png_data)
+    {
         std::cerr << "Failed to load image: " << filename << std::endl;
         throw std::runtime_error("png not loaded");
     }
 
+    if(channels != 1)
+    {
+        spdlog::critical("channels {}", channels);
+        throw std::runtime_error("png must be monochrome");
+    }
+
     nLandNodes = 0;
+    nWaterNodes = 0;
+    grid_buffer.resize(gridx*gridy);
+    spdlog::info("grid_buffer size {}",grid_buffer.size());
     for (int y = 0; y < gridy; ++y)
     {
         for (int x = 0; x < gridx; ++x)
         {
             int index = y * gridx + x;
-            unsigned char pixel = png_data[index];
-            bool is_black = pixel < 128;  // assuming a threshold of 128 for 1-bit (0-127 black, 128-255 white)
-            if(!is_black) nLandNodes++;
+            unsigned char &pixel = png_data[index];
+            bool is_water = pixel < 128;  // assuming a threshold of 128 for 1-bit (0-127 black, 128-255 white)
+            pixel = is_water ? 0 : 1; // 1 is land
+            if(is_water) nWaterNodes++;
+            else nLandNodes++;
+
+            grid_buffer[y + x*gridy] = (uint32_t) pixel;
         }
     }
 }
@@ -59,9 +75,9 @@ void GrainProcessor2D::generate_block_and_write()
     load_png();
     LoadMSH();
     print_out_parameters();
-//    GenerateBlock(bx, by, n);
-//    IdentifyGrains(scale);
-//    Write_HDF5(outputFile);
+    GenerateBlock();
+    IdentifyGrains();
+    Write_HDF5();
     stbi_image_free(png_data);
 }
 
@@ -181,12 +197,12 @@ void GrainProcessor2D::LoadMSH()
 
 void GrainProcessor2D::Write_HDF5()
 {
-    /*
+    spdlog::info("Write_HDF5()");
     H5::H5File file(outputFileName, H5F_ACC_TRUNC);
 
     hsize_t dims_grains[1] = {llGrainID.size()};
     H5::DataSpace dataspace_points_grains(1, dims_grains);
-    hsize_t g_chunk_dims[1] = {1024*128};
+    hsize_t g_chunk_dims[1] = {1024*256};
     if(g_chunk_dims[0] > llGrainID.size()) g_chunk_dims[0] = std::max(llGrainID.size()/3,(size_t)1);
     spdlog::info("llGrain chunk {}; dims_grains {}", g_chunk_dims[0], dims_grains[0]);
     H5::DSetCreatPropList proplist1;
@@ -195,23 +211,38 @@ void GrainProcessor2D::Write_HDF5()
     H5::DataSet dataset_grainids = file.createDataSet("llGrainIDs", H5::PredType::NATIVE_UINT32, dataspace_points_grains, proplist1);
     dataset_grainids.write(llGrainID.data(), H5::PredType::NATIVE_UINT32);
 
-    H5::DataSet dataset_x = file.createDataSet("x", H5::PredType::NATIVE_FLOAT, dataspace_points_grains, proplist1);
-    dataset_x.write(coordinates[0].data(), H5::PredType::NATIVE_FLOAT);
-
-    H5::DataSet dataset_y = file.createDataSet("y", H5::PredType::NATIVE_FLOAT, dataspace_points_grains, proplist1);
-    dataset_y.write(coordinates[1].data(), H5::PredType::NATIVE_FLOAT);
-
     hsize_t att_dim = 1;
     H5::DataSpace att_dspace(1, &att_dim);
     H5::Attribute att_volume = dataset_grainids.createAttribute("volume", H5::PredType::NATIVE_FLOAT, att_dspace);
     att_volume.write(H5::PredType::NATIVE_FLOAT, &volume);
     spdlog::info("volume written {}",volume);
 
-    H5::Attribute att_offsetIncluded = dataset_grainids.createAttribute("offsetIncluded", H5::PredType::NATIVE_INT, att_dspace);
-    att_offsetIncluded.write(H5::PredType::NATIVE_INT, &OffsetIncluded);
+
+    H5::DataSet dataset_x = file.createDataSet("x", H5::PredType::NATIVE_FLOAT, dataspace_points_grains, proplist1);
+    dataset_x.write(coordinates[0].data(), H5::PredType::NATIVE_FLOAT);
+
+    H5::DataSet dataset_y = file.createDataSet("y", H5::PredType::NATIVE_FLOAT, dataspace_points_grains, proplist1);
+    dataset_y.write(coordinates[1].data(), H5::PredType::NATIVE_FLOAT);
+
+    // write grid info
+
+
+    hsize_t dims_grid[1] = {grid_buffer.size()};
+
+    H5::DataSpace dataspace_grid(1, dims_grid);
+    hsize_t g_chunk_grid[1] = {1024*128};
+    if(g_chunk_grid[0] > grid_buffer.size()) g_chunk_grid[0] = std::max(grid_buffer.size()/3,(size_t)1);
+    H5::DSetCreatPropList proplist2;
+
+    proplist2.setChunk(1, g_chunk_grid);
+    proplist2.setDeflate(7);
+    H5::DataSet dataset_grid = file.createDataSet("GridLand", H5::PredType::NATIVE_UINT32, dataspace_grid, proplist2);
+    dataset_grid.write(grid_buffer.data(), H5::PredType::NATIVE_UINT32);
+
+    dataset_grid.createAttribute("GridX", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &gridx);
+    dataset_grid.createAttribute("GridY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &gridy);
 
     file.close();
-*/
 }
 
 bool GrainProcessor2D::PointInsideTriangle(Eigen::Vector2f point, Eigen::Vector2f t[3])
@@ -227,29 +258,72 @@ bool GrainProcessor2D::PointInsideTriangle(Eigen::Vector2f point, Eigen::Vector2
 
 void GrainProcessor2D::GenerateBlock()
 {
-    /*
     constexpr float magic_constant = 0.656;
-    volume = dx*dy;
 
-    const float kRadius = sqrt(magic_constant*volume/n);
+    float h = 1.f/(float)gridx;
+    float dx = 1.f*(float)(gridx-4)/gridx;
+    float dy = 1.f*(gridy)/(float)(gridx);
+    float nPts = requestedPointsPerCell*gridx*gridy;
+    const float kRadius = sqrt(magic_constant*dx*dy/nPts);
 
-    const std::array<float, 2>kXMin{0, 0};
-    const std::array<float, 2>kXMax{dx, dy};
+    const std::array<float, 2>kXMin {2*h, 2*h};
+    const std::array<float, 2>kXMax {dx-2*h, dy-2*h};
+
+
     buffer = thinks::PoissonDiskSampling(kRadius, kXMin, kXMax);
+    spdlog::info("generating rectangle [{},{}] - [{},{}]",kXMin[0],kXMin[1],kXMax[0],kXMax[1]);
+
+    const size_t nPtsCountInitial = buffer.size();
+    spdlog::info("initial point cloud: {} pts", nPtsCountInitial);
+    auto result = std::remove_if(buffer.begin(),buffer.end(),[&](std::array<float, 2> &pt){
+        float x = pt[0];
+        float y = pt[1];
+        int i = (int)(x/h + 0.5f);
+        int j = (int)(y/h + 0.5f);
+        if(i<0 || j< 0 || i>=gridx || j>=gridy)
+            {
+            spdlog::critical("error pt ({},{}); grid cell ({},{})",x,y,i,j);
+                throw std::runtime_error("particle is out of grid bounds");
+        }
+        int cellidx = j*gridx + i;
+        unsigned char pixel_land = png_data[cellidx];
+        return (bool)pixel_land;
+    });
+    buffer.erase(result,buffer.end());
+
+    const size_t nPtsCountFinal = buffer.size();
+    spdlog::info("after erasing land points: {} pts", nPtsCountFinal);
+
+    volume = (kXMax[0]-kXMin[0])*(kXMax[1]-kXMin[1])*block_length*block_length;
+    volume *= (float)nPtsCountFinal/(float)nPtsCountInitial;
+
+    auto getidx = [&] (std::array<float, 2> &pt)
+    {
+        float x = pt[0];
+        float y = pt[1];
+        int i = (int)(x/h + 0.5f);
+        int j = (int)(y/h + 0.5f);
+        int cellidx = j + gridy*i;
+        return cellidx;
+    };
+
+    // sort, to facilitate subsequent loading
+    std::sort(buffer.begin(), buffer.end(),
+              [&](std::array<float, 2> &p1, std::array<float, 2> &p2)
+              {return getidx(p1)<getidx(p2);});
+    spdlog::info("points sortred by cell");
 
     coordinates[0].resize(buffer.size());
     coordinates[1].resize(buffer.size());
     for(int i=0;i<buffer.size();i++)
     {
-        coordinates[0][i] = buffer[i][0];
-        coordinates[1][i] = buffer[i][1];
+        coordinates[0][i] = buffer[i][0]*block_length;
+        coordinates[1][i] = buffer[i][1]*block_length;
     }
-*/
 }
 
 void GrainProcessor2D::IdentifyGrains()
 {
-    /*
     spdlog::info("identify grains");
 
     BVHN2D::BVHNFactory.release(leaves);
@@ -283,8 +357,7 @@ void GrainProcessor2D::IdentifyGrains()
     {
         std::array<float, 2> &arr = buffer[i];
         Eigen::Vector2f v(arr[0],arr[1]);
-        v *= scale;
-//        for(int j=0;j<2;j++) v[j] = v[j] - floor(v[j]);
+        v *= (block_length/scale);
         v -= v.array().floor().matrix();
 
         BVHN2D bvhn;
@@ -335,5 +408,4 @@ void GrainProcessor2D::IdentifyGrains()
     for(int i=0;i<grainID.size();i++) llGrainID[i] = grainID[i];
 
     spdlog::info("finished processing points; problematic {}; unidentified {}",problematicPoints, unidentifiedPoints);
-*/
 }
