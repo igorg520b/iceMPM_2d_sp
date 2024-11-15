@@ -13,12 +13,19 @@ struct Triangle
 
 class GrainProcessor2D
 {
-    constexpr static long long status_liquid = 0x40000ll;
-    constexpr static float waterLevel = 0.6;
-
 
 public:
-    void generate_block_and_write(float scale, float bx, float by, int n, std::string msh, std::string outputFile);
+    std::string outputFileName, meshFileName, landPNGFileName;
+    float scale; // for scaling grains
+    float block_length;
+    float requestedPointsPerCell;
+
+    int gridx, gridy, channels;   // from PNG
+
+
+    void load_png();
+    void print_out_parameters();
+    void generate_block_and_write();
 
     std::vector<std::array<float, 2>> buffer;   // result from poisson disk sampler
     std::vector<short> grainID;
@@ -34,12 +41,14 @@ public:
 
 
 private:
-    void GenerateBlock(float dx, float dy, int n);
-    void LoadMSH(std::string fileName);
-    void IdentifyGrains(const float scale);
-    void Write_HDF5(std::string fileName, int OffsetIncluded = 0);
+    void GenerateBlock();
+    void LoadMSH();
+    void IdentifyGrains();
+    void Write_HDF5();
     static bool PointInsideTriangle(Eigen::Vector2f point, Eigen::Vector2f triangle[3]);
 
+    unsigned char* png_data;
+    int nLandNodes;
     float volume = -1;
     std::vector<BVHN2D*> leaves;
     BVHN2D root;

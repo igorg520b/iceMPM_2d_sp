@@ -95,7 +95,7 @@ include(FetchContent)
 FetchContent_Declare(
     PBrowser
     GIT_REPOSITORY https://github.com/igorg520b/PBrowser.git
-    GIT_TAG        master
+    GIT_TAG        main
 )
 FetchContent_MakeAvailable(PBrowser)
 
@@ -162,9 +162,10 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/kernels.cuh
 
     )
-
-    target_include_directories(gm2 PRIVATE ${MyLibrary_SOURCE_DIR} ${MyLibrary_SOURCE_DIR}/propertybrowser)
-    target_include_directories(gm2 PRIVATE ${MyLibrary_SOURCE_DIR}/objectpropertybrowser)
+    message(${PBrowser_SOURCE_DIR})
+    target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR} ${PBrowser_SOURCE_DIR}/propertybrowser)
+    target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser)
+    target_link_libraries(gm2 PRIVATE PBrowser)
     #PBrowser
 #[[    if(WIN32)
         target_link_directories(gm2 PRIVATE "C:\\libraries\\pbrowser-build")
@@ -281,5 +282,6 @@ target_link_libraries(GrainIdentifier PRIVATE gmsh)
 target_include_directories(GrainIdentifier PRIVATE ${HDF5_INCLUDE_DIRS})
 target_include_directories(GrainIdentifier PRIVATE "/home/s2/Projects-other/gmsh/api")
 target_include_directories(GrainIdentifier PRIVATE generator/poisson_disk_sampling generator/2d generator/2d/bvh2d)
+target_include_directories(GrainIdentifier PRIVATE External)
 
 endif()

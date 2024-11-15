@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <algorithm>
+#include <iostream>
 
 #include <H5Cpp.h>
 #include <gmsh.h>
@@ -12,30 +13,73 @@
 
 #include <Eigen/Dense>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
-void GrainProcessor2D::generate_block_and_write(float scale, float bx, float by, int n, std::string msh, std::string outputFile)
+
+
+void GrainProcessor2D::print_out_parameters()
 {
-    LoadMSH(msh);
-    GenerateBlock(bx, by, n);
-    IdentifyGrains(scale);
-    Write_HDF5(outputFile);
+    spdlog::info("requestedPointsPerCell {}", requestedPointsPerCell);
+    spdlog::info("grid dimensions {} x {}", gridx, gridy);
+    spdlog::info("proportion of landmass {}",(float)nLandNodes/(gridx*gridy));
+    spdlog::info("expected points {}", nLandNodes*requestedPointsPerCell);
+    spdlog::info("grain scale {}", scale);
+    spdlog::info("output file: {}", outputFileName);
+}
+
+
+void GrainProcessor2D::load_png()
+{
+    const char* filename = landPNGFileName.c_str();
+    png_data = stbi_load(filename, &gridx, &gridy, &channels, 1);  // Request 1 channel (grayscale)
+
+    if (!png_data) {
+        std::cerr << "Failed to load image: " << filename << std::endl;
+        throw std::runtime_error("png not loaded");
+    }
+
+    nLandNodes = 0;
+    for (int y = 0; y < gridy; ++y)
+    {
+        for (int x = 0; x < gridx; ++x)
+        {
+            int index = y * gridx + x;
+            unsigned char pixel = png_data[index];
+            bool is_black = pixel < 128;  // assuming a threshold of 128 for 1-bit (0-127 black, 128-255 white)
+            if(!is_black) nLandNodes++;
+        }
+    }
+}
+
+
+
+void GrainProcessor2D::generate_block_and_write()
+{
+    load_png();
+    LoadMSH();
+    print_out_parameters();
+//    GenerateBlock(bx, by, n);
+//    IdentifyGrains(scale);
+//    Write_HDF5(outputFile);
+    stbi_image_free(png_data);
 }
 
 
 
 
-void GrainProcessor2D::LoadMSH(std::string fileName)
+void GrainProcessor2D::LoadMSH()
 {
     std::vector<Eigen::Vector2f> vertices;
     std::vector<std::array<int,4>> elems;
     std::vector<Triangle> tris1;
 
-    spdlog::info("load {}", fileName);
-    if(!std::filesystem::exists(fileName)) spdlog::critical("file does not exist");
+    spdlog::info("load {}", meshFileName);
+    if(!std::filesystem::exists(meshFileName)) spdlog::critical("file does not exist");
 
     gmsh::clear();
     gmsh::option::setNumber("General.Terminal", 0);
-    gmsh::open(fileName);
+    gmsh::open(meshFileName);
 
     // get nodes
     std::vector<std::size_t> nodeTags;
@@ -135,9 +179,10 @@ void GrainProcessor2D::LoadMSH(std::string fileName)
     gmsh::clear();
 }
 
-void GrainProcessor2D::Write_HDF5(std::string fileName, int OffsetIncluded)
+void GrainProcessor2D::Write_HDF5()
 {
-    H5::H5File file(fileName, H5F_ACC_TRUNC);
+    /*
+    H5::H5File file(outputFileName, H5F_ACC_TRUNC);
 
     hsize_t dims_grains[1] = {llGrainID.size()};
     H5::DataSpace dataspace_points_grains(1, dims_grains);
@@ -166,6 +211,7 @@ void GrainProcessor2D::Write_HDF5(std::string fileName, int OffsetIncluded)
     att_offsetIncluded.write(H5::PredType::NATIVE_INT, &OffsetIncluded);
 
     file.close();
+*/
 }
 
 bool GrainProcessor2D::PointInsideTriangle(Eigen::Vector2f point, Eigen::Vector2f t[3])
@@ -179,8 +225,9 @@ bool GrainProcessor2D::PointInsideTriangle(Eigen::Vector2f point, Eigen::Vector2
     return (b[0]>-eps && b[1]>-eps && (b.sum() < 1+eps));
 }
 
-void GrainProcessor2D::GenerateBlock(float dx, float dy, int n)
+void GrainProcessor2D::GenerateBlock()
 {
+    /*
     constexpr float magic_constant = 0.656;
     volume = dx*dy;
 
@@ -197,10 +244,12 @@ void GrainProcessor2D::GenerateBlock(float dx, float dy, int n)
         coordinates[0][i] = buffer[i][0];
         coordinates[1][i] = buffer[i][1];
     }
+*/
 }
 
-void GrainProcessor2D::IdentifyGrains(const float scale)
+void GrainProcessor2D::IdentifyGrains()
 {
+    /*
     spdlog::info("identify grains");
 
     BVHN2D::BVHNFactory.release(leaves);
@@ -286,4 +335,5 @@ void GrainProcessor2D::IdentifyGrains(const float scale)
     for(int i=0;i<grainID.size();i++) llGrainID[i] = grainID[i];
 
     spdlog::info("finished processing points; problematic {}; unidentified {}",problematicPoints, unidentifiedPoints);
+*/
 }
