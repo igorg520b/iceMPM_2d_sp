@@ -67,6 +67,16 @@ void GPU_Partition::transfer_points_from_soa_to_device(HostSideSOA &hssoa, int p
     }
 }
 
+void GPU_Partition::transfer_grid_data_to_device(HostSideSOA &hssoa)
+{
+    cudaError_t err;
+    err = cudaSetDevice(Device);
+    if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
+    size_t grid_array_size = prms->GridXTotal * prms->GridY * sizeof(uint8_t);
+    err = cudaMemcpy(grid_status_array, hssoa.grid_status_buffer.data(), grid_array_size, cudaMemcpyHostToDevice);
+    if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
+}
+
 
 GPU_Partition::GPU_Partition()
 {
@@ -99,6 +109,7 @@ GPU_Partition::~GPU_Partition()
     cudaFree(grid_array);
     cudaFree(pts_array);
     cudaFree(indenter_force_accumulator);
+    cudaFree(grid_status_array);
     spdlog::info("Destructor invoked; partition {} on device {}", PartitionID, Device);
 }
 
@@ -141,6 +152,10 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
     total_device += nGridPitch * SimParams::nGridArrays;
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid array");
     nGridPitch /= sizeof(t_GridReal); // assume that this divides without remainder
+
+    // grid status
+    err = cudaMalloc(&grid_status_array, gx*gy*sizeof(uint8_t));
+    if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid status array");
 
     // host-side indenter accumulator
     err = cudaMallocHost(&host_side_indenter_force_accumulator, prms->IndenterArraySize());

@@ -119,16 +119,16 @@ void GPU_Implementation5::allocate_arrays()
 
 
 
-void GPU_Implementation5::transfer_ponts_to_device()
+void GPU_Implementation5::transfer_to_device()
 {
     spdlog::info("GPU_Implementation: transfer_to_device()");
     int points_uploaded = 0;
-    for(GPU_Partition &p : partitions)
-    {
-        p.transfer_points_from_soa_to_device(hssoa, points_uploaded);
-        points_uploaded += p.nPts_partition;
-    }
-    spdlog::info("transfer_ponts_to_device() done; transferred points {}", points_uploaded);
+    GPU_Partition &p = partitions.front();
+    p.transfer_points_from_soa_to_device(hssoa, points_uploaded);
+    points_uploaded += p.nPts_partition;
+    spdlog::info("transfer_to_device() done; transferred points {}", points_uploaded);
+
+    p.transfer_grid_data_to_device(hssoa);
 }
 
 

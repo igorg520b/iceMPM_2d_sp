@@ -73,6 +73,7 @@ struct GPU_Partition
     void initialize(int device, int partition);
     void allocate(int n_points_capacity, int grid_x_capacity);
     void transfer_points_from_soa_to_device(HostSideSOA &hssoa, int point_idx_offset);
+    void transfer_grid_data_to_device(HostSideSOA &hssoa);
     void update_constants();
     void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset);
 
@@ -118,6 +119,7 @@ struct GPU_Partition
     // device-side data
     t_PointReal *pts_array, *indenter_force_accumulator;
     t_GridReal *grid_array;
+    uint8_t *grid_status_array;
 
     // frame analysis
     float timing_10_P2GAndHalo;

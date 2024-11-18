@@ -18,6 +18,7 @@ public:
     float scale; // for scaling grains
     float block_length;
     float requestedPointsPerCell;
+    float cellsize;
 
 
     void load_png();
@@ -43,12 +44,11 @@ private:
     void Write_HDF5();
     static bool PointInsideTriangle(Eigen::Vector2f point, Eigen::Vector2f triangle[3]);
 
-    unsigned char* png_data;
     int nLandNodes, nWaterNodes;
     float volume = -1;
     int gridx, gridy, channels;   // from PNG
     std::vector<std::array<float, 2>> buffer;   // result from poisson disk sampler
-    std::vector<uint32_t> grid_buffer;
+    std::vector<uint8_t> grid_buffer;
 
     std::vector<BVHN2D*> leaves;
     BVHN2D root;

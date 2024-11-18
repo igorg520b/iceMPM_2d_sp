@@ -58,6 +58,7 @@ public:
     vtkNew<vtkLookupTable> hueLut, lutMPM;
     vtkNew<vtkActor> actor_points;
     vtkNew<vtkActor> actor_grid;
+    vtkNew<vtkActor> actor_grid2;
     vtkNew<vtkActor> actor_indenter;
     vtkNew<vtkScalarBarActor> scalarBar;
 
@@ -82,6 +83,12 @@ private:
     vtkNew<vtkStructuredGrid> structuredGrid;
     vtkNew<vtkDataSetMapper> grid_mapper;
     vtkNew<vtkPoints> grid_points;
+
+    // background grid 2
+    vtkNew<vtkStructuredGrid> structuredGrid2;
+    vtkNew<vtkDataSetMapper> grid_mapper2;
+    vtkNew<vtkPoints> grid_points2;
+    vtkNew<vtkIntArray> visualized_values_grid;
 
     static constexpr float lutArrayMPMColors[101][3] =
     {{0.25098, 0.556863, 0.756863}, {0.245961, 0.547294,

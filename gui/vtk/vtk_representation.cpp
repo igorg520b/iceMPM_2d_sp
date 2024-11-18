@@ -40,13 +40,16 @@ icy::VisualRepresentation::VisualRepresentation()
                               lutArrayMPMColors[i][1],
                               lutArrayMPMColors[i][2], 1.0);
 
-    hueLut_four->SetNumberOfColors(5);
+    hueLut_four->SetNumberOfColors(7);
     hueLut_four->SetTableValue(0, 0.3, 0.3, 0.3);
     hueLut_four->SetTableValue(1, 1.0, 0, 0);
     hueLut_four->SetTableValue(2, 0, 1.0, 0);
     hueLut_four->SetTableValue(3, 0.2, 0.2, 0.85);
     hueLut_four->SetTableValue(4, 0, 0.5, 0.5);
-    hueLut_four->SetTableRange(0,4);
+
+    hueLut_four->SetTableValue(5, 41./255,128./255,215./255);
+    hueLut_four->SetTableValue(6, 0.35, 0.15, 0.15);
+    hueLut_four->SetTableRange(0,6);
 
 
     indenterMapper->SetInputConnection(indenterSource->GetOutputPort());
@@ -84,7 +87,8 @@ icy::VisualRepresentation::VisualRepresentation()
     actor_points->SetMapper(points_mapper);
     actor_points->GetProperty()->SetPointSize(2);
     actor_points->GetProperty()->SetVertexColor(1,0,0);
-    actor_points->GetProperty()->SetColor(0,0,0);
+//    actor_points->GetProperty()->SetColor(41./255,128./255,215./255);
+    actor_points->GetProperty()->SetColor(151./255,188./255,215./255);
     actor_points->GetProperty()->LightingOff();
     actor_points->GetProperty()->ShadingOff();
     actor_points->GetProperty()->SetInterpolationToFlat();
@@ -102,6 +106,25 @@ icy::VisualRepresentation::VisualRepresentation()
     actor_grid->PickableOff();
     actor_grid->GetProperty()->SetColor(0.98,0.98,0.98);
 //    actor_grid->GetProperty()->SetRepresentationToWireframe();
+
+    // grid2
+    visualized_values_grid->SetName("visualized_values_grid");
+    structuredGrid2->GetCellData()->AddArray(visualized_values_grid);
+    structuredGrid2->GetCellData()->SetActiveScalars("visualized_values_grid");
+
+    grid_mapper2->SetInputData(structuredGrid2);
+    grid_mapper2->SetLookupTable(hueLut_four);
+    grid_mapper2->UseLookupTableScalarRangeOn();
+    points_mapper->UseLookupTableScalarRangeOn();
+
+
+    actor_grid2->SetMapper(grid_mapper2);
+    actor_grid2->GetProperty()->SetEdgeVisibility(false);
+    actor_grid2->GetProperty()->LightingOff();
+    actor_grid2->GetProperty()->ShadingOff();
+    actor_grid2->GetProperty()->SetInterpolationToFlat();
+    actor_grid2->PickableOff();
+    actor_grid2->GetProperty()->SetColor(0.98,0.98,0.98);
 
     // scalar bar
     scalarBar->SetLookupTable(lutMPM);
@@ -155,6 +178,39 @@ void icy::VisualRepresentation::SynchronizeTopology()
             grid_points->SetPoint((vtkIdType)(idx_x+idx_y*gx), pt_pos);
         }
     structuredGrid->SetPoints(grid_points);
+
+    // grid2
+    int gx1 = gx+1;
+    int gy1 = gy+1;
+    structuredGrid2->SetDimensions(gx1, gy1, 1);
+    grid_points2->SetNumberOfPoints(gx1*gy1);
+    for(int idx_y=0; idx_y<=gy; idx_y++)
+        for(int idx_x=0; idx_x<=gx; idx_x++)
+        {
+            float x = ((float)idx_x - 0.5) * h;
+            float y = ((float)idx_y - 0.5) * h;
+            double pt_pos[3] {x, y, -3.0};
+            grid_points2->SetPoint((vtkIdType)(idx_x+idx_y*gx1), pt_pos);
+        }
+    structuredGrid2->SetPoints(grid_points2);
+
+    visualized_values_grid->SetNumberOfValues(gx*gy);
+    std::vector<uint8_t> &gb = model->gpu.hssoa.grid_status_buffer;
+    if(gb.size() > 0)
+    {
+        spdlog::info("gb size {}; gx {}; gy {}",gb.size(), gx, gy);
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int value = gb[idx_storage]+5;
+                visualized_values_grid->SetValue(idx_visual, value);
+            }
+
+        visualized_values_grid->Modified();
+    }
+
 
 
     model->accessing_point_data.unlock();

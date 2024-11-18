@@ -19,6 +19,17 @@
 
 
 
+void GrainProcessor2D::generate_block_and_write()
+{
+    load_png();
+    LoadMSH();
+    print_out_parameters();
+    GenerateBlock();
+    IdentifyGrains();
+    Write_HDF5();
+}
+
+
 void GrainProcessor2D::print_out_parameters()
 {
     spdlog::info("requestedPointsPerCell {}", requestedPointsPerCell);
@@ -34,6 +45,7 @@ void GrainProcessor2D::load_png()
 {
     spdlog::info("load_png");
     const char* filename = landPNGFileName.c_str();
+    unsigned char* png_data;
     png_data = stbi_load(filename, &gridx, &gridy, &channels, 1);  // Request 1 channel (grayscale)
 
     if (!png_data)
@@ -63,137 +75,17 @@ void GrainProcessor2D::load_png()
             if(is_water) nWaterNodes++;
             else nLandNodes++;
 
-            grid_buffer[y + x*gridy] = (uint32_t) pixel;
+            grid_buffer[(gridy-y-1) + x*gridy] = (uint8_t) pixel;
         }
     }
-}
-
-
-
-void GrainProcessor2D::generate_block_and_write()
-{
-    load_png();
-    LoadMSH();
-    print_out_parameters();
-    GenerateBlock();
-    IdentifyGrains();
-    Write_HDF5();
     stbi_image_free(png_data);
 }
 
 
 
 
-void GrainProcessor2D::LoadMSH()
-{
-    std::vector<Eigen::Vector2f> vertices;
-    std::vector<std::array<int,4>> elems;
-    std::vector<Triangle> tris1;
-
-    spdlog::info("load {}", meshFileName);
-    if(!std::filesystem::exists(meshFileName)) spdlog::critical("file does not exist");
-
-    gmsh::clear();
-    gmsh::option::setNumber("General.Terminal", 0);
-    gmsh::open(meshFileName);
-
-    // get nodes
-    std::vector<std::size_t> nodeTags;
-    std::vector<double> nodeCoords, parametricCoords;
-    std::unordered_map<std::size_t, int> mtags; // gmsh nodeTag -> node sequential number
-
-    gmsh::model::mesh::getNodesByElementType(2, nodeTags, nodeCoords, parametricCoords);
-    vertices.reserve(nodeTags.size()*9);
-
-    // set the size of the resulting nodes array
-    for(unsigned i=0;i<nodeTags.size();i++)
-    {
-        std::size_t tag = nodeTags[i];
-        if(mtags.count(tag)>0) continue; // throw std::runtime_error("GetFromGmsh() node duplication in deformable");
-        Eigen::Vector2f coords = Eigen::Vector2f(nodeCoords[i*3+0], nodeCoords[i*3+1]);
-        mtags[tag] = vertices.size();
-        vertices.push_back(coords);
-    }
-    spdlog::info("nodes read {}",vertices.size());
-    int nVerticesOriginal = vertices.size();
-    vertices2.resize(nVerticesOriginal*9);
-
-    // create surrounding copies
-    int count = 0;
-    for(int i=-1;i<=1;i++)
-        for(int j=-1;j<=1;j++)
-        {
-            for(int m=0;m<nVerticesOriginal;m++)
-                vertices2[m + nVerticesOriginal*count] = vertices[m] + Eigen::Vector2f(i,j);
-            count++;
-        }
-
-    std::vector<std::pair<int,int>> dimTagsGrains;
-    gmsh::model::getEntities(dimTagsGrains,2);
-    spdlog::info("dimTagsGrains size {}",dimTagsGrains.size());
-
-    //    std::unordered_set<int> used_nodes;
-    elems.reserve(dimTagsGrains.size()*50);
-    tris1.clear();
-    tris1.reserve(elems.size());
-
-    std::vector<int> types;
-    std::vector<std::vector<std::size_t>> elemtags, nodetags;
-    gmsh::model::mesh::getElements(types, elemtags, nodetags);
-
-    for(int i=0;i<types.size();i++)
-        spdlog::info("type {}; elemtags {}", types[i], elemtags[i].size());
 
 
-    for(std::size_t j=0;j<dimTagsGrains.size();j++)
-    {
-        std::vector<std::size_t> tetraTags, nodeTagsInTetra;
-        int entityTag = dimTagsGrains[j].second;
-        gmsh::model::mesh::getElementsByType(2, tetraTags, nodeTagsInTetra, entityTag);
-//        spdlog::info("grain {}; tetratags {}", j, tetraTags.size());
-
-        for(std::size_t i=0;i<tetraTags.size();i++)
-        {
-            std::array<int,4> elem;
-            Triangle t;
-
-            for(int k=0;k<3;k++)
-            {
-                elem[k] = mtags.at(nodeTagsInTetra[i*3+k]);
-                t.nds[k] = vertices[elem[k]];
-            }
-            t.grain = elem[3] = j;
-            elems.push_back(elem);
-            tris1.push_back(t);
-        }
-    }
-    spdlog::info("tris read {}", tris1.size());
-
-    int nTetraOriginal = tris1.size();
-    elems2.resize(nTetraOriginal*9);
-    tris2.resize(nTetraOriginal*9);
-
-    count = 0;
-    for(int i=-1;i<=1;i++)
-        for(int j=-1;j<=1;j++)
-            {
-                for(int m=0;m<tris1.size();m++)
-                {
-                    int idx = m + count*nTetraOriginal;
-                    elems2[idx] = elems[m];
-                    Triangle &t = tris2[idx];
-                    for(int n=0;n<3;n++)
-                    {
-                        elems2[idx][n] += count*nVerticesOriginal;
-                        t.nds[n] = vertices2[elems2[idx][n]];
-                    }
-                    t.grain = elems2[m][3];
-                }
-                count++;
-            }
-
-    gmsh::clear();
-}
 
 void GrainProcessor2D::Write_HDF5()
 {
@@ -224,9 +116,9 @@ void GrainProcessor2D::Write_HDF5()
     H5::DataSet dataset_y = file.createDataSet("y", H5::PredType::NATIVE_FLOAT, dataspace_points_grains, proplist1);
     dataset_y.write(coordinates[1].data(), H5::PredType::NATIVE_FLOAT);
 
+
+
     // write grid info
-
-
     hsize_t dims_grid[1] = {grid_buffer.size()};
 
     H5::DataSpace dataspace_grid(1, dims_grid);
@@ -236,11 +128,12 @@ void GrainProcessor2D::Write_HDF5()
 
     proplist2.setChunk(1, g_chunk_grid);
     proplist2.setDeflate(7);
-    H5::DataSet dataset_grid = file.createDataSet("GridLand", H5::PredType::NATIVE_UINT32, dataspace_grid, proplist2);
-    dataset_grid.write(grid_buffer.data(), H5::PredType::NATIVE_UINT32);
+    H5::DataSet dataset_grid = file.createDataSet("GridLand", H5::PredType::NATIVE_UINT8, dataspace_grid, proplist2);
+    dataset_grid.write(grid_buffer.data(), H5::PredType::NATIVE_UINT8);
 
     dataset_grid.createAttribute("GridX", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &gridx);
     dataset_grid.createAttribute("GridY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &gridy);
+    dataset_grid.createAttribute("cellsize", H5::PredType::NATIVE_FLOAT, att_dspace).write(H5::PredType::NATIVE_FLOAT, &cellsize);
 
     file.close();
 }
@@ -260,9 +153,9 @@ void GrainProcessor2D::GenerateBlock()
 {
     constexpr float magic_constant = 0.656;
 
-    float h = 1.f/(float)gridx;
-    float dx = 1.f*(float)(gridx-4)/gridx;
-    float dy = 1.f*(gridy)/(float)(gridx);
+    float h = 1.f/(float)(gridx-1);
+    float dx = 1.f;
+    float dy = 1.f*(gridy-1)/(float)(gridx-1);
     float nPts = requestedPointsPerCell*gridx*gridy;
     const float kRadius = sqrt(magic_constant*dx*dy/nPts);
 
@@ -285,8 +178,7 @@ void GrainProcessor2D::GenerateBlock()
             spdlog::critical("error pt ({},{}); grid cell ({},{})",x,y,i,j);
                 throw std::runtime_error("particle is out of grid bounds");
         }
-        int cellidx = j*gridx + i;
-        unsigned char pixel_land = png_data[cellidx];
+        unsigned char pixel_land = grid_buffer[j + i*gridy];
         return (bool)pixel_land;
     });
     buffer.erase(result,buffer.end());
@@ -320,6 +212,7 @@ void GrainProcessor2D::GenerateBlock()
         coordinates[0][i] = buffer[i][0]*block_length;
         coordinates[1][i] = buffer[i][1]*block_length;
     }
+    cellsize = block_length/(float)(gridx-1);
 }
 
 void GrainProcessor2D::IdentifyGrains()
@@ -408,4 +301,116 @@ void GrainProcessor2D::IdentifyGrains()
     for(int i=0;i<grainID.size();i++) llGrainID[i] = grainID[i];
 
     spdlog::info("finished processing points; problematic {}; unidentified {}",problematicPoints, unidentifiedPoints);
+}
+
+
+void GrainProcessor2D::LoadMSH()
+{
+    std::vector<Eigen::Vector2f> vertices;
+    std::vector<std::array<int,4>> elems;
+    std::vector<Triangle> tris1;
+
+    spdlog::info("load {}", meshFileName);
+    if(!std::filesystem::exists(meshFileName)) spdlog::critical("file does not exist");
+
+    gmsh::clear();
+    gmsh::option::setNumber("General.Terminal", 0);
+    gmsh::open(meshFileName);
+
+    // get nodes
+    std::vector<std::size_t> nodeTags;
+    std::vector<double> nodeCoords, parametricCoords;
+    std::unordered_map<std::size_t, int> mtags; // gmsh nodeTag -> node sequential number
+
+    gmsh::model::mesh::getNodesByElementType(2, nodeTags, nodeCoords, parametricCoords);
+    vertices.reserve(nodeTags.size()*9);
+
+    // set the size of the resulting nodes array
+    for(unsigned i=0;i<nodeTags.size();i++)
+    {
+        std::size_t tag = nodeTags[i];
+        if(mtags.count(tag)>0) continue; // throw std::runtime_error("GetFromGmsh() node duplication in deformable");
+        Eigen::Vector2f coords = Eigen::Vector2f(nodeCoords[i*3+0], nodeCoords[i*3+1]);
+        mtags[tag] = vertices.size();
+        vertices.push_back(coords);
+    }
+    spdlog::info("nodes read {}",vertices.size());
+    int nVerticesOriginal = vertices.size();
+    vertices2.resize(nVerticesOriginal*9);
+
+    // create surrounding copies
+    int count = 0;
+    for(int i=-1;i<=1;i++)
+        for(int j=-1;j<=1;j++)
+        {
+            for(int m=0;m<nVerticesOriginal;m++)
+                vertices2[m + nVerticesOriginal*count] = vertices[m] + Eigen::Vector2f(i,j);
+            count++;
+        }
+
+    std::vector<std::pair<int,int>> dimTagsGrains;
+    gmsh::model::getEntities(dimTagsGrains,2);
+    spdlog::info("dimTagsGrains size {}",dimTagsGrains.size());
+
+    //    std::unordered_set<int> used_nodes;
+    elems.reserve(dimTagsGrains.size()*50);
+    tris1.clear();
+    tris1.reserve(elems.size());
+
+    std::vector<int> types;
+    std::vector<std::vector<std::size_t>> elemtags, nodetags;
+    gmsh::model::mesh::getElements(types, elemtags, nodetags);
+
+    for(int i=0;i<types.size();i++)
+        spdlog::info("type {}; elemtags {}", types[i], elemtags[i].size());
+
+
+    for(std::size_t j=0;j<dimTagsGrains.size();j++)
+    {
+        std::vector<std::size_t> tetraTags, nodeTagsInTetra;
+        int entityTag = dimTagsGrains[j].second;
+        gmsh::model::mesh::getElementsByType(2, tetraTags, nodeTagsInTetra, entityTag);
+        //        spdlog::info("grain {}; tetratags {}", j, tetraTags.size());
+
+        for(std::size_t i=0;i<tetraTags.size();i++)
+        {
+            std::array<int,4> elem;
+            Triangle t;
+
+            for(int k=0;k<3;k++)
+            {
+                elem[k] = mtags.at(nodeTagsInTetra[i*3+k]);
+                t.nds[k] = vertices[elem[k]];
+            }
+            t.grain = elem[3] = j;
+            elems.push_back(elem);
+            tris1.push_back(t);
+        }
+    }
+    spdlog::info("tris read {}", tris1.size());
+
+    int nTetraOriginal = tris1.size();
+    elems2.resize(nTetraOriginal*9);
+    tris2.resize(nTetraOriginal*9);
+
+    count = 0;
+    for(int i=-1;i<=1;i++)
+        for(int j=-1;j<=1;j++)
+        {
+            for(int m=0;m<tris1.size();m++)
+            {
+                int idx = m + count*nTetraOriginal;
+                elems2[idx] = elems[m];
+                Triangle &t = tris2[idx];
+                for(int n=0;n<3;n++)
+                {
+                    elems2[idx][n] += count*nVerticesOriginal;
+                    t.nds[n] = vertices2[elems2[idx][n]];
+                }
+                t.grain = elems2[m][3];
+            }
+            count++;
+        }
+
+    gmsh::clear();
 }

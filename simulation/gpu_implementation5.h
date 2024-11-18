@@ -35,7 +35,7 @@ public:
     void initialize();
     void allocate_arrays();
     void split_hssoa_into_partitions();     // perform grid and point partitioning
-    void transfer_ponts_to_device();
+    void transfer_to_device();
 
     void transfer_from_device();
 

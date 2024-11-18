@@ -12,7 +12,6 @@ void SimParams::Reset()
     GridXTotal = 128;
     GridY = 55;
     ParticleViewSize = 2.5f;
-    GridXDimension = 3.33;
 
     SimulationEndTime = 12;
 
@@ -67,9 +66,6 @@ std::string SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("SetupType")) SetupType = doc["SetupType"].GetInt();
     if(doc.HasMember("InitialTimeStep")) InitialTimeStep = doc["InitialTimeStep"].GetDouble();
     if(doc.HasMember("YoungsModulus")) YoungsModulus = doc["YoungsModulus"].GetDouble();
-    if(doc.HasMember("GridX")) GridXTotal = doc["GridX"].GetInt();
-    if(doc.HasMember("GridY")) GridY = doc["GridY"].GetInt();
-    if(doc.HasMember("GridXDimension")) GridXDimension = doc["GridXDimension"].GetDouble();
     if(doc.HasMember("ParticleViewSize")) ParticleViewSize = doc["ParticleViewSize"].GetDouble();
     if(doc.HasMember("SimulationEndTime")) SimulationEndTime = doc["SimulationEndTime"].GetDouble();
     if(doc.HasMember("PoissonsRatio")) PoissonsRatio = doc["PoissonsRatio"].GetDouble();
@@ -96,10 +92,6 @@ std::string SimParams::ParseFile(std::string fileName)
     ComputeHelperVariables();
 
     std::cout << "loaded parameters file " << fileName << std::endl;
-    std::cout << "GridXDimension " << GridXDimension << std::endl;
-    std::cout << "cellsize " << cellsize << std::endl;
-    std::cout << "IndVelocity " << IndVelocity << std::endl;
-    std::cout << '\n';
 
     if(!doc.HasMember("InputRawPoints"))
     {
@@ -124,8 +116,7 @@ void SimParams::ComputeHelperVariables()
     ParticleMass = ParticleVolume * Density;
 
     UpdateEveryNthStep = (int)(1.f/(200*InitialTimeStep));
-    cellsize = GridXDimension/GridXTotal;
-    cellsize_inv = 1./cellsize;
+    cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
     Dp_inv = 4./(cellsize*cellsize);
     IndRSq = IndDiameter*IndDiameter/4.;
     dt_vol_Dpinv = InitialTimeStep*ParticleVolume*Dp_inv;

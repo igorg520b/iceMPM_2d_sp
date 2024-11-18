@@ -27,7 +27,7 @@ struct SimParams
 public:
     constexpr static t_PointReal pi = 3.14159265358979323846;
     constexpr static int dim = 2;
-    constexpr static int nGridArrays = 3;
+    constexpr static int nGridArrays = 3; // mass, px, py
 
     // index of the corresponding array in SoA
     constexpr static size_t idx_utility_data = 0;
@@ -45,8 +45,7 @@ public:
     int tpb_P2G, tpb_Upd, tpb_G2P;  // threads per block for each operation
 
     int nPtsTotal;
-    int GridXTotal, GridY, GridTotal;
-    t_PointReal GridXDimension;
+    int GridXTotal, GridY;
 
     t_PointReal InitialTimeStep, SimulationEndTime;
     int UpdateEveryNthStep; // run N steps without update
