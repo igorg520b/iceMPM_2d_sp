@@ -234,7 +234,7 @@ void GPU_Partition::update_nodes(float simulation_time)
 
     partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(ind_center, nGridNodes,
                                                                       nGridPitch, grid_array, indenter_force_accumulator,
-                                                                      simulation_time);
+                                                                      simulation_time, grid_status_array);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
 }
 
@@ -248,8 +248,7 @@ void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer)
     const int &tpb = prms->tpb_G2P;
     const int nBlocks = (n + tpb - 1) / tpb;
 
-    partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ,
-                                                             GridX_partition, nGridPitch,
+    partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ, nGridPitch,
                                                              nPts_partition, nPtsPitch,
                                                              pts_array, grid_array);
 

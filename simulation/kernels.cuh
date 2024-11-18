@@ -98,7 +98,7 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
                                               const int nNodes, const int pitch_grid,
                                               t_GridReal *buffer_grid, t_PointReal *indenter_force_accumulator,
-                                              t_PointReal simulation_time)
+                                              t_PointReal simulation_time, const uint8_t *grid_status)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= nNodes) return;
@@ -126,10 +126,9 @@ __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
 
     GridVector2r velocity(vx, vy);
     velocity /= mass;
-    velocity[1] -= gprms.dt_Gravity;
+//    velocity[1] -= gprms.dt_Gravity;
 
-    if(velocity.squaredNorm() > vmax_squared) velocity = velocity.normalized()*vmax;
-
+/*
     // indenter
     GridVector2r n = gnpos - indCenter;
     if(n.squaredNorm() < indRsq)
@@ -156,25 +155,37 @@ __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
 
         }
     }
-
+*/
+    /*
     // attached bottom layer
     if(gi.y() <= 2) velocity.setZero();
 //    if(gi.y() <= 2 && velocity[1]<0) velocity[1] = 0;
     if(gi.y() >= gridY-3 && velocity[1]>0) velocity[1] = 0;
     if(gi.x() <= 2 && velocity[0]<0) velocity[0] = 0;
     else if(gi.x() >= gridXTotal-3 && velocity[0]>0) velocity[0] = 0;
-
-    // side boundary conditions would go here
+*/
+    uint8_t is_land = grid_status[idx];
+    if(is_land)
+    {
+        velocity.setZero();
+    }
+    else
+    {
+        // wind and water drag
+        GridVector2r vWind(-simulation_time-0.5,-simulation_time-0.5);
+        const t_GridReal coeff = 1e-3;
+        velocity = (1-coeff)*velocity + coeff*vWind;
+    }
 
     // write the updated grid velocity back to memory
+    if(velocity.squaredNorm() > vmax_squared) velocity = velocity.normalized()*vmax;
     buffer_grid[1*pitch_grid + idx] = (t_GridReal)velocity[0];
     buffer_grid[2*pitch_grid + idx] = (t_GridReal)velocity[1];
 }
 
 
 
-__global__ void partition_kernel_g2p(const bool recordPQ,
-                                     const int gridX, const int pitch_grid,
+__global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
                                      t_PointReal *buffer_pts, const t_GridReal *buffer_grid)
 {
@@ -190,6 +201,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
     const t_PointReal &mu = gprms.mu;
     const t_PointReal &kappa = gprms.kappa;
     const int &gridY = gprms.GridY;
+    const int &gridX = gprms.GridXTotal;
 
     PointVector2r pos;
     PointMatrix2r Fe;
@@ -242,6 +254,11 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
     else if(pos.x() < -0.5) { pos.x() += 1.0; cell_i.x()--; cell_updated = true; }
     if(pos.y() > 0.5) { pos.y() -= 1.0; cell_i.y()++; cell_updated = true; }
     else if(pos.y() < -0.5) { pos.y() += 1.0; cell_i.y()--; cell_updated = true; }
+    if(cell_updated)
+    {
+        if(cell_i.x() <= 1 || cell_i.x() >= gridX-2 || cell_i.y() <= 1 || cell_i.y() >= gridY-2)
+            utility_data |= status_disabled;
+    }
 
     Fe = (PointMatrix2r::Identity() + dt*p_Bp) * Fe;     // p.Bp is the gradient of the velocity vector (it seems)
 

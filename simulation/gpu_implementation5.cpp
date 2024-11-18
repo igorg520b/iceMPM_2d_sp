@@ -172,42 +172,6 @@ void GPU_Implementation5::transfer_from_device()
         }
     }
 
-    int count = 0;
-    for(int i=0;i<hssoa.size;i++)
-    {
-        SOAIterator s = hssoa.begin()+i;
-        if(s->getDisabledStatus()) continue;
-        count++;
-    }
-
-    if(count != model->prms.nPtsTotal)
-    {
-        spdlog::error("tranfer: hssoa.size {}; nPts {}, count_active {}", hssoa.size, model->prms.nPtsTotal, count);
-
-        unsigned offset_pts = 0;
-        for(int i=0;i<partitions.size();i++)
-        {
-            GPU_Partition &p = partitions[i];
-            int count_disabled_soa = 0;
-            for(int i=offset_pts; i<offset_pts+p.nPts_partition; i++)
-            {
-                SOAIterator s = hssoa.begin()+i;
-                if(s->getDisabledStatus())
-                {
-                    std::cout << i << ' ';
-                    count_disabled_soa++;
-                }
-            }
-            std::cout << '\n';
-            offset_pts += p.nPts_partition;
-            spdlog::error("P{}: size {}; disabled {}; disabled_soa {}",
-                          p.PartitionID, p.nPts_partition, p.nPts_disabled, count_disabled_soa);
-        }
-
-
-        throw std::runtime_error("transfer_from_device(): active point count mismatch");
-    }
-
     if(transfer_completion_callback) transfer_completion_callback();
 }
 

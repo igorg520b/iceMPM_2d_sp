@@ -24,10 +24,10 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
                                               const int nNodes, const int pitch_grid,
                                               t_GridReal *_buffer_grid, t_PointReal *indenter_force_accumulator,
-                                              t_PointReal simulation_time);
+                                              t_PointReal simulation_time, const uint8_t *grid_status);
 
 __global__ void partition_kernel_g2p(const bool recordPQ,
-                                     const int gridX, const int pitch_grid,
+                                     const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
                                      t_PointReal *buffer_pts, const t_GridReal *buffer_grid);
 

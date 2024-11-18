@@ -41,7 +41,7 @@ icy::VisualRepresentation::VisualRepresentation()
                               lutArrayMPMColors[i][2], 1.0);
 
     hueLut_four->SetNumberOfColors(7);
-    hueLut_four->SetTableValue(0, 0.3, 0.3, 0.3);
+    hueLut_four->SetTableValue(0, 151./255,188./255,215./255);
     hueLut_four->SetTableValue(1, 1.0, 0, 0);
     hueLut_four->SetTableValue(2, 0, 1.0, 0);
     hueLut_four->SetTableValue(3, 0.2, 0.2, 0.85);
