@@ -42,7 +42,7 @@ icy::VisualRepresentation::VisualRepresentation()
 
     hueLut_four->SetNumberOfColors(7);
     hueLut_four->SetTableValue(0, 151./255,188./255,215./255);
-    hueLut_four->SetTableValue(1, 1.0, 0, 0);
+    hueLut_four->SetTableValue(1, 1.0, 1.0, 1.0);
     hueLut_four->SetTableValue(2, 0, 1.0, 0);
     hueLut_four->SetTableValue(3, 0.2, 0.2, 0.85);
     hueLut_four->SetTableValue(4, 0, 0.5, 0.5);
@@ -231,16 +231,12 @@ void icy::VisualRepresentation::SynchronizeValues()
 
 
     unsigned activePtsCount = 0;
-    for(int i=0;i<model->gpu.hssoa.size;i++)
+    for(int i=0;i<model->prms.nPtsTotal;i++)
     {
         SOAIterator s = model->gpu.hssoa.begin()+i;
-        if(s->getDisabledStatus()) continue;
         PointVector2r pos = s->getPos(model->prms.cellsize);
-        points->SetPoint((vtkIdType)activePtsCount, pos[0], pos[1], 0);
-//        spdlog::info("setting point {}; {} - {}", activePtsCount, pos[0], pos[1]);
-        activePtsCount++;
+        points->SetPoint((vtkIdType)i, pos[0], pos[1], 0);
     }
-    if(activePtsCount != model->prms.nPtsTotal) throw std::runtime_error("SynchronizeValues() point count mismatch (pos)");
     points->Modified();
     actor_points->GetProperty()->SetPointSize(model->prms.ParticleViewSize);
     points_filter->Update();
@@ -258,17 +254,14 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_mapper->SetLookupTable(hueLut_four);
         scalarBar->SetLookupTable(hueLut_four);
         visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-        activePtsCount = 0;
-        for(int i=0;i<model->gpu.hssoa.size;i++)
+        for(int i=0;i<model->prms.nPtsTotal;i++)
         {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            if(s->getDisabledStatus()) continue;
-            bool isCrushed = s->getCrushedStatus();
             float value = 0;
-            if(isCrushed) value = 1;
-            visualized_values->SetValue((vtkIdType)activePtsCount++, (float)value);
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            if(s->getDisabledStatus()) value = 2;
+            else if(s->getCrushedStatus()) value = 1;
+            visualized_values->SetValue((vtkIdType)i, (float)value);
         }
-        if(activePtsCount != model->prms.nPtsTotal) throw std::runtime_error("SynchronizeValues() point count mismatch");
         visualized_values->Modified();
     }
     else if(VisualizingVariable == VisOpt::Jp_inv)
@@ -281,15 +274,13 @@ void icy::VisualRepresentation::SynchronizeValues()
         scalarBar->SetLookupTable(lutMPM);
         lutMPM->SetTableRange(centerVal-range, centerVal+range);
         visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-        activePtsCount = 0;
-        for(int i=0;i<model->gpu.hssoa.size;i++)
+        for(int i=0;i<model->prms.nPtsTotal;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            if(s->getDisabledStatus()) continue;
             double value = s->getValue(SimParams::idx_Jp_inv)-1;
-            visualized_values->SetValue((vtkIdType)activePtsCount++, (float)value);
+            if(s->getDisabledStatus()) value = 0;
+            visualized_values->SetValue((vtkIdType)i, (float)value);
         }
-        if(activePtsCount != model->prms.nPtsTotal) throw std::runtime_error("SynchronizeValues() point count mismatch");
         visualized_values->Modified();
     }
     else if(VisualizingVariable == VisOpt::grains)
@@ -302,17 +293,15 @@ void icy::VisualRepresentation::SynchronizeValues()
         scalarBar->SetLookupTable(hueLut_pastel);
 
         visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-        activePtsCount = 0;
-        for(int i=0;i<model->gpu.hssoa.size;i++)
+        for(int i=0;i<model->prms.nPtsTotal;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            if(s->getDisabledStatus()) continue;
             uint16_t grain = s->getGrain()%40;
             bool isCrushed = s->getCrushedStatus();
+            if(s->getDisabledStatus()) grain = 41;
             if(isCrushed) grain = 41;
-            visualized_values->SetValue((vtkIdType)activePtsCount++, (float)grain);
+            visualized_values->SetValue((vtkIdType)i, (float)grain);
         }
-        if(activePtsCount != model->prms.nPtsTotal) throw std::runtime_error("SynchronizeValues() point count mismatch");
         visualized_values->Modified();
     }
     else if(VisualizingVariable == VisOpt::velocity)
@@ -328,17 +317,15 @@ void icy::VisualRepresentation::SynchronizeValues()
 
         //points_mapper->SetScalarRange(11,-1);
         visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-        activePtsCount = 0;
-        for(int i=0;i<model->gpu.hssoa.size;i++)
+        for(int i=0;i<model->prms.nPtsTotal;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            if(s->getDisabledStatus()) continue;
             PointVector2r vel = s->getVelocity();
             float value = (float)vel.norm();
+            if(s->getDisabledStatus()) value = 1.9;
             if(value>=1.9) value=1.9;
-            visualized_values->SetValue((vtkIdType)activePtsCount++, (float)value);
+            visualized_values->SetValue((vtkIdType)i, (float)value);
         }
-        if(activePtsCount != model->prms.nPtsTotal) throw std::runtime_error("SynchronizeValues() point count mismatch");
         visualized_values->Modified();
     }
     else

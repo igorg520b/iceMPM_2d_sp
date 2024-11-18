@@ -171,8 +171,9 @@ __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
     }
     else
     {
+        float windSpeed = min(0.5+simulation_time, 2.0);
         // wind and water drag
-        GridVector2r vWind(-simulation_time-0.5,-simulation_time-0.5);
+        GridVector2r vWind(-windSpeed,-windSpeed);
         const t_GridReal coeff = 1e-3;
         velocity = (1-coeff)*velocity + coeff*vWind;
     }
