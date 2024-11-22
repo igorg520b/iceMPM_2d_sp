@@ -36,13 +36,15 @@ void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offse
         }
     }
 
-    err = cudaMemcpyAsync(host_side_indenter_force_accumulator, indenter_force_accumulator,
-                          prms->IndenterArraySize(), cudaMemcpyDeviceToHost, streamCompute);
-    if(err != cudaSuccess) throw std::runtime_error("transfer_from_device() cudaMemcpyAsync indenter");
-
+    // transfer error code
     err = cudaMemcpyFromSymbolAsync(&error_code, gpu_error_indicator, sizeof(error_code), 0, cudaMemcpyDeviceToHost,
                                     streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("transfer_from_device");
+
+    // transfer the count of disabled points
+    err = cudaMemcpyFromSymbolAsync(&disabled_points_count, gpu_disabled_points_count,
+                                    sizeof(disabled_points_count), 0, cudaMemcpyDeviceToHost, streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("transfer_from_device; disabled_points_count");
 }
 
 
@@ -65,6 +67,12 @@ void GPU_Partition::transfer_points_from_soa_to_device(HostSideSOA &hssoa, int p
             throw std::runtime_error("transfer_points_from_soa_to_device");
         }
     }
+
+    err = cudaMemcpyToSymbolAsync(gpu_disabled_points_count, &disabled_points_count,
+                                              sizeof(disabled_points_count), 0,
+                                              cudaMemcpyHostToDevice,streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("gpu_error_indicator initialization");
+
 }
 
 void GPU_Partition::transfer_grid_data_to_device(HostSideSOA &hssoa)
@@ -73,21 +81,21 @@ void GPU_Partition::transfer_grid_data_to_device(HostSideSOA &hssoa)
     err = cudaSetDevice(Device);
     if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
     size_t grid_array_size = prms->GridXTotal * prms->GridY * sizeof(uint8_t);
-    err = cudaMemcpy(grid_status_array, hssoa.grid_status_buffer.data(), grid_array_size, cudaMemcpyHostToDevice);
+    err = cudaMemcpyAsync(grid_status_array, hssoa.grid_status_buffer.data(), grid_array_size, cudaMemcpyHostToDevice,streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
 }
 
 
 GPU_Partition::GPU_Partition()
 {
+    initialized = false;
     error_code = 0;
-    nPts_partition = GridX_partition = GridX_offset = 0;
-    nPts_disabled = 0;
+    disabled_points_count = 0;
+    nPts_partition = GridX_partition = 0;
 
-    host_side_indenter_force_accumulator = nullptr;
     pts_array = nullptr;
     grid_array = nullptr;
-    indenter_force_accumulator = nullptr;
+    grid_status_array = nullptr;
 }
 
 GPU_Partition::~GPU_Partition()
@@ -104,17 +112,15 @@ GPU_Partition::~GPU_Partition()
 
     cudaStreamDestroy(streamCompute);
 
-    cudaFreeHost(host_side_indenter_force_accumulator);
-
     cudaFree(grid_array);
     cudaFree(pts_array);
-    cudaFree(indenter_force_accumulator);
     cudaFree(grid_status_array);
     spdlog::info("Destructor invoked; partition {} on device {}", PartitionID, Device);
 }
 
 void GPU_Partition::initialize(int device, int partition)
 {
+    if(initialized) throw std::runtime_error("GPU_Partition double initialization");
     this->PartitionID = partition;
     this->Device = device;
     cudaSetDevice(Device);
@@ -157,15 +163,6 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
     err = cudaMalloc(&grid_status_array, gx*gy*sizeof(uint8_t));
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid status array");
 
-    // host-side indenter accumulator
-    err = cudaMallocHost(&host_side_indenter_force_accumulator, prms->IndenterArraySize());
-    if(err!=cudaSuccess) throw std::runtime_error("GPU_Partition allocate host-side buffer");
-    memset(host_side_indenter_force_accumulator, 0, prms->IndenterArraySize());
-
-    // indenter accumulator
-    err = cudaMalloc(&indenter_force_accumulator, prms->IndenterArraySize());
-    if(err != cudaSuccess) throw std::runtime_error("cuda_allocate_arrays");
-
     // points
     const size_t pts_buffer_requested = sizeof(t_PointReal) * n_points_capacity;
     err = cudaMallocPitch(&pts_array, &nPtsPitch, pts_buffer_requested, SimParams::nPtsArrays);
@@ -191,13 +188,6 @@ void GPU_Partition::update_constants()
 }
 
 
-
-void GPU_Partition::reset_indenter_force_accumulator()
-{
-    cudaSetDevice(Device);
-    cudaError_t err = cudaMemsetAsync(indenter_force_accumulator, 0, prms->IndenterArraySize(), streamCompute);
-    if(err != cudaSuccess) throw std::runtime_error("cuda_reset_grid error");
-}
 
 
 // ============================================================= main simulation steps
@@ -230,10 +220,9 @@ void GPU_Partition::update_nodes(float simulation_time)
 
     int tpb = prms->tpb_Upd;
     int nBlocks = (nGridNodes + tpb - 1) / tpb;
-    GridVector2r ind_center(prms->indenter_x, prms->indenter_y);
 
-    partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(ind_center, nGridNodes,
-                                                                      nGridPitch, grid_array, indenter_force_accumulator,
+    partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(nGridNodes,
+                                                                      nGridPitch, grid_array,
                                                                       simulation_time, grid_status_array);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
 }

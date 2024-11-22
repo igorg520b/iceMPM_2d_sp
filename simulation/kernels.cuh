@@ -12,6 +12,7 @@ constexpr uint32_t status_crushed = 0x10000;
 constexpr uint32_t status_disabled = 0x20000;
 
 __device__ uint8_t gpu_error_indicator;
+__device__ int gpu_disabled_points_count;
 __constant__ SimParams gprms;
 
 __forceinline__ __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3])
@@ -95,9 +96,8 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 
 
 
-__global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
-                                              const int nNodes, const int pitch_grid,
-                                              t_GridReal *buffer_grid, t_PointReal *indenter_force_accumulator,
+__global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
+                                              t_GridReal *buffer_grid,
                                               t_PointReal simulation_time, const uint8_t *grid_status)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -171,7 +171,8 @@ __global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
     }
     else
     {
-        float windSpeed = min(0.5+simulation_time, 2.0);
+        // apply wind drag force
+        float windSpeed = min(0.1+simulation_time*0.25, 2.0);
         // wind and water drag
         GridVector2r vWind(-windSpeed,-windSpeed);
         const t_GridReal coeff = 1e-3;
@@ -258,7 +259,10 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     if(cell_updated)
     {
         if(cell_i.x() <= 1 || cell_i.x() >= gridX-2 || cell_i.y() <= 1 || cell_i.y() >= gridY-2)
+        {
             utility_data |= status_disabled;
+            atomicAdd(&gpu_disabled_points_count, 1);
+        }
     }
 
     Fe = (PointMatrix2r::Identity() + dt*p_Bp) * Fe;     // p.Bp is the gradient of the velocity vector (it seems)
@@ -271,7 +275,6 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
 
     ComputePQ(Je_tr, p_tr, q_tr, kappa, mu, Fe);    // computes P, Q, J
 
-
     if(!(utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(utility_data, grain, p_tr, q_tr);
     if(utility_data & status_crushed)
     {
@@ -281,6 +284,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
         ComputeSVD(Fe, U, vSigma, V, vSigmaSquared, v_s_hat_tr, kappa, mu, Je_tr);
         Wolper_Drucker_Prager(p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
     }
+
 
     // distribute the values of p back into GPU memory: pos, velocity, BP, Fe, Jp_inv, PQ
     for(int i=0; i<SimParams::dim; i++)

@@ -28,12 +28,11 @@ bool icy::Model::Step()
                  gpu.hssoa.size, gpu.hssoa.capacity);
 
     int count_unupdated_steps = 0;
-    gpu.reset_indenter_force_accumulator();
+    gpu.reset_timings();
 
     do
     {
         simulation_time += prms.InitialTimeStep;
-        prms.indenter_x = prms.indenter_x_initial + simulation_time*prms.IndVelocity;
 
         gpu.reset_grid();
         gpu.p2g();
@@ -53,20 +52,28 @@ bool icy::Model::Step()
                  prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity);
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
-    gpu.indenter_force /= (float)count_unupdated_steps;
 
-    spdlog::info("{:^3s} {:^8s} {:^8s} {:^7s} {:^3s} {:^3s} | {:^5s} {:^5s} {:^5s} | {:^5s} {:^5s} {:^5s} {:^5s} {:^5s} | {:^6s}",
-                 "P-D",    "pts",  "free", "dis","msn", "mdv", "p2g",  "s2",  "S12",     "u",  "g2p", "psnt", "prcv","S36", "tot");
-    for(GPU_Partition &p : gpu.partitions)
+    // print out timings
+    spdlog::info("{:^3s} {:^8s} {:^8s} {:^7s} | {:^5s} {:^5s} {:^5s} | {:^5s} {:^5s} {:^5s} {:^5s} {:^5s} | {:^6s}",
+                 "P-D",  "pts", "free", "dis",  "p2g",  "s2",  "S12",     "u",  "g2p", "psnt", "prcv","S36", "tot");
+    GPU_Partition &p = gpu.partitions.front();
+    p.normalize_timings(count_unupdated_steps);
+    spdlog::info("{:>1}-{:>1} {:>8} {:>8} {:>7} | {:>5.1f} {:>5.1f} {:>5.1f} | {:>5.1f} {:>5.1f} {:>5.1f} {:5.1f} {:5.1f} | {:>6.1f}",
+                 p.PartitionID, p.Device, p.nPts_partition, (p.nPtsPitch-p.nPts_partition), p.disabled_points_count,
+                 p.timing_10_P2GAndHalo, p.timing_20_acceptHalo, (p.timing_10_P2GAndHalo + p.timing_20_acceptHalo),
+                 p.timing_30_updateGrid, p.timing_40_G2P, p.timing_60_ptsSent, p.timing_70_ptsAccepted,
+                 (p.timing_30_updateGrid + p.timing_40_G2P + p.timing_60_ptsSent + p.timing_70_ptsAccepted),
+                 p.timing_stepTotal);
+
+    const float disabled_proportion = (float)p.disabled_points_count/p.nPts_partition;
+    if(disabled_proportion > SimParams::disabled_pts_proportion_threshold)
     {
-        p.normalize_timings(count_unupdated_steps);
-
-        spdlog::info("{:>1}-{:>1} {:>8} {:>8} {:>7} {:>3} {:>3} | {:>5.1f} {:>5.1f} {:>5.1f} | {:>5.1f} {:>5.1f} {:>5.1f} {:5.1f} {:5.1f} | {:>6.1f}",
-                     p.PartitionID, p.Device, p.nPts_partition, (p.nPtsPitch-p.nPts_partition), p.nPts_disabled, 0, 0,
-                     p.timing_10_P2GAndHalo, p.timing_20_acceptHalo, (p.timing_10_P2GAndHalo + p.timing_20_acceptHalo),
-                     p.timing_30_updateGrid, p.timing_40_G2P, p.timing_60_ptsSent, p.timing_70_ptsAccepted,
-                     (p.timing_30_updateGrid + p.timing_40_G2P + p.timing_60_ptsSent + p.timing_70_ptsAccepted),
-                     p.timing_stepTotal);
+        spdlog::info("Model::Step() squeezing and sorting HSSOA");
+        gpu.hssoa.RemoveDisabledAndSort(prms.GridY);
+        gpu.split_hssoa_into_partitions();
+        gpu.transfer_to_device();
+        SyncTopologyRequired = true;
+        spdlog::info("Model::Step() rebalancing done");
     }
 
     accessing_point_data.unlock();

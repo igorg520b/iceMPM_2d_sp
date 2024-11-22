@@ -5,7 +5,6 @@
 void SimParams::Reset()
 {
     nPtsTotal = 0;
-    n_indenter_subdivisions = 100;
 
     InitialTimeStep = 3.e-5;
     YoungsModulus = 5.e8;
@@ -14,6 +13,7 @@ void SimParams::Reset()
     ParticleViewSize = 2.5f;
 
     SimulationEndTime = 12;
+    AnimationFramesRequested = 5000;
 
     PoissonsRatio = 0.3;
     Gravity = 9.81;
@@ -38,7 +38,6 @@ void SimParams::Reset()
     tpb_Upd = 512;
     tpb_G2P = 128;
 
-    indenter_x = indenter_x_initial = indenter_y = indenter_y_initial = 0;
     SetupType = 0;
     GrainVariability = 0.50;
 
@@ -65,6 +64,8 @@ std::string SimParams::ParseFile(std::string fileName)
 
     if(doc.HasMember("SetupType")) SetupType = doc["SetupType"].GetInt();
     if(doc.HasMember("InitialTimeStep")) InitialTimeStep = doc["InitialTimeStep"].GetDouble();
+    if(doc.HasMember("AnimationFramesRequested")) AnimationFramesRequested = doc["AnimationFramesRequested"].GetInt();
+
     if(doc.HasMember("YoungsModulus")) YoungsModulus = doc["YoungsModulus"].GetDouble();
     if(doc.HasMember("ParticleViewSize")) ParticleViewSize = doc["ParticleViewSize"].GetDouble();
     if(doc.HasMember("SimulationEndTime")) SimulationEndTime = doc["SimulationEndTime"].GetDouble();
@@ -115,7 +116,7 @@ void SimParams::ComputeHelperVariables()
 {
     ParticleMass = ParticleVolume * Density;
 
-    UpdateEveryNthStep = (int)(1.f/(200*InitialTimeStep));
+    UpdateEveryNthStep = (int)(SimulationEndTime/(AnimationFramesRequested*InitialTimeStep));
     cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
     Dp_inv = 4./(cellsize*cellsize);
     IndRSq = IndDiameter*IndDiameter/4.;

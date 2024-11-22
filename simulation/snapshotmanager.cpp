@@ -52,24 +52,25 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     // allocate space host-side
     model->gpu.hssoa.Allocate(nPoints, grid_total);
     model->gpu.hssoa.size = nPoints;
-
+    t_PointReal *hssoa_ptr;
+    {
     std::vector<float> buffer(nPoints);
 
     // read
     file.openDataSet("x").read(buffer.data(), H5::PredType::NATIVE_FLOAT);
-    t_PointReal *hssoa_ptr = model->gpu.hssoa.getPointerToPosX();
+    hssoa_ptr = model->gpu.hssoa.getPointerToPosX();
     for(int i=0;i<nPoints;i++) hssoa_ptr[i] = (t_PointReal)buffer[i];
 
     file.openDataSet("y").read(buffer.data(), H5::PredType::NATIVE_FLOAT);
     hssoa_ptr = model->gpu.hssoa.getPointerToPosY();
     for(int i=0;i<nPoints;i++) hssoa_ptr[i] = (t_PointReal)buffer[i];
+    }
 
+    {
     std::vector<uint32_t> buffer2(nPoints);
     dataset_grains.read(buffer2.data(), H5::PredType::NATIVE_UINT32);
     hssoa_ptr = model->gpu.hssoa.getPointerToLine(SimParams::idx_utility_data);
-    for(int i=0;i<nPoints;i++)
-    {
-        *reinterpret_cast<uint32_t*>(&hssoa_ptr[i]) = buffer2[i];
+    for(int i=0;i<nPoints;i++) *reinterpret_cast<uint32_t*>(&hssoa_ptr[i]) = buffer2[i];
     }
 
     // read volume attribute
@@ -117,21 +118,6 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     const float r = model->prms.IndDiameter/2;
     const float ht = r - model->prms.IndDepth;
     const float x_ind_offset = sqrt(r*r - ht*ht);
-
-    model->prms.indenter_x = floor((block_left-x_ind_offset)/h)*h;
-    if(model->prms.SetupType == 0)
-        model->prms.indenter_y = block_top + ht;
-    else if(model->prms.SetupType == 1)
-        model->prms.indenter_y = ceil(block_top/h)*h;
-    else
-    {
-        // for buoyancy testing
-        model->prms.indenter_x = model->prms.indenter_y = -1;
-    }
-
-
-    model->prms.indenter_x_initial = model->prms.indenter_x;
-    model->prms.indenter_y_initial = model->prms.indenter_y;
 
     // particle volume and mass
     model->prms.ParticleVolume = model->prms.Volume/nPoints;

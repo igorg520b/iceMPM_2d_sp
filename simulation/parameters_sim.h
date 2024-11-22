@@ -14,8 +14,10 @@
 
 // variables related to the formulation of the model
 
-typedef double t_GridReal;      // data type for grid data
-typedef double t_PointReal;     // data type to store point data
+//typedef double t_GridReal;      // data type for grid data
+//typedef double t_PointReal;     // data type to store point data
+typedef float t_GridReal;      // data type for grid data
+typedef float t_PointReal;     // data type to store point data
 typedef Eigen::Matrix<t_GridReal, 2, 1> GridVector2r;
 typedef Eigen::Matrix<t_GridReal, 2, 2> GridMatrix2r;
 typedef Eigen::Matrix<t_PointReal, 2, 1> PointVector2r;
@@ -25,6 +27,7 @@ typedef Eigen::Array<t_PointReal, 2, 1> PointArray2r;
 struct SimParams
 {
 public:
+    constexpr static float disabled_pts_proportion_threshold = 0.05; // when exceeded, disabled points are removed
     constexpr static t_PointReal pi = 3.14159265358979323846;
     constexpr static int dim = 2;
     constexpr static int nGridArrays = 3; // mass, px, py
@@ -35,20 +38,20 @@ public:
     constexpr static size_t idx_P = integer_cell_idx + 1;
     constexpr static size_t idx_Q = idx_P + 1;
     constexpr static size_t idx_Jp_inv = idx_Q + 1;
-    constexpr static size_t posx = idx_Jp_inv + 1;
+    constexpr static size_t idx_Qp = idx_Jp_inv + 1;    // accumulated plastic shear
+    constexpr static size_t posx = idx_Qp + 1;
     constexpr static size_t velx = posx + 2;
     constexpr static size_t Fe00 = velx + 2;
     constexpr static size_t Bp00 = Fe00 + 4;
     constexpr static size_t nPtsArrays = Bp00 + 4;
 
-    int n_indenter_subdivisions;
     int tpb_P2G, tpb_Upd, tpb_G2P;  // threads per block for each operation
 
     int nPtsTotal;
     int GridXTotal, GridY;
 
     t_PointReal InitialTimeStep, SimulationEndTime;
-    int UpdateEveryNthStep; // run N steps without update
+    int AnimationFramesRequested, UpdateEveryNthStep; // run N steps without update
     int SimulationStep;
     t_PointReal SimulationTime;
 
@@ -70,7 +73,6 @@ public:
 
     t_PointReal ParticleVolume, ParticleMass, ParticleViewSize;
 
-    t_PointReal indenter_x, indenter_x_initial, indenter_y, indenter_y_initial;
     t_PointReal Volume;  // total volume (area) of the object
     int SetupType;  // 0 - ice block horizontal indentation; 1 - cone uniaxial compression
     t_PointReal GrainVariability;
@@ -87,7 +89,6 @@ public:
     void ComputeIntegerBlockCoords();
     float PointsPerCell() {return nPtsTotal/(Volume/(cellsize*cellsize));}
     int AnimationFrameNumber() { return SimulationStep / UpdateEveryNthStep;}
-    size_t IndenterArraySize() { return sizeof(t_PointReal)*n_indenter_subdivisions*dim; }
 };
 
 #endif

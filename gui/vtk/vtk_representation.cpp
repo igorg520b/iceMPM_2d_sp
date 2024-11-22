@@ -52,25 +52,6 @@ icy::VisualRepresentation::VisualRepresentation()
     hueLut_four->SetTableRange(0,6);
 
 
-    indenterMapper->SetInputConnection(indenterSource->GetOutputPort());
-    actor_indenter->SetMapper(indenterMapper);
-
-    indenterSource->GeneratePolygonOff();
-    indenterSource->SetNumberOfSides(50);
-
-    indenterMapper->SetInputConnection(indenterSource->GetOutputPort());
-    actor_indenter->SetMapper(indenterMapper);
-    actor_indenter->GetProperty()->LightingOff();
-    actor_indenter->GetProperty()->EdgeVisibilityOn();
-    actor_indenter->GetProperty()->VertexVisibilityOff();
-    actor_indenter->GetProperty()->SetColor(0.1,0.1,0.1);
-    actor_indenter->GetProperty()->SetEdgeColor(90.0/255.0, 90.0/255.0, 97.0/255.0);
-    actor_indenter->GetProperty()->ShadingOff();
-    actor_indenter->GetProperty()->SetInterpolationToFlat();
-    actor_indenter->PickableOff();
-    actor_indenter->GetProperty()->SetLineWidth(3);
-
-
     // points
     points_polydata->SetPoints(points);
     points_polydata->GetPointData()->AddArray(visualized_values);
@@ -158,10 +139,9 @@ void icy::VisualRepresentation::SynchronizeTopology()
 
     spdlog::info("SynchronizeTopology()");
 
-    points->SetNumberOfPoints(model->prms.nPtsTotal);
-    visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-    indenterSource->SetRadius(model->prms.IndDiameter/2.f);
-
+    const int nPts = model->gpu.hssoa.size;
+    points->SetNumberOfPoints(nPts);
+    visualized_values->SetNumberOfValues(nPts);
 
     int gx = model->prms.GridXTotal;
     int gy = model->prms.GridY;
@@ -224,14 +204,8 @@ void icy::VisualRepresentation::SynchronizeValues()
 
     double sim_time = model->prms.SimulationTime;
 
-    // spdlog::info("SynchronizeValues() npts {}", model->prms.nPtsTotal);
-    double indenter_x = model->prms.indenter_x;
-    double indenter_y = model->prms.indenter_y;
-    indenterSource->SetCenter(indenter_x, indenter_y, 1);
-
-
-    unsigned activePtsCount = 0;
-    for(int i=0;i<model->prms.nPtsTotal;i++)
+    const int nPts = model->gpu.hssoa.size;
+    for(int i=0;i<nPts;i++)
     {
         SOAIterator s = model->gpu.hssoa.begin()+i;
         PointVector2r pos = s->getPos(model->prms.cellsize);
@@ -253,8 +227,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_mapper->UseLookupTableScalarRangeOn();
         points_mapper->SetLookupTable(hueLut_four);
         scalarBar->SetLookupTable(hueLut_four);
-        visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-        for(int i=0;i<model->prms.nPtsTotal;i++)
+        for(int i=0;i<nPts;i++)
         {
             float value = 0;
             SOAIterator s = model->gpu.hssoa.begin()+i;
@@ -273,8 +246,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_mapper->SetLookupTable(lutMPM);
         scalarBar->SetLookupTable(lutMPM);
         lutMPM->SetTableRange(centerVal-range, centerVal+range);
-        visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-        for(int i=0;i<model->prms.nPtsTotal;i++)
+        for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             double value = s->getValue(SimParams::idx_Jp_inv)-1;
@@ -291,9 +263,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_mapper->UseLookupTableScalarRangeOn();
         points_mapper->SetLookupTable(hueLut_pastel);
         scalarBar->SetLookupTable(hueLut_pastel);
-
-        visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-        for(int i=0;i<model->prms.nPtsTotal;i++)
+        for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             uint16_t grain = s->getGrain()%40;
@@ -316,8 +286,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         hueLut_Southwest->SetRange(0, 2.0);
 
         //points_mapper->SetScalarRange(11,-1);
-        visualized_values->SetNumberOfValues(model->prms.nPtsTotal);
-        for(int i=0;i<model->prms.nPtsTotal;i++)
+        for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             PointVector2r vel = s->getVelocity();

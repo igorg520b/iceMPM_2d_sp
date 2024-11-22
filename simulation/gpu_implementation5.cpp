@@ -97,14 +97,11 @@ void GPU_Implementation5::initialize()
 void GPU_Implementation5::split_hssoa_into_partitions()
 {
     spdlog::info("split_hssoa_into_partitions() start");
-    const t_PointReal &hinv = model->prms.cellsize_inv;
-    const int &GridXTotal = model->prms.GridXTotal;
 
     GPU_Partition &p = partitions.front();
-    p.nPts_disabled = 0;
     p.nPts_partition = hssoa.size;
-    p.GridX_offset = 0;
-    p.GridX_partition = GridXTotal;
+    p.GridX_partition = model->prms.GridXTotal;
+    p.disabled_points_count = 0;
     spdlog::info("split_hssoa_into_partitions() done");
 }
 
@@ -153,7 +150,6 @@ void GPU_Implementation5::transfer_from_device()
     hssoa.size = offset_pts;
 
     // wait until everything is copied to host
-    indenter_force.setZero();
     for(int i=0;i<partitions.size();i++)
     {
         GPU_Partition &p = partitions[i];
@@ -163,12 +159,6 @@ void GPU_Implementation5::transfer_from_device()
         {
             spdlog::critical("P {}; error code {}", p.PartitionID, p.error_code);
             throw std::runtime_error("error code");
-        }
-
-        for(int j=0; j<model->prms.n_indenter_subdivisions; j++)
-        {
-            indenter_force.x() += p.host_side_indenter_force_accumulator[j*2+0];
-            indenter_force.y() += p.host_side_indenter_force_accumulator[j*2+1];
         }
     }
 
@@ -190,11 +180,10 @@ void GPU_Implementation5::update_constants()
     for(GPU_Partition &p : partitions) p.update_constants();
 }
 
-void GPU_Implementation5::reset_indenter_force_accumulator()
+void GPU_Implementation5::reset_timings()
 {
     for(GPU_Partition &p : partitions)
     {
-        p.reset_indenter_force_accumulator();
         p.reset_timings();
     }
 }

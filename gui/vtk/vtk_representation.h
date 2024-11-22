@@ -59,17 +59,12 @@ public:
     vtkNew<vtkActor> actor_points;
     vtkNew<vtkActor> actor_grid;
     vtkNew<vtkActor> actor_grid2;
-    vtkNew<vtkActor> actor_indenter;
     vtkNew<vtkScalarBarActor> scalarBar;
 
     vtkNew<vtkTextActor> actorText;
 
 private:
     vtkNew<vtkLookupTable> hueLut_pastel, hueLut_four, hueLut_temperature, hueLut_Southwest;
-
-    // indenter
-    vtkNew<vtkRegularPolygonSource> indenterSource;
-    vtkNew<vtkPolyDataMapper> indenterMapper;
 
     // points
     vtkNew<vtkPoints> points;

@@ -21,9 +21,8 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
                               const int count_pts, const int pitch_pts,
                                      const t_PointReal *buffer_pts, t_GridReal *buffer_grid);
 
-__global__ void partition_kernel_update_nodes(const GridVector2r indCenter,
-                                              const int nNodes, const int pitch_grid,
-                                              t_GridReal *_buffer_grid, t_PointReal *indenter_force_accumulator,
+__global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
+                                              t_GridReal *_buffer_grid,
                                               t_PointReal simulation_time, const uint8_t *grid_status);
 
 __global__ void partition_kernel_g2p(const bool recordPQ,
@@ -79,7 +78,6 @@ struct GPU_Partition
 
     // calculation
     void reset_grid();
-    void reset_indenter_force_accumulator();
     void p2g();
     void update_nodes(float simulation_time);
     void g2p(const bool recordPQ, const bool enablePointTransfer);
@@ -96,11 +94,7 @@ struct GPU_Partition
 
     size_t nPtsPitch, nGridPitch; // in number of elements(!), for coalesced access on the device
     int nPts_partition;    // actual number of points (including disabled)
-    int nPts_disabled;      // count the disabled points in this partition
     int GridX_partition;   // size of the portion of the grid for which this partition is "responsible"
-    int GridX_offset;      // index where the grid starts in this partition
-
-    t_PointReal *host_side_indenter_force_accumulator;
 
     // stream and events
     cudaStream_t streamCompute;
@@ -114,12 +108,13 @@ struct GPU_Partition
     cudaEvent_t event_80_pts_accepted;
 
     bool initialized = false;
-    uint8_t error_code = 0;
+    uint8_t error_code;             // set by kernels if there is something wrong
+    int disabled_points_count;      // counts how many points are marked as disabled in the simulation
 
-    // device-side data
-    t_PointReal *pts_array, *indenter_force_accumulator;
-    t_GridReal *grid_array;
-    uint8_t *grid_status_array;
+    // pointers to device-side arrays
+    t_PointReal *pts_array;
+    t_GridReal *grid_array;         // grid nodes: mass, vx, vy
+    uint8_t *grid_status_array;     // boundary condition for grid nodes
 
     // frame analysis
     float timing_10_P2GAndHalo;

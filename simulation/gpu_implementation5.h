@@ -28,7 +28,6 @@ public:
     icy::Model *model;
     std::vector<GPU_Partition> partitions;
     HostSideSOA hssoa;
-    PointVector2r indenter_force;
 
     std::function<void()> transfer_completion_callback;
 
@@ -42,7 +41,7 @@ public:
     void synchronize(); // call before terminating the main thread
     void update_constants();
     void reset_grid();
-    void reset_indenter_force_accumulator();
+    void reset_timings();
 
     void p2g();
     void update_nodes(float simulation_time);
