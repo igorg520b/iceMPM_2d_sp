@@ -18,6 +18,7 @@
 //typedef double t_PointReal;     // data type to store point data
 typedef float t_GridReal;      // data type for grid data
 typedef float t_PointReal;     // data type to store point data
+
 typedef Eigen::Matrix<t_GridReal, 2, 1> GridVector2r;
 typedef Eigen::Matrix<t_GridReal, 2, 2> GridMatrix2r;
 typedef Eigen::Matrix<t_PointReal, 2, 1> PointVector2r;
@@ -47,13 +48,16 @@ public:
 
     int tpb_P2G, tpb_Upd, tpb_G2P;  // threads per block for each operation
 
-    int nPtsTotal;
+    int nPtsInitial;
     int GridXTotal, GridY;
 
     t_PointReal InitialTimeStep, SimulationEndTime;
     int AnimationFramesRequested, UpdateEveryNthStep; // run N steps without update
     int SimulationStep;
     t_PointReal SimulationTime;
+
+    // wind
+    t_PointReal windDragCoeff_airDensity;
 
     // material properties
     t_PointReal Gravity, Density, PoissonsRatio, YoungsModulus;
@@ -87,7 +91,7 @@ public:
     void ComputeCamClayParams2();
     void ComputeHelperVariables();
     void ComputeIntegerBlockCoords();
-    float PointsPerCell() {return nPtsTotal/(Volume/(cellsize*cellsize));}
+    float PointsPerCell() {return nPtsInitial/(Volume/(cellsize*cellsize));}
     int AnimationFrameNumber() { return SimulationStep / UpdateEveryNthStep;}
 };
 

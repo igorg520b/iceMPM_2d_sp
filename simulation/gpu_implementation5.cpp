@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 #include <Eigen/Core>
 #include <Eigen/LU>
@@ -43,9 +44,14 @@ void GPU_Implementation5::p2g()
 
 void GPU_Implementation5::update_nodes(float simulation_time)
 {
+    float windSpeed = std::min(1+simulation_time*1e-3, 30.0);
+    GridVector2r vWind(-1,-2.5);
+    vWind.normalize();
+    vWind *= windSpeed;
+
     for(GPU_Partition &p : partitions)
     {
-        p.update_nodes(simulation_time);
+        p.update_nodes(simulation_time, vWind);
         cudaError_t err = cudaEventRecord(p.event_40_grid_updated, p.streamCompute);
         if(err != cudaSuccess) throw std::runtime_error("update_nodes cudaEventRecord");
     }
@@ -110,7 +116,7 @@ void GPU_Implementation5::allocate_arrays()
 {
     spdlog::info("GPU_Implementation5::allocate_arrays()");
     int GridX_size = partitions.front().GridX_partition;
-    partitions.front().allocate(model->prms.nPtsTotal, GridX_size);
+    partitions.front().allocate(model->prms.nPtsInitial, GridX_size);
     spdlog::info("GPU_Implementation5::allocate_arrays() done");
 }
 

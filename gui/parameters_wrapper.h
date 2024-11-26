@@ -66,8 +66,8 @@ class ParamsWrapper : public QObject
     double getIndDepth() {return prms->IndDepth;}
 
     // ice block
-    Q_PROPERTY(int b_PtActual READ getPointCountActual NOTIFY propertyChanged)
-    int getPointCountActual() {return prms->nPtsTotal;}
+    Q_PROPERTY(int b_PtInitial READ getPointCountActual NOTIFY propertyChanged)
+    int getPointCountActual() {return prms->nPtsInitial;}
 
     Q_PROPERTY(QString b_Grid READ getGridDimensions NOTIFY propertyChanged)
     QString getGridDimensions() {return QString("%1 x %2").arg(prms->GridXTotal).arg(prms->GridY);}

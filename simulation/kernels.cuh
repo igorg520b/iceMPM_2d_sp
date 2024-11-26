@@ -15,16 +15,6 @@ __device__ uint8_t gpu_error_indicator;
 __device__ int gpu_disabled_points_count;
 __constant__ SimParams gprms;
 
-__forceinline__ __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3])
-{
-    // optimized method of computing the quadratic (!) weight function (no conditional operators)
-    PointArray2r arr_v0 = 0.5 - pos.array();
-    PointArray2r arr_v1 = pos.array();
-    PointArray2r arr_v2 = pos.array() + 0.5;
-    ww[0] = 0.5*arr_v0*arr_v0;
-    ww[1] = 0.75-arr_v1*arr_v1;
-    ww[2] = 0.5*arr_v2*arr_v2;
-}
 
 
 __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
@@ -98,7 +88,8 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 
 __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
                                               t_GridReal *buffer_grid,
-                                              t_PointReal simulation_time, const uint8_t *grid_status)
+                                              t_PointReal simulation_time, const uint8_t *grid_status,
+                                              const GridVector2r vWind)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= nNodes) return;
@@ -128,42 +119,6 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     velocity /= mass;
 //    velocity[1] -= gprms.dt_Gravity;
 
-/*
-    // indenter
-    GridVector2r n = gnpos - indCenter;
-    if(n.squaredNorm() < indRsq)
-    {
-        // grid node is inside the indenter
-        GridVector2r vrel = velocity - vco;
-        n.normalize();
-        t_GridReal vn = vrel.dot(n);   // normal component of the velocity
-        if(vn < 0)
-        {
-            GridVector2r vt = vrel - n*vn;   // tangential portion of relative velocity
-            GridVector2r prev_velocity = velocity;
-            velocity = vco + vt;
-            if(velocity.squaredNorm() > vmax_squared) velocity = velocity.normalized()*vmax;
-
-            // force on the indenter
-            GridVector2r force = (prev_velocity-velocity)*mass/dt;
-            float angle = atan2f((float)n[0],(float)n[1]);
-            angle += SimParams::pi;
-            angle *= gprms.n_indenter_subdivisions/ (2*SimParams::pi);
-            int index = min(max((int)angle, 0), gprms.n_indenter_subdivisions-1);
-            atomicAdd(&indenter_force_accumulator[0+2*index], (t_PointReal)force[0]);
-            atomicAdd(&indenter_force_accumulator[1+2*index], (t_PointReal)force[1]);
-
-        }
-    }
-*/
-    /*
-    // attached bottom layer
-    if(gi.y() <= 2) velocity.setZero();
-//    if(gi.y() <= 2 && velocity[1]<0) velocity[1] = 0;
-    if(gi.y() >= gridY-3 && velocity[1]>0) velocity[1] = 0;
-    if(gi.x() <= 2 && velocity[0]<0) velocity[0] = 0;
-    else if(gi.x() >= gridXTotal-3 && velocity[0]>0) velocity[0] = 0;
-*/
     uint8_t is_land = grid_status[idx];
     if(is_land)
     {
@@ -171,12 +126,23 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     }
     else
     {
-        // apply wind drag force
-        float windSpeed = min(0.1+simulation_time*0.25, 2.0);
+/*        // apply wind drag force
+        float windSpeed = min(0.5+simulation_time*1e-4, 2.0);
+        windSpeed += simulation_time*3e-5;
+        windSpeed = min(windSpeed, 10.0);
         // wind and water drag
         GridVector2r vWind(-windSpeed,-windSpeed);
         const t_GridReal coeff = 1e-3;
         velocity = (1-coeff)*velocity + coeff*vWind;
+*/
+
+
+        GridVector2r vrel = vWind - velocity;
+        const t_GridReal airDensity_coeff_A = gprms.windDragCoeff_airDensity * gprms.cellsize * gprms.cellsize;
+        const t_GridReal dragForce = vrel.squaredNorm() * airDensity_coeff_A;
+        vrel.normalize();
+        vrel *= dragForce * dt / mass;
+        velocity += vrel;
     }
 
     // write the updated grid velocity back to memory
@@ -322,6 +288,16 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
 
 
 
+__forceinline__ __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3])
+{
+    // optimized method of computing the quadratic (!) weight function (no conditional operators)
+    PointArray2r arr_v0 = 0.5 - pos.array();
+    PointArray2r arr_v1 = pos.array();
+    PointArray2r arr_v2 = pos.array() + 0.5;
+    ww[0] = 0.5*arr_v0*arr_v0;
+    ww[1] = 0.75-arr_v1*arr_v1;
+    ww[2] = 0.5*arr_v2*arr_v2;
+}
 
 
 
@@ -343,6 +319,7 @@ __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_
 
     pmax = gprms.IceCompressiveStrength;// * var1;
     pmin = -gprms.IceTensileStrength;// * var2;
+
     qmax = gprms.IceShearStrength * var3;
     pmin2 = -gprms.IceTensileStrength2 * var2;
 

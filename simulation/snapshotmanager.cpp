@@ -46,7 +46,7 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     H5::DataSet dataset_grains = file.openDataSet("llGrainIDs");
     hsize_t nPoints;
     dataset_grains.getSpace().getSimpleExtentDims(&nPoints, NULL);
-    model->prms.nPtsTotal = nPoints;
+    model->prms.nPtsInitial = nPoints;
     spdlog::info("nPoints {}; grid [{} x {}]", nPoints,model->prms.GridXTotal, model->prms.GridY);
 
     // allocate space host-side

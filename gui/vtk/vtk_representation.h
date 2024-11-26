@@ -46,7 +46,7 @@ public:
 
     icy::Model *model;
 
-    enum VisOpt { none, status, Jp_inv, grains, velocity };
+    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q };
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[20] = {};
@@ -65,6 +65,7 @@ public:
 
 private:
     vtkNew<vtkLookupTable> hueLut_pastel, hueLut_four, hueLut_temperature, hueLut_Southwest;
+    vtkNew<vtkLookupTable> hueLut_pressure;
 
     // points
     vtkNew<vtkPoints> points;
@@ -84,6 +85,9 @@ private:
     vtkNew<vtkDataSetMapper> grid_mapper2;
     vtkNew<vtkPoints> grid_points2;
     vtkNew<vtkIntArray> visualized_values_grid;
+
+    void populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
+    void interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
 
     static constexpr float lutArrayMPMColors[101][3] =
     {{0.25098, 0.556863, 0.756863}, {0.245961, 0.547294,
@@ -241,6 +245,33 @@ private:
                                                    0.499082}, {0.500864, 0.657426, 0.570014}, {0.463353, 0.641864,
                                                    0.640946}, {0.425842, 0.626302, 0.711878}, {0.388331, 0.61074,
          0.78281}, {0.35082, 0.595178, 0.853742},{0,0,0}};
+
+
+
+static constexpr float lutSpecialP[9][3] = {
+    {1.,1.,1.},
+    {0xb7/255.,0x24/255.,0x30/255.},
+    {0xc2/255.,0x66/255.,0x6e/255.},             // -2
+    {0xdf/255.,0xa7/255.,0xac/255.},             // -1
+
+    {0xc4/255.,0xdb/255.,0xf2/255.},     // 0
+
+    {0x80/255.,0xac/255.,0xd9/255.},    //1
+    {0x4c/255.,0x83/255.,0xbc/255.},    //2
+    {0x27/255.,0x5d/255.,0x96/255.},    //3
+    {0x0e/255.,0x41/255.,0x77/255.},    //4
+};
+
+
+static constexpr float lutSpecialSeven[7][3] = {
+    {151./255,188./255,215./255},
+    {1.0, 1.0, 1.0},
+    {0, 1.0, 0},
+    {0.2, 0.2, 0.85},
+    {0, 0.5, 0.5},
+    {41./255,128./255,215./255},
+    {0.35, 0.15, 0.15}
+};
 
 };
 #endif

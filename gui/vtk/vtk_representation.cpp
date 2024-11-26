@@ -7,50 +7,51 @@
 #include <iostream>
 #include <spdlog/spdlog.h>
 
+
+void icy::VisualRepresentation::populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
+{
+    table->SetNumberOfTableValues(size);
+    for(int i=0;i<size;i++)
+        table->SetTableValue(i,lutArray[i][0],lutArray[i][1],lutArray[i][2]);
+    table->SetTableRange(0, size-1);
+
+    table->SetRampToLinear();
+}
+
+
+void icy::VisualRepresentation::interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
+{
+    const int m = 256;
+    table->SetNumberOfTableValues(m);
+
+    for (int i = 0; i < m; ++i) {
+        float t = static_cast<float>(i) / (float)(m-1); // Normalize index to [0, 1]
+
+        // Map t to the interval [0, N-1] for interpolation
+        float scaledT = t * (size - 1);
+        int lowerIdx = static_cast<int>(std::floor(scaledT)); // Lower bound
+        int upperIdx = static_cast<int>(std::ceil(scaledT));  // Upper bound
+        float localT = scaledT - lowerIdx; // Fractional position between indices
+
+        // Linearly interpolate between colors at lowerIdx and upperIdx
+        float r = (1.0f - localT) * lutArray[lowerIdx][0] + localT * lutArray[upperIdx][0];
+        float g = (1.0f - localT) * lutArray[lowerIdx][1] + localT * lutArray[upperIdx][1];
+        float b = (1.0f - localT) * lutArray[lowerIdx][2] + localT * lutArray[upperIdx][2];
+
+        // Set the interpolated color in the lookup table
+        table->SetTableValue(i, r, g, b, 1.0); // Alpha is set to 1.0 (opaque)
+    }
+}
+
 icy::VisualRepresentation::VisualRepresentation()
 {
-    int nLut = sizeof lutArrayTemperatureAdj / sizeof lutArrayTemperatureAdj[0];
-    hueLut_temperature->SetNumberOfTableValues(nLut);
-    for ( int i=0; i<nLut; i++)
-        hueLut_temperature->SetTableValue(i, lutArrayTemperatureAdj[i][0],
-                              lutArrayTemperatureAdj[i][1],
-                              lutArrayTemperatureAdj[i][2], 1.0);
+    populateLut(lutArrayTemperatureAdj, (sizeof(lutArrayTemperatureAdj)/(sizeof(lutArrayTemperatureAdj[0]))), hueLut_temperature);
+    populateLut(lutSouthwest, (sizeof(lutSouthwest)/(sizeof(lutSouthwest[0]))), hueLut_Southwest);
+    populateLut(lutArrayPastel, (sizeof(lutArrayPastel)/(sizeof(lutArrayPastel[0]))), hueLut_pastel);
+    populateLut(lutArrayMPMColors, (sizeof(lutArrayMPMColors)/(sizeof(lutArrayMPMColors[0]))), lutMPM);
+    populateLut(lutSpecialSeven, (sizeof(lutSpecialSeven)/(sizeof(lutSpecialSeven[0]))), hueLut_four);
 
-
-    nLut = sizeof(lutSouthwest)/sizeof lutSouthwest[0];
-    hueLut_Southwest->SetNumberOfTableValues(nLut);
-    for ( int i=0; i<nLut; i++)
-        hueLut_Southwest->SetTableValue(i, lutSouthwest[i][0],
-                                          lutSouthwest[i][1],
-                                          lutSouthwest[i][2], 1.0);
-
-
-    nLut = sizeof lutArrayPastel / sizeof lutArrayPastel[0];
-    hueLut_pastel->SetNumberOfTableValues(nLut);
-    for ( int i=0; i<nLut; i++)
-        hueLut_pastel->SetTableValue(i, lutArrayPastel[i][0],
-                              lutArrayPastel[i][1],
-                              lutArrayPastel[i][2], 1.0);
-    hueLut_pastel->SetTableRange(0,nLut-1);
-
-    nLut = sizeof lutArrayMPMColors / sizeof lutArrayMPMColors[0];
-    lutMPM->SetNumberOfTableValues(nLut);
-    for ( int i=0; i<nLut; i++)
-        lutMPM->SetTableValue(i, lutArrayMPMColors[i][0],
-                              lutArrayMPMColors[i][1],
-                              lutArrayMPMColors[i][2], 1.0);
-
-    hueLut_four->SetNumberOfColors(7);
-    hueLut_four->SetTableValue(0, 151./255,188./255,215./255);
-    hueLut_four->SetTableValue(1, 1.0, 1.0, 1.0);
-    hueLut_four->SetTableValue(2, 0, 1.0, 0);
-    hueLut_four->SetTableValue(3, 0.2, 0.2, 0.85);
-    hueLut_four->SetTableValue(4, 0, 0.5, 0.5);
-
-    hueLut_four->SetTableValue(5, 41./255,128./255,215./255);
-    hueLut_four->SetTableValue(6, 0.35, 0.15, 0.15);
-    hueLut_four->SetTableRange(0,6);
-
+    interpolateLut(lutSpecialP, (sizeof(lutSpecialP)/(sizeof(lutSpecialP[0]))), hueLut_pressure);
 
     // points
     points_polydata->SetPoints(points);
@@ -252,6 +253,42 @@ void icy::VisualRepresentation::SynchronizeValues()
             double value = s->getValue(SimParams::idx_Jp_inv)-1;
             if(s->getDisabledStatus()) value = 0;
             visualized_values->SetValue((vtkIdType)i, (float)value);
+        }
+        visualized_values->Modified();
+    }
+    else if(VisualizingVariable == VisOpt::P)
+    {
+        scalarBar->VisibilityOn();
+        points_mapper->ScalarVisibilityOn();
+        points_mapper->SetColorModeToMapScalars();
+        points_mapper->UseLookupTableScalarRangeOn();
+        points_mapper->SetLookupTable(hueLut_pressure);
+        scalarBar->SetLookupTable(hueLut_pressure);
+        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            float value = s->getValue(SimParams::idx_P);
+            if(s->getDisabledStatus()) value = -2*range;
+            visualized_values->SetValue((vtkIdType)i, value);
+        }
+        visualized_values->Modified();
+    }
+    else if(VisualizingVariable == VisOpt::Q)
+    {
+        scalarBar->VisibilityOn();
+        points_mapper->ScalarVisibilityOn();
+        points_mapper->SetColorModeToMapScalars();
+        points_mapper->UseLookupTableScalarRangeOn();
+        points_mapper->SetLookupTable(hueLut_pressure);
+        scalarBar->SetLookupTable(hueLut_pressure);
+        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            float value = s->getValue(SimParams::idx_Q);
+            if(s->getDisabledStatus()) value = -2*range;
+            visualized_values->SetValue((vtkIdType)i, value);
         }
         visualized_values->Modified();
     }

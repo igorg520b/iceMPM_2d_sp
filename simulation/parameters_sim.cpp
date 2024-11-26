@@ -4,7 +4,7 @@
 
 void SimParams::Reset()
 {
-    nPtsTotal = 0;
+    nPtsInitial = 0;
 
     InitialTimeStep = 3.e-5;
     YoungsModulus = 5.e8;
@@ -17,7 +17,9 @@ void SimParams::Reset()
 
     PoissonsRatio = 0.3;
     Gravity = 9.81;
-    Density = 916;
+    Density = 916*0.2;  // surface density
+
+    windDragCoeff_airDensity = 0.025 * 1.2;
 
     IndDiameter = 0.324;
     IndVelocity = 0.2;
