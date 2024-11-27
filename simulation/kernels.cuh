@@ -152,6 +152,24 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 }
 
 
+__device__ void Glen_Nye_flow_law(PointMatrix2r &F)
+
+{
+    const t_PointReal &mu = gprms.mu;
+    const t_PointReal &dt = gprms.InitialTimeStep;
+    const t_PointReal &A = gprms.GlenA;
+
+
+    const t_PointReal Je_tr = F.determinant();
+    PointMatrix2r s = mu*(1./Je_tr)*dev(F*F.transpose());   // expression would be different in 3D
+    t_PointReal q = coeff1*s.norm();
+    PointMatrix2r epsilon_dot = A * q*q * coeff1 * s;
+
+    F = (PointMatrix2r::Identity() + dt*epsilon_dot) * F;
+}
+
+
+
 
 __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
@@ -249,6 +267,10 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
 
         ComputeSVD(Fe, U, vSigma, V, vSigmaSquared, v_s_hat_tr, kappa, mu, Je_tr);
         Wolper_Drucker_Prager(p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
+    }
+    else
+    {
+        Glen_Nye_flow_law(Fe);
     }
 
 
@@ -355,6 +377,7 @@ __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const
         if(y > 0) utility_data |= status_crushed;
     }
 }
+
 
 
 

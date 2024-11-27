@@ -58,6 +58,7 @@ public:
 
     // wind
     t_PointReal windDragCoeff_airDensity;
+    t_PointReal GlenA;
 
     // material properties
     t_PointReal Gravity, Density, PoissonsRatio, YoungsModulus;

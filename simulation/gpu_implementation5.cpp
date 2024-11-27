@@ -45,7 +45,7 @@ void GPU_Implementation5::p2g()
 void GPU_Implementation5::update_nodes(float simulation_time)
 {
     float windSpeed = std::min(1+simulation_time*1e-3, 30.0);
-    GridVector2r vWind(-1,-2.5);
+    GridVector2r vWind(-1,-1);
     vWind.normalize();
     vWind *= windSpeed;
 

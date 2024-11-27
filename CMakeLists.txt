@@ -52,7 +52,7 @@ add_executable(cm2
     simulation/snapshotmanager.h
     simulation/snapshotmanager.cpp
     simulation/gpu_partition.h
-    simulation/gpu_partition.cu
+    simulation/gpu_partition.cpp
     simulation/kernels.cuh
 
     simulation/hssoa/host_side_soa.h
@@ -60,6 +60,7 @@ add_executable(cm2
     simulation/hssoa/proxypoint2d.h
     simulation/hssoa/proxypoint2d.cpp
 )
+set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
 
 set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
 set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
@@ -158,10 +159,12 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/hssoa/proxypoint2d.cpp
 
         simulation/gpu_partition.h
-        simulation/gpu_partition.cu
+        simulation/gpu_partition.cpp
         simulation/kernels.cuh
 
     )
+    set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
+    
     message(${PBrowser_SOURCE_DIR})
     target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR} ${PBrowser_SOURCE_DIR}/propertybrowser)
     target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser)

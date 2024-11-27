@@ -5,6 +5,7 @@
 void SimParams::Reset()
 {
     nPtsInitial = 0;
+    GlenA = 1e-24;
 
     InitialTimeStep = 3.e-5;
     YoungsModulus = 5.e8;
