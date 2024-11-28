@@ -29,7 +29,8 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 __global__ void partition_kernel_g2p(const bool recordPQ,
                                      const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
-                                     t_PointReal *buffer_pts, const t_GridReal *buffer_grid);
+                                     t_PointReal *buffer_pts, const t_GridReal *buffer_grid,
+                                     int applyGlensLaw);
 
 
 
@@ -81,7 +82,7 @@ struct GPU_Partition
     void reset_grid();
     void p2g();
     void update_nodes(float simulation_time, const GridVector2r vWind);
-    void g2p(const bool recordPQ, const bool enablePointTransfer);
+    void g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw);
 
     // analysis
     void reset_timings();

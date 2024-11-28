@@ -250,7 +250,7 @@ void GrainProcessor2D::IdentifyGrains()
     {
         std::array<float, 2> &arr = buffer[i];
         Eigen::Vector2f v(arr[0],arr[1]);
-        v *= (block_length/scale);
+        v *= (scale);
         v -= v.array().floor().matrix();
 
         BVHN2D bvhn;

@@ -227,7 +227,7 @@ void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
 }
 
-void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer)
+void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw)
 {
     cudaError_t err;
     err = cudaSetDevice(Device);
@@ -239,7 +239,7 @@ void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer)
 
     partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ, nGridPitch,
                                                              nPts_partition, nPtsPitch,
-                                                             pts_array, grid_array);
+                                                             pts_array, grid_array, applyGlensLaw);
 
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("g2p kernel");
 }

@@ -6,7 +6,9 @@
 
 #include "2d/grainprocessor2d.h"
 
-// -o cov_1m.h5 -m msh_2d/1k_2d.msh -r raster_images/land_600_450b.png
+// -o tv_600.h5 -m msh_2d/1k_2d.msh -r raster_images/land_600_450b.png -l 200000
+// -o tv_2000.h5 -m msh_2d/1k_2d.msh -r raster_images/land_2000.png -l 200000
+//-o tv_600.h5 -m msh_2d/1k_2d.msh -r raster_images/land_600_450b.png -l 200000 -c 5
 
 int main(int argc, char *argv[])
 {
@@ -27,7 +29,7 @@ int main(int argc, char *argv[])
         ("r,raster", "Input PNG image file with land map", cxxopts::value<std::string>())
 
         ("n,pointspercell", "How many points per cell desired", cxxopts::value<float>()->default_value("5.0"))
-        ("c,scale", "Scale for grain mapping", cxxopts::value<float>()->default_value("3"))
+        ("c,scale", "Scale for grain mapping", cxxopts::value<float>()->default_value("1"))
 //        ("r,rescale", "Add a special attribute to the resulting file to rescale later", cxxopts::value<bool>()->default_value("false"))
 
         // for block

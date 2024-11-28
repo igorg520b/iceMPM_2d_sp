@@ -33,12 +33,13 @@ bool icy::Model::Step()
     do
     {
         simulation_time += prms.InitialTimeStep;
+        const int step = prms.SimulationStep+count_unupdated_steps;
 
         gpu.reset_grid();
         gpu.p2g();
         gpu.update_nodes(simulation_time);
-        const bool isZeroStep = (prms.SimulationStep+count_unupdated_steps) % prms.UpdateEveryNthStep == 0;
-        gpu.g2p(isZeroStep, false);
+        const bool isZeroStep = step % prms.UpdateEveryNthStep == 0;
+        gpu.g2p(isZeroStep, false, 1);
         gpu.record_timings(false);
 
         count_unupdated_steps++;

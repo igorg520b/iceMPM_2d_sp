@@ -46,7 +46,7 @@ public:
 
     icy::Model *model;
 
-    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q };
+    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[20] = {};
@@ -248,18 +248,20 @@ private:
 
 
 
-static constexpr float lutSpecialP[9][3] = {
+static constexpr float lutSpecialP[11][3] = {
     {1.,1.,1.},
     {0xb7/255.,0x24/255.,0x30/255.},
     {0xc2/255.,0x66/255.,0x6e/255.},             // -2
     {0xdf/255.,0xa7/255.,0xac/255.},             // -1
 
     {0xc4/255.,0xdb/255.,0xf2/255.},     // 0
+    {0xc4/255.,0xdb/255.,0xf2/255.},     // 0
 
     {0x80/255.,0xac/255.,0xd9/255.},    //1
     {0x4c/255.,0x83/255.,0xbc/255.},    //2
     {0x27/255.,0x5d/255.,0x96/255.},    //3
     {0x0e/255.,0x41/255.,0x77/255.},    //4
+    {0x03/255.,0x36/255.,0xb3/255.}
 };
 
 

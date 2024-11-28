@@ -126,23 +126,22 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     }
     else
     {
-/*        // apply wind drag force
-        float windSpeed = min(0.5+simulation_time*1e-4, 2.0);
-        windSpeed += simulation_time*3e-5;
-        windSpeed = min(windSpeed, 10.0);
-        // wind and water drag
-        GridVector2r vWind(-windSpeed,-windSpeed);
-        const t_GridReal coeff = 1e-3;
-        velocity = (1-coeff)*velocity + coeff*vWind;
-*/
-
-
+        // wind drag
+        t_GridReal hsq = gprms.cellsize * gprms.cellsize;
         GridVector2r vrel = vWind - velocity;
-        const t_GridReal airDensity_coeff_A = gprms.windDragCoeff_airDensity * gprms.cellsize * gprms.cellsize;
+        const t_GridReal airDensity_coeff_A = gprms.windDragCoeff_airDensity * hsq;
         const t_GridReal dragForce = vrel.squaredNorm() * airDensity_coeff_A;
         vrel.normalize();
         vrel *= dragForce * dt / mass;
         velocity += vrel;
+
+        // water drag
+
+        const t_GridReal waterDragForce = velocity.squaredNorm() * gprms.waterDrag_waterDensity * hsq;
+        t_GridReal dv = waterDragForce*dt/mass;
+        if(dv > velocity.norm()) dv = velocity.norm()/2;
+        vrel = velocity.normalized();
+        velocity -= vrel * (waterDragForce*dt/mass);
     }
 
     // write the updated grid velocity back to memory
@@ -152,20 +151,31 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 }
 
 
-__device__ void Glen_Nye_flow_law(PointMatrix2r &F)
+__device__ void Glen_Nye_flow_law(const t_PointReal dt, const t_PointReal &q_tr,
+const PointVector2r &vSigmaSquared,
+const PointMatrix2r &U,
+const PointMatrix2r &V,
+const PointVector2r &v_s_hat_tr,
+                                  PointMatrix2r &Fe, t_PointReal &qp)
 
 {
     const t_PointReal &mu = gprms.mu;
-    const t_PointReal &dt = gprms.InitialTimeStep;
     const t_PointReal &A = gprms.GlenA;
 
 
-    const t_PointReal Je_tr = F.determinant();
-    PointMatrix2r s = mu*(1./Je_tr)*dev(F*F.transpose());   // expression would be different in 3D
-    t_PointReal q = coeff1*s.norm();
-    PointMatrix2r epsilon_dot = A * q*q * coeff1 * s;
+    const t_PointReal Je_tr = Fe.determinant();
+    t_PointReal epsilon_dot_dt = A * q_tr*q_tr*q_tr * dt;      // Glen's Law
 
-    F = (PointMatrix2r::Identity() + dt*epsilon_dot) * F;
+
+    t_PointReal q_n_1 = max(q_tr - mu*epsilon_dot_dt, 0.);
+
+
+    t_PointReal s_hat_n_1_norm = q_n_1*coeff1_inv;
+    PointVector2r vB_hat_E_new = s_hat_n_1_norm*(Je_tr/mu)*v_s_hat_tr.normalized() +
+                                 PointVector2r::Constant(1)*(vSigmaSquared.sum()/d);
+    PointVector2r vSigma_new = vB_hat_E_new.array().sqrt().matrix();
+    Fe = U*vSigma_new.asDiagonal()*V.transpose();
+    qp *= (q_n_1/q_tr);
 }
 
 
@@ -173,7 +183,8 @@ __device__ void Glen_Nye_flow_law(PointMatrix2r &F)
 
 __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
-                                     t_PointReal *buffer_pts, const t_GridReal *buffer_grid)
+                                     t_PointReal *buffer_pts, const t_GridReal *buffer_grid,
+                                     int applyGlensLaw)
 {
     const int pt_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(pt_idx >= count_pts) return;
@@ -202,6 +213,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
         }
     }
     t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
+    t_PointReal qp = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Qp];
     uint16_t grain = (uint16_t) (utility_data && 0xffff);
 
     uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
@@ -255,22 +267,21 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
 //    Jp_inv *= (PointMatrix2r::Identity() + dt*p_Bp).determinant();  // for water model
 
     t_PointReal Je_tr, p_tr, q_tr;
-
-
     ComputePQ(Je_tr, p_tr, q_tr, kappa, mu, Fe);    // computes P, Q, J
+
+    PointMatrix2r U, V;
+    PointVector2r vSigma, vSigmaSquared, v_s_hat_tr;
+    ComputeSVD(Fe, U, vSigma, V, vSigmaSquared, v_s_hat_tr, kappa, mu, Je_tr);
 
     if(!(utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(utility_data, grain, p_tr, q_tr);
     if(utility_data & status_crushed)
     {
-        PointMatrix2r U, V;
-        PointVector2r vSigma, vSigmaSquared, v_s_hat_tr;
-
-        ComputeSVD(Fe, U, vSigma, V, vSigmaSquared, v_s_hat_tr, kappa, mu, Je_tr);
         Wolper_Drucker_Prager(p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
     }
-    else
+    else if(applyGlensLaw)
     {
-        Glen_Nye_flow_law(Fe);
+        t_PointReal dt_special = dt*applyGlensLaw;
+        Glen_Nye_flow_law(dt_special, q_tr, vSigmaSquared, U, V, v_s_hat_tr, Fe, qp);
     }
 
 
@@ -287,6 +298,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     }
 
     buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv] = Jp_inv;
+    buffer_pts[pt_idx + pitch_pts*SimParams::idx_Qp] = qp;
     // save crushed/disabled status
     *reinterpret_cast<uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]) = utility_data;
 
@@ -333,21 +345,6 @@ __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_
 }
 
 
- __device__ void GetParametersForGrain(int grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
-                                      t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2)
-{
-    t_PointReal var2 = 1.0 + gprms.GrainVariability*0.033*(-15 + ((int)grain+3)%30);
-    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + ((int)grain+4)%11);
-
-    pmax = gprms.IceCompressiveStrength;// * var1;
-    pmin = -gprms.IceTensileStrength;// * var2;
-
-    qmax = gprms.IceShearStrength * var3;
-    pmin2 = -gprms.IceTensileStrength2 * var2;
-
-    beta = gprms.NACC_beta;
-    mSq = (4.*qmax*qmax*(1.+2.*beta))/((pmax-pmin)*(pmax-pmin));
-}
 
 
 
@@ -494,4 +491,29 @@ __device__ PointMatrix2r Water(const t_PointReal J)
 
     PointMatrix2r PFt = kappa*(1.-pow(J,-gamma))*PointMatrix2r::Identity();
     return PFt;
+}
+
+
+__device__ void GetParametersForGrain(int grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
+                                      t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2)
+{
+    //    t_PointReal var2 = 1.0 + gprms.GrainVariability*0.033*(-15 + ((int)grain+3)%30);
+    //    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + ((int)grain+4)%11);
+
+    t_PointReal gv = 0.6;
+
+    t_PointReal var2 = 1.0;
+    t_PointReal var3 = 1.0;
+//    if(((int)grain)%5==0) var2 = 1.0 - gv;
+//    if(((int)grain)%5==0) var3 = 1.0 - gv;
+
+
+    pmax = gprms.IceCompressiveStrength;// * var1;
+    pmin = -gprms.IceTensileStrength;// * var2;
+
+    qmax = gprms.IceShearStrength * var3;
+    pmin2 = -gprms.IceTensileStrength2 * var2;
+
+    beta = gprms.NACC_beta;
+    mSq = (4.*qmax*qmax*(1.+2.*beta))/((pmax-pmin)*(pmax-pmin));
 }

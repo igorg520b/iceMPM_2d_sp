@@ -14,10 +14,10 @@
 
 // variables related to the formulation of the model
 
-//typedef double t_GridReal;      // data type for grid data
-//typedef double t_PointReal;     // data type to store point data
-typedef float t_GridReal;      // data type for grid data
-typedef float t_PointReal;     // data type to store point data
+typedef double t_GridReal;      // data type for grid data
+typedef double t_PointReal;     // data type to store point data
+//typedef float t_GridReal;      // data type for grid data
+//typedef float t_PointReal;     // data type to store point data
 
 typedef Eigen::Matrix<t_GridReal, 2, 1> GridVector2r;
 typedef Eigen::Matrix<t_GridReal, 2, 2> GridMatrix2r;
@@ -57,7 +57,7 @@ public:
     t_PointReal SimulationTime;
 
     // wind
-    t_PointReal windDragCoeff_airDensity;
+    t_PointReal windDragCoeff_airDensity, waterDrag_waterDensity;
     t_PointReal GlenA;
 
     // material properties

@@ -6,6 +6,8 @@ void SimParams::Reset()
 {
     nPtsInitial = 0;
     GlenA = 1e-24;
+    windDragCoeff_airDensity = 0.0025 * 1.2;
+    waterDrag_waterDensity = 0.000005 * 1025;
 
     InitialTimeStep = 3.e-5;
     YoungsModulus = 5.e8;
@@ -20,7 +22,6 @@ void SimParams::Reset()
     Gravity = 9.81;
     Density = 916*0.2;  // surface density
 
-    windDragCoeff_airDensity = 0.025 * 1.2;
 
     IndDiameter = 0.324;
     IndVelocity = 0.2;
@@ -31,8 +32,8 @@ void SimParams::Reset()
 
     IceCompressiveStrength = 100e6;
     IceTensileStrength = 10e6;
-    IceShearStrength = 6e6;
-    IceTensileStrength2 = 5e6;
+    IceShearStrength = 1e6;
+    IceTensileStrength2 = 10e6;
 
     DP_tan_phi = std::tan(30*pi/180.);
     DP_threshold_p = 1e3;

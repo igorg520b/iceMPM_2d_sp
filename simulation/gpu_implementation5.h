@@ -45,7 +45,7 @@ public:
 
     void p2g();
     void update_nodes(float simulation_time);
-    void g2p(const bool recordPQ, const bool enablePointTransfer);
+    void g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw);
     void record_timings(const bool enablePointTransfer);
 
     // the size of this buffer (in the number of points) is stored in PointsHostBufferCapacity

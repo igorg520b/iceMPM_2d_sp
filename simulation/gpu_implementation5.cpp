@@ -44,7 +44,7 @@ void GPU_Implementation5::p2g()
 
 void GPU_Implementation5::update_nodes(float simulation_time)
 {
-    float windSpeed = std::min(1+simulation_time*1e-3, 30.0);
+    float windSpeed = std::min(0+simulation_time*(40./5.e5), 40.0);
     GridVector2r vWind(-1,-1);
     vWind.normalize();
     vWind *= windSpeed;
@@ -57,11 +57,11 @@ void GPU_Implementation5::update_nodes(float simulation_time)
     }
 }
 
-void GPU_Implementation5::g2p(const bool recordPQ, const bool enablePointTransfer)
+void GPU_Implementation5::g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw)
 {
     for(GPU_Partition &p : partitions)
     {
-        p.g2p(recordPQ, enablePointTransfer);
+        p.g2p(recordPQ, enablePointTransfer, applyGlensLaw);
         cudaError_t err = cudaEventRecord(p.event_50_g2p_completed, p.streamCompute);
         if(err != cudaSuccess) throw std::runtime_error("g2p cudaEventRecord");
     }

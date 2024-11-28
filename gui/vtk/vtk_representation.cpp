@@ -270,6 +270,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             SOAIterator s = model->gpu.hssoa.begin()+i;
             float value = s->getValue(SimParams::idx_P);
             if(s->getDisabledStatus()) value = -2*range;
+            else if(s->getCrushedStatus()) value = 2*range;
             visualized_values->SetValue((vtkIdType)i, value);
         }
         visualized_values->Modified();
@@ -288,6 +289,26 @@ void icy::VisualRepresentation::SynchronizeValues()
             SOAIterator s = model->gpu.hssoa.begin()+i;
             float value = s->getValue(SimParams::idx_Q);
             if(s->getDisabledStatus()) value = -2*range;
+            else if(s->getCrushedStatus()) value = 2*range;
+            visualized_values->SetValue((vtkIdType)i, value);
+        }
+        visualized_values->Modified();
+    }
+    else if(VisualizingVariable == VisOpt::qp)
+    {
+        scalarBar->VisibilityOn();
+        points_mapper->ScalarVisibilityOn();
+        points_mapper->SetColorModeToMapScalars();
+        points_mapper->UseLookupTableScalarRangeOn();
+        points_mapper->SetLookupTable(hueLut_Southwest);
+        scalarBar->SetLookupTable(hueLut_Southwest);
+        hueLut_Southwest->SetTableRange(centerVal-range, centerVal+range);
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            float value = s->getValue(SimParams::idx_Qp)-1;
+            if(s->getDisabledStatus()) value = -2*range;
+            else if(s->getCrushedStatus()) value = 2*range;
             visualized_values->SetValue((vtkIdType)i, value);
         }
         visualized_values->Modified();
