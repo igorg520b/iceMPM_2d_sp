@@ -14,8 +14,57 @@ icy::Model::Model()
     prms.Reset();
     gpu.model = this;
     GPU_Partition::prms = &this->prms;
+
+    wind_data.push_back({0,0,45});
+    wind_data.push_back({20'000,20,45});
+    wind_data.push_back({100'000,25,45});
+    wind_data.push_back({500'000,30,0});
+    wind_data.push_back({1'000'000,30,0});
+
     spdlog::info("Model constructor");
 }
+
+
+
+float icy::Model::interpolateWindSpeed(float current_time) {
+    // Edge case: If wind_data is empty
+    if (wind_data.empty()) {
+        throw std::invalid_argument("wind_data is empty");
+    }
+
+    // Edge case: If current_time is before the first entry
+    if (current_time <= wind_data.front()[0]) {
+        return wind_data.front()[1]; // Return wind speed of the first entry
+    }
+
+    // Edge case: If current_time is after the last entry
+    if (current_time >= wind_data.back()[0]) {
+        return wind_data.back()[1]; // Return wind speed of the last entry
+    }
+
+    // Find the "before" and "after" records
+    std::array<float, 3> before{}, after{};
+    for (size_t i = 0; i < wind_data.size() - 1; ++i) {
+        if (wind_data[i][0] <= current_time && current_time <= wind_data[i + 1][0]) {
+            before = wind_data[i];
+            after = wind_data[i + 1];
+            break;
+        }
+    }
+
+    // Linear interpolation
+    float time_before = before[0];
+    float speed_before = before[1];
+    float time_after = after[0];
+    float speed_after = after[1];
+
+    float interpolated_speed = speed_before +
+                               (current_time - time_before) / (time_after - time_before) * (speed_after - speed_before);
+
+    return interpolated_speed;
+}
+
+
 
 icy::Model::~Model() {}
 
@@ -29,17 +78,19 @@ bool icy::Model::Step()
 
     int count_unupdated_steps = 0;
     gpu.reset_timings();
+    float windSpeed;
 
     do
     {
         simulation_time += prms.InitialTimeStep;
+        windSpeed = interpolateWindSpeed(simulation_time);
         const int step = prms.SimulationStep+count_unupdated_steps;
 
         gpu.reset_grid();
         gpu.p2g();
-        gpu.update_nodes(simulation_time);
+        gpu.update_nodes(simulation_time, windSpeed, 45);
         const bool isZeroStep = step % prms.UpdateEveryNthStep == 0;
-        gpu.g2p(isZeroStep, false, 1);
+        gpu.g2p(isZeroStep, false, (step%10)==0 ? 10 : 0);
         gpu.record_timings(false);
 
         count_unupdated_steps++;
@@ -49,8 +100,8 @@ bool icy::Model::Step()
     accessing_point_data.lock();
 
     gpu.transfer_from_device();
-    spdlog::info("finished {} ({}); host pts {}; cap {}", prms.SimulationEndTime,
-                 prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity);
+    spdlog::info("finished {} ({}); host pts {}; cap {}; windSpeed {}", prms.SimulationEndTime,
+                 prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity, windSpeed);
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
 

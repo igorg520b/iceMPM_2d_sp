@@ -2,6 +2,7 @@
 #define MODEL_H
 
 #include <vector>
+#include <array>
 #include <algorithm>
 #include <chrono>
 #include <unordered_set>
@@ -43,6 +44,7 @@ public:
     void UnlockCycleMutex();
 
     SimParams prms;
+    std::vector<std::array<float,3>> wind_data;
     GPU_Implementation5 gpu;
     bool SyncTopologyRequired;
 
@@ -51,6 +53,7 @@ public:
 
 private:
     bool abortRequested;
+    float interpolateWindSpeed(float current_time);
 };
 
 #endif

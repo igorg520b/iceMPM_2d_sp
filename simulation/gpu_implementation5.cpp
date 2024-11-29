@@ -42,12 +42,16 @@ void GPU_Implementation5::p2g()
 
 
 
-void GPU_Implementation5::update_nodes(float simulation_time)
+void GPU_Implementation5::update_nodes(float simulation_time, float windSpeed, float windAngle)
 {
-    float windSpeed = std::min(0+simulation_time*(40./5.e5), 40.0);
-    GridVector2r vWind(-1,-1);
-    vWind.normalize();
-    vWind *= windSpeed;
+//    float windSpeed = std::min(0+simulation_time*(40./5.e5), 40.0);
+    float alphaRad = (windAngle + 180.0) * M_PI / 180.0;
+
+    // Compute the x and y components
+    float vx = windSpeed * std::sin(alphaRad); // Eastward component
+    float vy = windSpeed * std::cos(alphaRad); // Northward component
+
+    GridVector2r vWind(vx,vy);
 
     for(GPU_Partition &p : partitions)
     {

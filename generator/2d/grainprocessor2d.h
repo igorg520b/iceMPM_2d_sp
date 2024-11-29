@@ -19,6 +19,7 @@ public:
     float block_length;
     float requestedPointsPerCell;
     float cellsize;
+    int gridx, gridy;
 
 
     void load_png();
@@ -46,9 +47,11 @@ private:
 
     int nLandNodes, nWaterNodes;
     float volume = -1;
-    int gridx, gridy, channels;   // from PNG
+    int imgx, imgy, channels;   // from PNG
+    float scale_img;
     std::vector<std::array<float, 2>> buffer;   // result from poisson disk sampler
     std::vector<uint8_t> grid_buffer;
+    unsigned char* png_data;
 
     std::vector<BVHN2D*> leaves;
     BVHN2D root;

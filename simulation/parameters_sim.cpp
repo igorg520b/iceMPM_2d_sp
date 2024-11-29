@@ -36,7 +36,7 @@ void SimParams::Reset()
     IceTensileStrength2 = 10e6;
 
     DP_tan_phi = std::tan(30*pi/180.);
-    DP_threshold_p = 1e3;
+    DP_threshold_p = 0;
 
     tpb_P2G = 256;
     tpb_Upd = 512;

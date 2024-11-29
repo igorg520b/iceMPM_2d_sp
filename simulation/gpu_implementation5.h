@@ -44,7 +44,7 @@ public:
     void reset_timings();
 
     void p2g();
-    void update_nodes(float simulation_time);
+    void update_nodes(float simulation_time, float windSpeed, float windAngle);
     void g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw);
     void record_timings(const bool enablePointTransfer);
 

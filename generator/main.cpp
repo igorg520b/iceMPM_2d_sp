@@ -6,9 +6,7 @@
 
 #include "2d/grainprocessor2d.h"
 
-// -o tv_600.h5 -m msh_2d/1k_2d.msh -r raster_images/land_600_450b.png -l 200000
-// -o tv_2000.h5 -m msh_2d/1k_2d.msh -r raster_images/land_2000.png -l 200000
-//-o tv_600.h5 -m msh_2d/1k_2d.msh -r raster_images/land_600_450b.png -l 200000 -c 5
+// -o tv_500.h5 -m msh_2d/1k_2d.msh -r raster_images/Kvarken_combined.png -l 200000 -c 5 -g 500
 
 int main(int argc, char *argv[])
 {
@@ -32,8 +30,8 @@ int main(int argc, char *argv[])
         ("c,scale", "Scale for grain mapping", cxxopts::value<float>()->default_value("1"))
 //        ("r,rescale", "Add a special attribute to the resulting file to rescale later", cxxopts::value<bool>()->default_value("false"))
 
-        // for block
         ("l,length", "Length of the block", cxxopts::value<float>()->default_value("170000"))
+        ("g,grid", "Horizontal grid size", cxxopts::value<int>()->default_value("500"))
         ;
 
     auto option_parse_result = options.parse(argc, argv);
@@ -47,6 +45,7 @@ int main(int argc, char *argv[])
 
     gp2d.scale = option_parse_result["scale"].as<float>();
     gp2d.requestedPointsPerCell = option_parse_result["pointspercell"].as<float>();
+    gp2d.gridx = option_parse_result["grid"].as<int>();
 
     gp2d.generate_block_and_write();
 }

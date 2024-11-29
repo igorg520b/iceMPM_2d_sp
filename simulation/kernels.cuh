@@ -130,18 +130,20 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         t_GridReal hsq = gprms.cellsize * gprms.cellsize;
         GridVector2r vrel = vWind - velocity;
         const t_GridReal airDensity_coeff_A = gprms.windDragCoeff_airDensity * hsq;
-        const t_GridReal dragForce = vrel.squaredNorm() * airDensity_coeff_A;
+        t_GridReal dragForce = vrel.squaredNorm() * airDensity_coeff_A;
         vrel.normalize();
         vrel *= dragForce * dt / mass;
         velocity += vrel;
 
         // water drag
+        t_GridReal coeff_relax = 1e-4;
+        velocity *= (1.0 - coeff_relax*gprms.InitialTimeStep);
 
-        const t_GridReal waterDragForce = velocity.squaredNorm() * gprms.waterDrag_waterDensity * hsq;
-        t_GridReal dv = waterDragForce*dt/mass;
-        if(dv > velocity.norm()) dv = velocity.norm()/2;
-        vrel = velocity.normalized();
-        velocity -= vrel * (waterDragForce*dt/mass);
+//        const t_GridReal waterDragForce = velocity.squaredNorm() * gprms.waterDrag_waterDensity * hsq;
+//        t_GridReal dv = waterDragForce*dt/mass;
+//        if(dv > velocity.norm()) dv = velocity.norm()/2;
+//        vrel = velocity.normalized();
+//        velocity -= vrel * (waterDragForce*dt/mass);
     }
 
     // write the updated grid velocity back to memory
@@ -390,10 +392,10 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
     const t_PointReal &pmax = gprms.IceCompressiveStrength;
     const t_PointReal &qmax = gprms.IceShearStrength;
 
-    if(p_tr < -DP_threshold_p || Jp_inv < 1)
+    if(p_tr < DP_threshold_p || Jp_inv < 1)
     {
-        // tear in tension or compress until original state
-        t_PointReal p_new = -DP_threshold_p;
+        // stretching in tension
+        t_PointReal p_new = 0;
         t_PointReal Je_new = sqrt(-2*p_new/kappa + 1);
         t_PointReal sqrt_Je_new = sqrt(Je_new);
 
@@ -411,7 +413,7 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
         }
         else
         {
-            t_PointReal q_from_dp = (p_tr+DP_threshold_p)*tan_phi;
+            t_PointReal q_from_dp = (p_tr-DP_threshold_p)*tan_phi;
             //q_n_1 = min(q_from_dp,qmax);
 
             const t_PointReal pmin = -gprms.IceTensileStrength;
@@ -500,12 +502,12 @@ __device__ void GetParametersForGrain(int grain, t_PointReal &pmin, t_PointReal 
     //    t_PointReal var2 = 1.0 + gprms.GrainVariability*0.033*(-15 + ((int)grain+3)%30);
     //    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + ((int)grain+4)%11);
 
-    t_PointReal gv = 0.6;
+    t_PointReal gv = gprms.GrainVariability;
 
     t_PointReal var2 = 1.0;
     t_PointReal var3 = 1.0;
-//    if(((int)grain)%5==0) var2 = 1.0 - gv;
-//    if(((int)grain)%5==0) var3 = 1.0 - gv;
+    if(((int)grain)%3==0) var2 = 1.0 - gv;
+    if(((int)grain+1)%5==0) var3 = 1.0 - gv;
 
 
     pmax = gprms.IceCompressiveStrength;// * var1;

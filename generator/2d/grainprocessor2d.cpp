@@ -27,6 +27,7 @@ void GrainProcessor2D::generate_block_and_write()
     GenerateBlock();
     IdentifyGrains();
     Write_HDF5();
+    stbi_image_free(png_data);
 }
 
 
@@ -45,8 +46,7 @@ void GrainProcessor2D::load_png()
 {
     spdlog::info("load_png");
     const char* filename = landPNGFileName.c_str();
-    unsigned char* png_data;
-    png_data = stbi_load(filename, &gridx, &gridy, &channels, 1);  // Request 1 channel (grayscale)
+    png_data = stbi_load(filename, &imgx, &imgy, &channels, 3);  // Request 1 channel (grayscale)
 
     if (!png_data)
     {
@@ -54,23 +54,28 @@ void GrainProcessor2D::load_png()
         throw std::runtime_error("png not loaded");
     }
 
-    if(channels != 1)
-    {
-        spdlog::critical("channels {}", channels);
-        throw std::runtime_error("png must be monochrome");
-    }
+    scale_img = (float)imgx / gridx;
+
+    gridy = (int)(imgy/scale_img);
+    grid_buffer.resize(gridx*gridy);
+    spdlog::info("image ({} x {}) loaded; {} channels", imgx, imgy, channels);
+    spdlog::info("grid size {} x {}", gridx, gridy);
+    spdlog::info("grid_buffer size {}",grid_buffer.size());
 
     nLandNodes = 0;
     nWaterNodes = 0;
-    grid_buffer.resize(gridx*gridy);
-    spdlog::info("grid_buffer size {}",grid_buffer.size());
     for (int y = 0; y < gridy; ++y)
     {
         for (int x = 0; x < gridx; ++x)
         {
-            int index = y * gridx + x;
-            unsigned char &pixel = png_data[index];
-            bool is_water = pixel < 128;  // assuming a threshold of 128 for 1-bit (0-127 black, 128-255 white)
+            int px = (int)(x * scale_img);
+            int py = (int)(y * scale_img);
+            px = std::min(px, imgx-1);
+            py = std::min(py, imgy-1);
+
+            int index_png = py * imgx + px;
+            unsigned char &pixel = png_data[index_png*3 + 0];   // red channel
+            bool is_water = pixel < 128;  // assuming a threshold of 128
             pixel = is_water ? 0 : 1; // 1 is land
             if(is_water) nWaterNodes++;
             else nLandNodes++;
@@ -78,13 +83,79 @@ void GrainProcessor2D::load_png()
             grid_buffer[(gridy-y-1) + x*gridy] = (uint8_t) pixel;
         }
     }
-    stbi_image_free(png_data);
 }
 
 
+void GrainProcessor2D::GenerateBlock()
+{
+    constexpr float magic_constant = 0.65;
 
+    float h_img = 1.f/(float(imgx-1));
 
+    float h = 1.f/(float)(gridx-1);
+    float dx = 1.f;
+    float dy = 1.f*(gridy-1)/(float)(gridx-1);
+    float nPts = requestedPointsPerCell*gridx*gridy;
+    const float kRadius = sqrt(magic_constant*dx*dy/nPts);
 
+    const std::array<float, 2>kXMin {2*h, 2*h};
+    const std::array<float, 2>kXMax {dx-2*h, dy-2*h};
+
+    buffer = thinks::PoissonDiskSampling(kRadius, kXMin, kXMax);
+    spdlog::info("generating rectangle [{},{}] - [{},{}]",kXMin[0],kXMin[1],kXMax[0],kXMax[1]);
+
+    const size_t nPtsCountInitial = buffer.size();
+    spdlog::info("initial point cloud: {} pts", nPtsCountInitial);
+    auto result = std::remove_if(buffer.begin(),buffer.end(),[&](std::array<float, 2> &pt){
+        float x = pt[0];
+        float y = pt[1];
+        int i = (int)(x/h + 0.5f);
+        int j = (int)(y/h + 0.5f);
+        if(i<0 || j< 0 || i>=gridx || j>=gridy)
+        {
+            spdlog::critical("error pt ({},{}); grid cell ({},{})",x,y,i,j);
+            throw std::runtime_error("particle is out of grid bounds");
+        }
+        unsigned char pixel_land = grid_buffer[j + i*gridy];
+        int px = (int)(x/h_img + 0.5f);
+        int py = (int)(y/h_img + 0.5f);
+        int index_png = (imgy - py -1) * imgx + px;
+        unsigned char &pixel = png_data[index_png*3 + 2];   // blue channel
+        return (bool)(pixel_land || pixel>0);
+    });
+    buffer.erase(result,buffer.end());
+
+    const size_t nPtsCountFinal = buffer.size();
+    spdlog::info("after erasing land points: {} pts", nPtsCountFinal);
+
+    volume = (kXMax[0]-kXMin[0])*(kXMax[1]-kXMin[1])*block_length*block_length;
+    volume *= (float)nPtsCountFinal/(float)nPtsCountInitial;
+
+    auto getidx = [&] (std::array<float, 2> &pt)
+    {
+        float x = pt[0];
+        float y = pt[1];
+        int i = (int)(x/h + 0.5f);
+        int j = (int)(y/h + 0.5f);
+        int cellidx = j + gridy*i;
+        return cellidx;
+    };
+
+    // sort, to facilitate subsequent loading
+    std::sort(buffer.begin(), buffer.end(),
+              [&](std::array<float, 2> &p1, std::array<float, 2> &p2)
+              {return getidx(p1)<getidx(p2);});
+    spdlog::info("points sortred by cell");
+
+    coordinates[0].resize(buffer.size());
+    coordinates[1].resize(buffer.size());
+    for(int i=0;i<buffer.size();i++)
+    {
+        coordinates[0][i] = buffer[i][0]*block_length;
+        coordinates[1][i] = buffer[i][1]*block_length;
+    }
+    cellsize = block_length/(float)(gridx-1);
+}
 
 
 void GrainProcessor2D::Write_HDF5()
@@ -149,71 +220,6 @@ bool GrainProcessor2D::PointInsideTriangle(Eigen::Vector2f point, Eigen::Vector2
     return (b[0]>-eps && b[1]>-eps && (b.sum() < 1+eps));
 }
 
-void GrainProcessor2D::GenerateBlock()
-{
-    constexpr float magic_constant = 0.656;
-
-    float h = 1.f/(float)(gridx-1);
-    float dx = 1.f;
-    float dy = 1.f*(gridy-1)/(float)(gridx-1);
-    float nPts = requestedPointsPerCell*gridx*gridy;
-    const float kRadius = sqrt(magic_constant*dx*dy/nPts);
-
-    const std::array<float, 2>kXMin {2*h, 2*h};
-    const std::array<float, 2>kXMax {dx-2*h, dy-2*h};
-
-
-    buffer = thinks::PoissonDiskSampling(kRadius, kXMin, kXMax);
-    spdlog::info("generating rectangle [{},{}] - [{},{}]",kXMin[0],kXMin[1],kXMax[0],kXMax[1]);
-
-    const size_t nPtsCountInitial = buffer.size();
-    spdlog::info("initial point cloud: {} pts", nPtsCountInitial);
-    auto result = std::remove_if(buffer.begin(),buffer.end(),[&](std::array<float, 2> &pt){
-        float x = pt[0];
-        float y = pt[1];
-        int i = (int)(x/h + 0.5f);
-        int j = (int)(y/h + 0.5f);
-        if(i<0 || j< 0 || i>=gridx || j>=gridy)
-            {
-            spdlog::critical("error pt ({},{}); grid cell ({},{})",x,y,i,j);
-                throw std::runtime_error("particle is out of grid bounds");
-        }
-        unsigned char pixel_land = grid_buffer[j + i*gridy];
-        return (bool)pixel_land;
-    });
-    buffer.erase(result,buffer.end());
-
-    const size_t nPtsCountFinal = buffer.size();
-    spdlog::info("after erasing land points: {} pts", nPtsCountFinal);
-
-    volume = (kXMax[0]-kXMin[0])*(kXMax[1]-kXMin[1])*block_length*block_length;
-    volume *= (float)nPtsCountFinal/(float)nPtsCountInitial;
-
-    auto getidx = [&] (std::array<float, 2> &pt)
-    {
-        float x = pt[0];
-        float y = pt[1];
-        int i = (int)(x/h + 0.5f);
-        int j = (int)(y/h + 0.5f);
-        int cellidx = j + gridy*i;
-        return cellidx;
-    };
-
-    // sort, to facilitate subsequent loading
-    std::sort(buffer.begin(), buffer.end(),
-              [&](std::array<float, 2> &p1, std::array<float, 2> &p2)
-              {return getidx(p1)<getidx(p2);});
-    spdlog::info("points sortred by cell");
-
-    coordinates[0].resize(buffer.size());
-    coordinates[1].resize(buffer.size());
-    for(int i=0;i<buffer.size();i++)
-    {
-        coordinates[0][i] = buffer[i][0]*block_length;
-        coordinates[1][i] = buffer[i][1]*block_length;
-    }
-    cellsize = block_length/(float)(gridx-1);
-}
 
 void GrainProcessor2D::IdentifyGrains()
 {
