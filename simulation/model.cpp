@@ -14,55 +14,25 @@ icy::Model::Model()
     prms.Reset();
     gpu.model = this;
     GPU_Partition::prms = &this->prms;
-
+/*
     wind_data.push_back({0,0,45});
     wind_data.push_back({20'000,20,45});
     wind_data.push_back({100'000,25,45});
     wind_data.push_back({500'000,30,0});
     wind_data.push_back({1'000'000,30,0});
-
+*/
+    wind_data.push_back({0,0,0});
+    wind_data.push_back({1000,10,0});
+    wind_data.push_back({1100,10,180});
+    wind_data.push_back({2000,20,180});
+    wind_data.push_back({2100,20,0});
+    wind_data.push_back({3000,30,0});
+    wind_data.push_back({10'000,40,270});
+//    wind_data.push_back({2'000,20,90});
+//    wind_data.push_back({4'000,40,270});
     spdlog::info("Model constructor");
 }
 
-
-
-float icy::Model::interpolateWindSpeed(float current_time) {
-    // Edge case: If wind_data is empty
-    if (wind_data.empty()) {
-        throw std::invalid_argument("wind_data is empty");
-    }
-
-    // Edge case: If current_time is before the first entry
-    if (current_time <= wind_data.front()[0]) {
-        return wind_data.front()[1]; // Return wind speed of the first entry
-    }
-
-    // Edge case: If current_time is after the last entry
-    if (current_time >= wind_data.back()[0]) {
-        return wind_data.back()[1]; // Return wind speed of the last entry
-    }
-
-    // Find the "before" and "after" records
-    std::array<float, 3> before{}, after{};
-    for (size_t i = 0; i < wind_data.size() - 1; ++i) {
-        if (wind_data[i][0] <= current_time && current_time <= wind_data[i + 1][0]) {
-            before = wind_data[i];
-            after = wind_data[i + 1];
-            break;
-        }
-    }
-
-    // Linear interpolation
-    float time_before = before[0];
-    float speed_before = before[1];
-    float time_after = after[0];
-    float speed_after = after[1];
-
-    float interpolated_speed = speed_before +
-                               (current_time - time_before) / (time_after - time_before) * (speed_after - speed_before);
-
-    return interpolated_speed;
-}
 
 
 
@@ -78,17 +48,18 @@ bool icy::Model::Step()
 
     int count_unupdated_steps = 0;
     gpu.reset_timings();
-    float windSpeed;
-
+    std::pair<float, float> spd_and_angle;
     do
     {
         simulation_time += prms.InitialTimeStep;
-        windSpeed = interpolateWindSpeed(simulation_time);
+        spd_and_angle = interpolateWind(simulation_time);
+        windSpeed = spd_and_angle.first;
+        windAngle = spd_and_angle.second;
         const int step = prms.SimulationStep+count_unupdated_steps;
 
         gpu.reset_grid();
         gpu.p2g();
-        gpu.update_nodes(simulation_time, windSpeed, 45);
+        gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
         const bool isZeroStep = step % prms.UpdateEveryNthStep == 0;
         gpu.g2p(isZeroStep, false, (step%10)==0 ? 10 : 0);
         gpu.record_timings(false);
@@ -100,8 +71,8 @@ bool icy::Model::Step()
     accessing_point_data.lock();
 
     gpu.transfer_from_device();
-    spdlog::info("finished {} ({}); host pts {}; cap {}; windSpeed {}", prms.SimulationEndTime,
-                 prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity, windSpeed);
+    spdlog::info("finished {} ({}); host pts {}; cap {}; windSpeed {}; windBearing {}", prms.SimulationEndTime,
+                 prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity, spd_and_angle.first, spd_and_angle.second);
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
 
@@ -157,3 +128,62 @@ void icy::Model::Prepare()
     gpu.update_constants();
 }
 
+std::pair<float, float> icy::Model::interpolateWind(float current_time) {
+    // Edge case: If wind_data is empty
+    if (wind_data.empty()) {
+        throw std::invalid_argument("wind_data is empty");
+    }
+
+    // Edge case: If current_time is before the first entry
+    if (current_time <= wind_data.front()[0]) {
+        return {wind_data.front()[1], wind_data.front()[2]}; // Return wind speed and angle of the first entry
+    }
+
+    // Edge case: If current_time is after the last entry
+    if (current_time >= wind_data.back()[0]) {
+        return {wind_data.back()[1], wind_data.back()[2]}; // Return wind speed and angle of the last entry
+    }
+
+    // Find the "before" and "after" records
+    std::array<float, 3> before{}, after{};
+    for (size_t i = 0; i < wind_data.size() - 1; ++i) {
+        if (wind_data[i][0] <= current_time && current_time <= wind_data[i + 1][0]) {
+            before = wind_data[i];
+            after = wind_data[i + 1];
+            break;
+        }
+    }
+
+    // Linear interpolation for wind speed
+    float time_before = before[0];
+    float speed_before = before[1];
+    float time_after = after[0];
+    float speed_after = after[1];
+
+    float interpolated_speed = speed_before +
+                               (current_time - time_before) / (time_after - time_before) * (speed_after - speed_before);
+
+    // Linear interpolation for wind angle
+    float angle_before = before[2];
+    float angle_after = after[2];
+
+    // Handle angle wrapping around 360
+    if (std::abs(angle_after - angle_before) > 180.0f) {
+        if (angle_after > angle_before) {
+            angle_before += 360.0f; // Add 360 to the smaller angle
+        } else {
+            angle_after += 360.0f; // Add 360 to the smaller angle
+        }
+    }
+
+    float interpolated_angle = angle_before +
+                               (current_time - time_before) / (time_after - time_before) * (angle_after - angle_before);
+
+    // Normalize the angle back to [0, 360)
+    interpolated_angle = std::fmod(interpolated_angle, 360.0f);
+    if (interpolated_angle < 0) {
+        interpolated_angle += 360.0f;
+    }
+
+    return {interpolated_speed, interpolated_angle};
+}

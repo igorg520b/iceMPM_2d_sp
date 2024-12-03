@@ -29,6 +29,7 @@ struct ProxyPoint
     PointVector2r getVelocity();
     bool getCrushedStatus();
     bool getDisabledStatus();
+    bool getWeakenedStatus();
     uint16_t getGrain();
 
     int getCellIndex(int GridY);  // index of the grid cell at the point's location

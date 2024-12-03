@@ -7,6 +7,7 @@
 #include "2d/grainprocessor2d.h"
 
 // -o tv_500.h5 -m msh_2d/1k_2d.msh -r raster_images/Kvarken_combined.png -l 200000 -c 5 -g 500
+// -o e_600.h5 -m msh_2d/1k_2d.msh -r /home/s2/Documents/_Kvarken_images/simulation_test1.png -l 20000 -c 5 -g 600
 
 int main(int argc, char *argv[])
 {

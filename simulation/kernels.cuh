@@ -10,6 +10,7 @@ constexpr t_PointReal coeff1 = 1.4142135623730950; // sqrt((6-d)/2.);
 constexpr t_PointReal coeff1_inv = 0.7071067811865475;
 constexpr uint32_t status_crushed = 0x10000;
 constexpr uint32_t status_disabled = 0x20000;
+constexpr uint32_t status_weakened = 0x40000;
 
 __device__ uint8_t gpu_error_indicator;
 __device__ int gpu_disabled_points_count;
@@ -126,7 +127,14 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     }
     else
     {
-        // wind drag
+        const t_GridReal air_coeff = 1e-3 * gprms.InitialTimeStep;
+        const t_GridReal water_coeff = 1e-4 * gprms.InitialTimeStep;
+
+        GridVector2r waterVelVector(0,0);
+        velocity = (1-air_coeff-water_coeff)*velocity + vWind*air_coeff + waterVelVector*water_coeff;
+
+
+/*        // wind drag
         t_GridReal hsq = gprms.cellsize * gprms.cellsize;
         GridVector2r vrel = vWind - velocity;
         const t_GridReal airDensity_coeff_A = gprms.windDragCoeff_airDensity * hsq;
@@ -138,7 +146,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         // water drag
         t_GridReal coeff_relax = 1e-4;
         velocity *= (1.0 - coeff_relax*gprms.InitialTimeStep);
-
+*/
 //        const t_GridReal waterDragForce = velocity.squaredNorm() * gprms.waterDrag_waterDensity * hsq;
 //        t_GridReal dv = waterDragForce*dt/mass;
 //        if(dv > velocity.norm()) dv = velocity.norm()/2;
@@ -496,18 +504,25 @@ __device__ PointMatrix2r Water(const t_PointReal J)
 }
 
 
-__device__ void GetParametersForGrain(int grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
+__device__ void GetParametersForGrain(uint32_t utility_data, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
                                       t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2)
 {
     //    t_PointReal var2 = 1.0 + gprms.GrainVariability*0.033*(-15 + ((int)grain+3)%30);
     //    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + ((int)grain+4)%11);
 
+    uint16_t grain = utility_data & 0xffff;
+    bool is_weakened = utility_data & status_weakened;
+
     t_PointReal gv = gprms.GrainVariability;
 
     t_PointReal var2 = 1.0;
     t_PointReal var3 = 1.0;
-    if(((int)grain)%3==0) var2 = 1.0 - gv;
-    if(((int)grain+1)%5==0) var3 = 1.0 - gv;
+//    if(((int)grain)%3==0) var2 = 1.0 - gv;
+//    if(((int)grain+1)%5==0) var3 = 1.0 - gv;
+    if(is_weakened)
+    {
+        var3 = var2 = 1.0 - gv;
+    }
 
 
     pmax = gprms.IceCompressiveStrength;// * var1;

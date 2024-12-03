@@ -57,16 +57,24 @@ MainWindow::MainWindow(QWidget *parent)
     statusLabel = new QLabel();
     labelElapsedTime = new QLabel();
     labelStepCount = new QLabel();
+    labelWindSpeed = new QLabel();
+    labelWindDirection = new QLabel();
 
     QSizePolicy sp;
-    const int status_width = 80;
+    const int status_width = 90;
     sp.setHorizontalPolicy(QSizePolicy::Fixed);
     labelStepCount->setSizePolicy(sp);
     labelStepCount->setFixedWidth(status_width);
     labelElapsedTime->setSizePolicy(sp);
     labelElapsedTime->setFixedWidth(status_width);
+    labelWindSpeed->setSizePolicy(sp);
+    labelWindSpeed->setFixedWidth(status_width);
+    labelWindDirection->setSizePolicy(sp);
+    labelWindDirection->setFixedWidth(status_width);
 
     ui->statusbar->addWidget(statusLabel);
+    ui->statusbar->addPermanentWidget(labelWindSpeed);
+    ui->statusbar->addPermanentWidget(labelWindDirection);
     ui->statusbar->addPermanentWidget(labelElapsedTime);
     ui->statusbar->addPermanentWidget(labelStepCount);
 
@@ -307,7 +315,11 @@ void MainWindow::simulation_data_ready()
 void MainWindow::updateGUI()
 {
     labelStepCount->setText(QString::number(model.prms.SimulationStep));
-    labelElapsedTime->setText(QString("%1 s").arg(model.prms.SimulationTime,0,'f',3));
+    labelElapsedTime->setText(QString("%1 s").arg(model.prms.SimulationTime,0,'f',0));
+    labelWindSpeed->setText(QString("%1 m/s").arg(model.windSpeed,0,'f',2));
+    labelWindDirection->setText(QString("%1 deg").arg(model.windAngle,0,'f',0));
+
+
     //statusLabel->setText(QString("per cycle: %1 ms").arg(model.compute_time_per_cycle,0,'f',3));
 
     if(model.SyncTopologyRequired)

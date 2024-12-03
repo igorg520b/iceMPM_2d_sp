@@ -22,13 +22,15 @@
 void GrainProcessor2D::generate_block_and_write()
 {
     load_png();
-    LoadMSH();
+//    LoadMSH();
     print_out_parameters();
     GenerateBlock();
-    IdentifyGrains();
+//    IdentifyGrains();
     Write_HDF5();
     stbi_image_free(png_data);
 }
+
+
 
 
 void GrainProcessor2D::print_out_parameters()
@@ -74,16 +76,19 @@ void GrainProcessor2D::load_png()
             py = std::min(py, imgy-1);
 
             int index_png = py * imgx + px;
-            unsigned char &pixel = png_data[index_png*3 + 0];   // red channel
-            bool is_water = pixel < 128;  // assuming a threshold of 128
-            pixel = is_water ? 0 : 1; // 1 is land
-            if(is_water) nWaterNodes++;
+            unsigned char &r = png_data[index_png*3 + 0];   // red channel
+            unsigned char &g = png_data[index_png*3 + 1];   // red channel
+            unsigned char &b = png_data[index_png*3 + 2];   // red channel
+            bool is_land = (r > 128 && g < 128 & b < 128);
+            if(!is_land) nWaterNodes++;
             else nLandNodes++;
 
-            grid_buffer[(gridy-y-1) + x*gridy] = (uint8_t) pixel;
+            grid_buffer[(gridy-y-1) + x*gridy] = is_land ? 1 : 0;
         }
     }
 }
+
+
 
 
 void GrainProcessor2D::GenerateBlock()
@@ -101,14 +106,20 @@ void GrainProcessor2D::GenerateBlock()
     const std::array<float, 2>kXMin {2*h, 2*h};
     const std::array<float, 2>kXMax {dx-2*h, dy-2*h};
 
+    int pt_counters[5]{};
+    {
     buffer = thinks::PoissonDiskSampling(kRadius, kXMin, kXMax);
     spdlog::info("generating rectangle [{},{}] - [{},{}]",kXMin[0],kXMin[1],kXMax[0],kXMax[1]);
 
-    const size_t nPtsCountInitial = buffer.size();
-    spdlog::info("initial point cloud: {} pts", nPtsCountInitial);
-    auto result = std::remove_if(buffer.begin(),buffer.end(),[&](std::array<float, 2> &pt){
-        float x = pt[0];
-        float y = pt[1];
+
+    // copy to buffer_categorized and categorize
+    buffer_categorized.resize(buffer.size());
+
+    for(int idx=0;idx<buffer.size();idx++)
+    {
+        float x = buffer[idx][0];
+        float y = buffer[idx][1];
+
         int i = (int)(x/h + 0.5f);
         int j = (int)(y/h + 0.5f);
         if(i<0 || j< 0 || i>=gridx || j>=gridy)
@@ -116,25 +127,57 @@ void GrainProcessor2D::GenerateBlock()
             spdlog::critical("error pt ({},{}); grid cell ({},{})",x,y,i,j);
             throw std::runtime_error("particle is out of grid bounds");
         }
-        unsigned char pixel_land = grid_buffer[j + i*gridy];
-        int px = (int)(x/h_img + 0.5f);
-        int py = (int)(y/h_img + 0.5f);
-        int index_png = (imgy - py -1) * imgx + px;
-        unsigned char &pixel = png_data[index_png*3 + 2];   // blue channel
-        return (bool)(pixel_land || pixel>0);
-    });
-    buffer.erase(result,buffer.end());
 
-    const size_t nPtsCountFinal = buffer.size();
+        int category = -2;
+
+        // if on land cell of the grid
+        unsigned char pixel_land = grid_buffer[j + i*gridy];
+        if(pixel_land) category = -1;
+        else
+        {
+            // pick from png image
+            int px = (int)(x/h_img + 0.5f);
+            int py = (int)(y/h_img + 0.5f);
+            int index_png = (imgy - py -1) * imgx + px;
+            float r = (float)png_data[index_png*3 + 0]/255.;
+            float g = (float)png_data[index_png*3 + 1]/255.;
+            float b = (float)png_data[index_png*3 + 2]/255.;
+            const float color[3] {r,g,b};
+            category = categorizeColor(color);
+        }
+        pt_counters[category+1]++;
+
+        buffer_categorized[idx] = {x,y,category};
+    }
+    }
+
+    size_t nPtsCountInitial = buffer_categorized.size();
+    spdlog::info("initial point cloud: {} pts", nPtsCountInitial);
+    spdlog::info("pt_counters; land {} water {} crushed {} weakened {} solid {}",
+                     pt_counters[0],pt_counters[1],pt_counters[2],pt_counters[3],pt_counters[4]);
+
+    auto result = std::remove_if(buffer_categorized.begin(),buffer_categorized.end(),
+                                 [&](std::tuple<float,float,int> &pt){
+//        float x = std::get<0>(pt);
+//        float y = std::get<1>(pt);
+        int cat = std::get<2>(pt);
+        return (cat == 0 || cat == -1); // remove points that are open water or land
+    });
+    buffer_categorized.erase(result,buffer_categorized.end());
+
+    const size_t nPtsCountFinal = buffer_categorized.size();
     spdlog::info("after erasing land points: {} pts", nPtsCountFinal);
+
 
     volume = (kXMax[0]-kXMin[0])*(kXMax[1]-kXMin[1])*block_length*block_length;
     volume *= (float)nPtsCountFinal/(float)nPtsCountInitial;
 
-    auto getidx = [&] (std::array<float, 2> &pt)
+
+    auto getidx = [&] (std::tuple<float,float,int> &pt)
     {
-        float x = pt[0];
-        float y = pt[1];
+        float x = std::get<0>(pt);
+        float y = std::get<1>(pt);
+
         int i = (int)(x/h + 0.5f);
         int j = (int)(y/h + 0.5f);
         int cellidx = j + gridy*i;
@@ -142,17 +185,32 @@ void GrainProcessor2D::GenerateBlock()
     };
 
     // sort, to facilitate subsequent loading
-    std::sort(buffer.begin(), buffer.end(),
-              [&](std::array<float, 2> &p1, std::array<float, 2> &p2)
+    std::sort(buffer_categorized.begin(), buffer_categorized.end(),
+              [&](std::tuple<float,float,int> &p1, std::tuple<float,float,int> &p2)
               {return getidx(p1)<getidx(p2);});
     spdlog::info("points sortred by cell");
 
-    coordinates[0].resize(buffer.size());
-    coordinates[1].resize(buffer.size());
-    for(int i=0;i<buffer.size();i++)
+    coordinates[0].resize(buffer_categorized.size());
+    coordinates[1].resize(buffer_categorized.size());
+    llGrainID.resize(buffer_categorized.size());
+
+    for(int i=0;i<buffer_categorized.size();i++)
     {
-        coordinates[0][i] = buffer[i][0]*block_length;
-        coordinates[1][i] = buffer[i][1]*block_length;
+        std::tuple<float,float,int> &pt = buffer_categorized[i];
+        float x = std::get<0>(pt);
+        float y = std::get<1>(pt);
+
+        coordinates[0][i] = x*block_length;
+        coordinates[1][i] = y*block_length;
+
+        int category = std::get<2>(pt);
+        constexpr uint32_t status_crushed = 0x10000;
+        constexpr uint32_t status_weakened = 0x40000;
+        if(category == 3) llGrainID[i] = 0;
+//        else if(category == 2) llGrainID[i] = status_weakened;
+        else if(category == 2) llGrainID[i] = status_crushed;
+        else if(category == 1) llGrainID[i] = status_crushed;
+
     }
     cellsize = block_length/(float)(gridx-1);
 }
@@ -419,4 +477,37 @@ void GrainProcessor2D::LoadMSH()
         }
 
     gmsh::clear();
+}
+
+
+
+
+float GrainProcessor2D::pointToSegmentDistance(const Eigen::Vector3f& p, const Eigen::Vector3f& a, const Eigen::Vector3f& b)
+{
+    Eigen::Vector3f ab = b - a;
+    Eigen::Vector3f ap = p - a;
+    float t = ap.dot(ab) / ab.squaredNorm(); // Projection factor
+    t = std::clamp(t, 0.0f, 1.0f);          // Clamp t to [0, 1]
+    Eigen::Vector3f projection = a + t * ab;       // Projection point
+    return (p - projection).squaredNorm();  // Squared distance
+}
+
+
+int GrainProcessor2D::categorizeColor(const float color[3])
+{
+    Eigen::Vector3f colorVec(color[0], color[1], color[2]);
+    float minDistance = std::numeric_limits<float>::max();
+    int category = -1;
+
+    for (int i = 0; i < 7; ++i)
+    { // Iterate through each segment
+        Eigen::Vector3f a(colordata[i][0], colordata[i][1], colordata[i][2]);
+        Eigen::Vector3f b(colordata[i + 1][0], colordata[i + 1][1], colordata[i + 1][2]);
+        float distance = pointToSegmentDistance(colorVec, a, b);
+        if (distance < minDistance) {
+            minDistance = distance;
+            category = i / 2; // Each category has 2 segments
+        }
+    }
+    return category;
 }

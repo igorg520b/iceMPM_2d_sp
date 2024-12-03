@@ -45,6 +45,7 @@ public:
 
     SimParams prms;
     std::vector<std::array<float,3>> wind_data;
+    float windSpeed, windAngle;
     GPU_Implementation5 gpu;
     bool SyncTopologyRequired;
 
@@ -53,7 +54,7 @@ public:
 
 private:
     bool abortRequested;
-    float interpolateWindSpeed(float current_time);
+    std::pair<float, float> interpolateWind(float current_time);
 };
 
 #endif

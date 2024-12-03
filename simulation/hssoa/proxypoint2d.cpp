@@ -96,6 +96,14 @@ bool ProxyPoint::getDisabledStatus()
     return (val & 0x20000);
 }
 
+bool ProxyPoint::getWeakenedStatus()
+{
+    uint32_t val = getValueInt(SimParams::idx_utility_data);
+    return (val & 0x40000);
+}
+
+
+
 uint16_t ProxyPoint::getGrain()
 {
     uint32_t val = getValueInt(SimParams::idx_utility_data);

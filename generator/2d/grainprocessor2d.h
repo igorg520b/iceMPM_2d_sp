@@ -3,6 +3,7 @@
 
 #include <Eigen/Core>
 #include "bvhn2d.h"
+#include <tuple>
 
 struct Triangle
 {
@@ -55,6 +56,27 @@ private:
 
     std::vector<BVHN2D*> leaves;
     BVHN2D root;
+
+
+    // identification of the point type based on color value
+    std::vector<std::tuple<float,float,int>> buffer_categorized;
+
+
+    static constexpr float colordata[8][3] {
+        {0,0,0},// open water
+        {0x16/255.,0x1f/255.,0x27/255.},  // open water
+        {0x2c/255.,0x3e/255.,0x41/255.},  // crushed
+        {0x4e/255.,0x5e/255.,0x60/255.},  // crushed
+        {0x6c/255.,0x82/255.,0x8f/255.},  // solid but weakened
+        {0x74/255.,0x94/255.,0xa4/255.},  // solid but weakened
+        {0xc7/255.,0xcc/255.,0xcb/255.},  // 100% solid
+        {1,1,1} // 100% solid
+    };
+
+    // Function to calculate the squared distance from a point to a segment
+    static float pointToSegmentDistance(const Eigen::Vector3f& p, const Eigen::Vector3f& a, const Eigen::Vector3f& b);
+
+    int categorizeColor(const float color[3]);
 };
 
 #endif // GRAINPROCESSOR2D_H

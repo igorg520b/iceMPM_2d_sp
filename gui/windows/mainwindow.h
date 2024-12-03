@@ -100,6 +100,7 @@ private:
     QLabel *statusLabel;                    // statusbar
     QLabel *labelElapsedTime;
     QLabel *labelStepCount;
+    QLabel *labelWindSpeed, *labelWindDirection;
     QComboBox *comboBox_visualizations;
     // QSlider *slider1;
     QDoubleSpinBox *qdsbValRange;   // high and low limits for value scale

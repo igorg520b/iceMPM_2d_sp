@@ -230,10 +230,11 @@ void icy::VisualRepresentation::SynchronizeValues()
         scalarBar->SetLookupTable(hueLut_four);
         for(int i=0;i<nPts;i++)
         {
-            float value = 0;
+            float value = 1;
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            if(s->getDisabledStatus()) value = 2;
-            else if(s->getCrushedStatus()) value = 1;
+            if(s->getDisabledStatus()) value = 3;
+            else if(s->getCrushedStatus()) value = 0;
+            else if(s->getWeakenedStatus()) value = 2;
             visualized_values->SetValue((vtkIdType)i, (float)value);
         }
         visualized_values->Modified();

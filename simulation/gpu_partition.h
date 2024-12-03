@@ -51,7 +51,7 @@ __device__ void ComputeSVD(const PointMatrix2r &Fe, PointMatrix2r &U, PointVecto
 __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_tr,
                           const t_PointReal &kappa, const t_PointReal &mu, const PointMatrix2r &F);
 
-__device__ void GetParametersForGrain(int grain, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
+__device__ void GetParametersForGrain(uint32_t utility_data, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
                                       t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2);
 
 __device__ PointMatrix2r KirchhoffStress_Wolper(const PointMatrix2r &F);
