@@ -8,40 +8,6 @@
 #include <spdlog/spdlog.h>
 
 
-void icy::VisualRepresentation::populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
-{
-    table->SetNumberOfTableValues(size);
-    for(int i=0;i<size;i++)
-        table->SetTableValue(i,lutArray[i][0],lutArray[i][1],lutArray[i][2]);
-    table->SetTableRange(0, size-1);
-
-    table->SetRampToLinear();
-}
-
-
-void icy::VisualRepresentation::interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
-{
-    const int m = 256;
-    table->SetNumberOfTableValues(m);
-
-    for (int i = 0; i < m; ++i) {
-        float t = static_cast<float>(i) / (float)(m-1); // Normalize index to [0, 1]
-
-        // Map t to the interval [0, N-1] for interpolation
-        float scaledT = t * (size - 1);
-        int lowerIdx = static_cast<int>(std::floor(scaledT)); // Lower bound
-        int upperIdx = static_cast<int>(std::ceil(scaledT));  // Upper bound
-        float localT = scaledT - lowerIdx; // Fractional position between indices
-
-        // Linearly interpolate between colors at lowerIdx and upperIdx
-        float r = (1.0f - localT) * lutArray[lowerIdx][0] + localT * lutArray[upperIdx][0];
-        float g = (1.0f - localT) * lutArray[lowerIdx][1] + localT * lutArray[upperIdx][1];
-        float b = (1.0f - localT) * lutArray[lowerIdx][2] + localT * lutArray[upperIdx][2];
-
-        // Set the interpolated color in the lookup table
-        table->SetTableValue(i, r, g, b, 1.0); // Alpha is set to 1.0 (opaque)
-    }
-}
 
 icy::VisualRepresentation::VisualRepresentation()
 {
@@ -76,6 +42,12 @@ icy::VisualRepresentation::VisualRepresentation()
     actor_points->GetProperty()->SetInterpolationToFlat();
     actor_points->PickableOff();
 
+
+    pts_colors->SetNumberOfComponents(3);
+    pts_colors->SetName("pts_colors");
+    points_polydata->GetPointData()->AddArray(pts_colors);
+
+    // GRID
     grid_mapper->SetInputData(structuredGrid);
 //    grid_mapper->SetLookupTable(hueLut);
 
@@ -143,6 +115,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
     const int nPts = model->gpu.hssoa.size;
     points->SetNumberOfPoints(nPts);
     visualized_values->SetNumberOfValues(nPts);
+    pts_colors->SetNumberOfValues(nPts*3);
 
     int gx = model->prms.GridXTotal;
     int gy = model->prms.GridY;
@@ -214,7 +187,6 @@ void icy::VisualRepresentation::SynchronizeValues()
     }
     points->Modified();
     actor_points->GetProperty()->SetPointSize(model->prms.ParticleViewSize);
-    points_filter->Update();
     double range = std::pow(10,ranges[VisualizingVariable]);
     double centerVal = 0;
 
@@ -237,7 +209,46 @@ void icy::VisualRepresentation::SynchronizeValues()
             else if(s->getWeakenedStatus()) value = 2;
             visualized_values->SetValue((vtkIdType)i, (float)value);
         }
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
+
+
+/*
+        points_mapper->SetLookupTable(hueLut_four);
+        scalarBar->SetLookupTable(hueLut_four);
+
+        for(int i=0;i<nPts;i++)
+        {
+        }
+
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
+        visualized_values->Modified();
+*/
+    }
+    else if(VisualizingVariable == VisOpt::color)
+    {
+        scalarBar->VisibilityOff();
+        points_mapper->ScalarVisibilityOn();
+
+        points_mapper->SetColorModeToDirectScalars();
+//        points_mapper->UseLookupTableScalarRangeOff();
+        points_mapper->Modified();
+
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            float r = s->getValue(SimParams::idx_rgb+0);
+            float g = s->getValue(SimParams::idx_rgb+1);
+            float b = s->getValue(SimParams::idx_rgb+2);
+            pts_colors->SetValue((vtkIdType)(i*3+0), (unsigned char)(r*255));
+            pts_colors->SetValue((vtkIdType)(i*3+1), (unsigned char)(g*255));
+            pts_colors->SetValue((vtkIdType)(i*3+2), (unsigned char)(b*255));
+        }
+        points_polydata->GetPointData()->SetActiveScalars("pts_colors");
+        pts_colors->Modified();
+
+        points_polydata->Modified();
+        points_filter->Update();
     }
     else if(VisualizingVariable == VisOpt::Jp_inv)
     {
@@ -255,6 +266,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             if(s->getDisabledStatus()) value = 0;
             visualized_values->SetValue((vtkIdType)i, (float)value);
         }
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
     }
     else if(VisualizingVariable == VisOpt::P)
@@ -274,6 +286,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             else if(s->getCrushedStatus()) value = 2*range;
             visualized_values->SetValue((vtkIdType)i, value);
         }
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
     }
     else if(VisualizingVariable == VisOpt::Q)
@@ -293,6 +306,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             else if(s->getCrushedStatus()) value = 2*range;
             visualized_values->SetValue((vtkIdType)i, value);
         }
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
     }
     else if(VisualizingVariable == VisOpt::qp)
@@ -312,6 +326,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             else if(s->getCrushedStatus()) value = 2*range;
             visualized_values->SetValue((vtkIdType)i, value);
         }
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
     }
     else if(VisualizingVariable == VisOpt::grains)
@@ -331,6 +346,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             if(isCrushed) grain = 41;
             visualized_values->SetValue((vtkIdType)i, (float)grain);
         }
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
     }
     else if(VisualizingVariable == VisOpt::velocity)
@@ -354,6 +370,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             if(value>=1.9) value=1.9;
             visualized_values->SetValue((vtkIdType)i, (float)value);
         }
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
     }
     else
@@ -361,6 +378,8 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_mapper->ScalarVisibilityOff();
         scalarBar->VisibilityOff();
     }
+    points_filter->Update();
+
     model->accessing_point_data.unlock();
 
 }
@@ -372,3 +391,37 @@ void icy::VisualRepresentation::ChangeVisualizationOption(int option)
     SynchronizeTopology();
 }
 
+void icy::VisualRepresentation::populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
+{
+    table->SetNumberOfTableValues(size);
+    for(int i=0;i<size;i++)
+        table->SetTableValue(i,lutArray[i][0],lutArray[i][1],lutArray[i][2]);
+    table->SetTableRange(0, size-1);
+
+    table->SetRampToLinear();
+}
+
+
+void icy::VisualRepresentation::interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
+{
+    const int m = 256;
+    table->SetNumberOfTableValues(m);
+
+    for (int i = 0; i < m; ++i) {
+        float t = static_cast<float>(i) / (float)(m-1); // Normalize index to [0, 1]
+
+        // Map t to the interval [0, N-1] for interpolation
+        float scaledT = t * (size - 1);
+        int lowerIdx = static_cast<int>(std::floor(scaledT)); // Lower bound
+        int upperIdx = static_cast<int>(std::ceil(scaledT));  // Upper bound
+        float localT = scaledT - lowerIdx; // Fractional position between indices
+
+        // Linearly interpolate between colors at lowerIdx and upperIdx
+        float r = (1.0f - localT) * lutArray[lowerIdx][0] + localT * lutArray[upperIdx][0];
+        float g = (1.0f - localT) * lutArray[lowerIdx][1] + localT * lutArray[upperIdx][1];
+        float b = (1.0f - localT) * lutArray[lowerIdx][2] + localT * lutArray[upperIdx][2];
+
+        // Set the interpolated color in the lookup table
+        table->SetTableValue(i, r, g, b, 1.0); // Alpha is set to 1.0 (opaque)
+    }
+}

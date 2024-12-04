@@ -21,13 +21,14 @@ icy::Model::Model()
     wind_data.push_back({500'000,30,0});
     wind_data.push_back({1'000'000,30,0});
 */
-    wind_data.push_back({0,0,0});
-    wind_data.push_back({1000,10,0});
-    wind_data.push_back({1100,10,180});
-    wind_data.push_back({2000,20,180});
-    wind_data.push_back({2100,20,0});
-    wind_data.push_back({3000,30,0});
-    wind_data.push_back({10'000,40,270});
+    wind_data.push_back({0,0,180});
+    wind_data.push_back({1000,10,180});
+    wind_data.push_back({1100,10,0});
+    wind_data.push_back({2000,20,0});
+    wind_data.push_back({2100,20,180});
+    wind_data.push_back({3000,30,180});
+    wind_data.push_back({3100,5,270});
+    wind_data.push_back({10'000,20,270});
 //    wind_data.push_back({2'000,20,90});
 //    wind_data.push_back({4'000,40,270});
     spdlog::info("Model constructor");

@@ -32,6 +32,7 @@ public:
     // SOA format (to be written as HDF5)
     std::vector<uint32_t> llGrainID;
     std::vector<float> coordinates[2];
+    std::vector<float> rgb[3];
 
     // mesh with grains
     std::vector<Eigen::Vector2f> vertices2;
@@ -50,7 +51,6 @@ private:
     float volume = -1;
     int imgx, imgy, channels;   // from PNG
     float scale_img;
-    std::vector<std::array<float, 2>> buffer;   // result from poisson disk sampler
     std::vector<uint8_t> grid_buffer;
     unsigned char* png_data;
 
@@ -59,7 +59,6 @@ private:
 
 
     // identification of the point type based on color value
-    std::vector<std::tuple<float,float,int>> buffer_categorized;
 
 
     static constexpr float colordata[8][3] {

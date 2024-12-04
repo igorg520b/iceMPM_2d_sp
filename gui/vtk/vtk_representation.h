@@ -10,9 +10,6 @@
 #include <vtkActor.h>
 #include <vtkProperty.h>
 #include <vtkNamedColors.h>
-#include <vtkDoubleArray.h>
-#include <vtkFloatArray.h>
-#include <vtkIntArray.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkDataSetMapper.h>
 #include <vtkLookupTable.h>
@@ -29,10 +26,13 @@
 #include <vtkTextProperty.h>
 #include <vtkTextActor.h>
 
-
 #include <vtkRegularPolygonSource.h>
 #include <vtkCylinderSource.h>
 
+#include <vtkUnsignedCharArray.h>
+#include <vtkDoubleArray.h>
+#include <vtkFloatArray.h>
+#include <vtkIntArray.h>
 
 
 namespace icy { class VisualRepresentation; class Model;}
@@ -46,7 +46,7 @@ public:
 
     icy::Model *model;
 
-    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp};
+    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp, color};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[20] = {};
@@ -74,6 +74,7 @@ private:
     vtkNew<vtkCellArray> points_cells;
     vtkNew<vtkVertexGlyphFilter> points_filter;
     vtkNew<vtkFloatArray> visualized_values;
+    vtkNew<vtkUnsignedCharArray> pts_colors;    // for color visualization per point
 
     // background grid
     vtkNew<vtkStructuredGrid> structuredGrid;

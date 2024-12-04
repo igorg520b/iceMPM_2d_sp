@@ -44,7 +44,8 @@ public:
     constexpr static size_t velx = posx + 2;
     constexpr static size_t Fe00 = velx + 2;
     constexpr static size_t Bp00 = Fe00 + 4;
-    constexpr static size_t nPtsArrays = Bp00 + 4;
+    constexpr static size_t idx_rgb = Bp00 + 4;
+    constexpr static size_t nPtsArrays = idx_rgb + 3;
 
     int tpb_P2G, tpb_Upd, tpb_G2P;  // threads per block for each operation
 
@@ -78,7 +79,6 @@ public:
 
     t_PointReal ParticleVolume, ParticleMass, ParticleViewSize;
 
-    t_PointReal Volume;  // total volume (area) of the object
     int SetupType;  // 0 - ice block horizontal indentation; 1 - cone uniaxial compression
     t_PointReal GrainVariability;
 
@@ -92,7 +92,7 @@ public:
     void ComputeCamClayParams2();
     void ComputeHelperVariables();
     void ComputeIntegerBlockCoords();
-    float PointsPerCell() {return nPtsInitial/(Volume/(cellsize*cellsize));}
+    float PointsPerCell() {return (float)nPtsInitial/(GridXTotal*GridY);}
     int AnimationFrameNumber() { return SimulationStep / UpdateEveryNthStep;}
 };
 

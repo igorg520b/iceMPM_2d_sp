@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 //        ("r,rescale", "Add a special attribute to the resulting file to rescale later", cxxopts::value<bool>()->default_value("false"))
 
         ("l,length", "Length of the block", cxxopts::value<float>()->default_value("170000"))
-        ("g,grid", "Horizontal grid size", cxxopts::value<int>()->default_value("500"))
+        ("g,grid", "Horizontal grid size", cxxopts::value<int>()->default_value("-1"))
         ;
 
     auto option_parse_result = options.parse(argc, argv);

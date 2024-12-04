@@ -43,11 +43,11 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     model->prms.cellsize_inv = 1./model->prms.cellsize;
 
     // get number of points
-    H5::DataSet dataset_grains = file.openDataSet("llGrainIDs");
+    H5::DataSet dataset_x = file.openDataSet("x");
     hsize_t nPoints;
-    dataset_grains.getSpace().getSimpleExtentDims(&nPoints, NULL);
+    dataset_x.getSpace().getSimpleExtentDims(&nPoints, NULL);
     model->prms.nPtsInitial = nPoints;
-    spdlog::info("nPoints {}; grid [{} x {}]", nPoints,model->prms.GridXTotal, model->prms.GridY);
+    spdlog::info("nPoints {}; grid [{} x {}]", nPoints, model->prms.GridXTotal, model->prms.GridY);
 
     // allocate space host-side
     model->gpu.hssoa.Allocate(nPoints, grid_total);
@@ -64,26 +64,33 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     file.openDataSet("y").read(buffer.data(), H5::PredType::NATIVE_FLOAT);
     hssoa_ptr = model->gpu.hssoa.getPointerToPosY();
     for(int i=0;i<nPoints;i++) hssoa_ptr[i] = (t_PointReal)buffer[i];
+
+    file.openDataSet("r").read(buffer.data(), H5::PredType::NATIVE_FLOAT);
+    hssoa_ptr = model->gpu.hssoa.getPointerToLine(SimParams::idx_rgb + 0);
+    for(int i=0;i<nPoints;i++) hssoa_ptr[i] = (t_PointReal)buffer[i];
+
+    file.openDataSet("g").read(buffer.data(), H5::PredType::NATIVE_FLOAT);
+    hssoa_ptr = model->gpu.hssoa.getPointerToLine(SimParams::idx_rgb + 1);
+    for(int i=0;i<nPoints;i++) hssoa_ptr[i] = (t_PointReal)buffer[i];
+
+    file.openDataSet("b").read(buffer.data(), H5::PredType::NATIVE_FLOAT);
+    hssoa_ptr = model->gpu.hssoa.getPointerToLine(SimParams::idx_rgb + 2);
+    for(int i=0;i<nPoints;i++) hssoa_ptr[i] = (t_PointReal)buffer[i];
     }
 
-    {
-    std::vector<uint32_t> buffer2(nPoints);
-    dataset_grains.read(buffer2.data(), H5::PredType::NATIVE_UINT32);
-    hssoa_ptr = model->gpu.hssoa.getPointerToLine(SimParams::idx_utility_data);
-    for(int i=0;i<nPoints;i++) *reinterpret_cast<uint32_t*>(&hssoa_ptr[i]) = buffer2[i];
-    }
+
+//    {
+//    std::vector<uint32_t> buffer2(nPoints);
+//    dataset_grains.read(buffer2.data(), H5::PredType::NATIVE_UINT32);
+//    hssoa_ptr = model->gpu.hssoa.getPointerToLine(SimParams::idx_utility_data);
+//    for(int i=0;i<nPoints;i++) *reinterpret_cast<uint32_t*>(&hssoa_ptr[i]) = buffer2[i];
+//    }
 
     // read volume attribute
-    H5::Attribute att_volume = dataset_grains.openAttribute("volume");
+    H5::Attribute att_volume = dataset_x.openAttribute("volume");
     float volume;
     att_volume.read(H5::PredType::NATIVE_FLOAT, &volume);
-    model->prms.Volume = volume;
-
-    int offsetIncluded = 0;
-    if(H5Aexists(dataset_grains.getId(), "offsetIncluded") > 0)
-    {
-        dataset_grains.openAttribute("offsetIncluded").read(H5::PredType::NATIVE_INT, &offsetIncluded);
-    }
+    model->prms.ParticleVolume = volume;
 
     // GRID
     dataset_grid.read(model->gpu.hssoa.grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
@@ -120,7 +127,6 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     const float x_ind_offset = sqrt(r*r - ht*ht);
 
     // particle volume and mass
-    model->prms.ParticleVolume = model->prms.Volume/nPoints;
     model->prms.ComputeHelperVariables();
 
     // allocate GPU partitions
