@@ -21,14 +21,23 @@ icy::Model::Model()
     wind_data.push_back({500'000,30,0});
     wind_data.push_back({1'000'000,30,0});
 */
+    constexpr float vel = 15;
     wind_data.push_back({0,0,180});
-    wind_data.push_back({1000,10,180});
-    wind_data.push_back({1100,10,0});
-    wind_data.push_back({2000,20,0});
-    wind_data.push_back({2100,20,180});
-    wind_data.push_back({3000,30,180});
-    wind_data.push_back({3100,5,270});
-    wind_data.push_back({10'000,20,270});
+    wind_data.push_back({1000,vel,180});
+    wind_data.push_back({1100,0,0});
+    wind_data.push_back({2000,vel,0});
+    wind_data.push_back({2100,0,180});
+    wind_data.push_back({3000,vel,180});
+    wind_data.push_back({3100,0,270});
+    wind_data.push_back({4'000,vel,270});
+    wind_data.push_back({4'100,0,90});
+    wind_data.push_back({5'000,vel,90});
+    wind_data.push_back({5'100,0,270});
+    wind_data.push_back({6'000,vel,270});
+    wind_data.push_back({6'100,0,90});
+    wind_data.push_back({7'000,vel,90});
+    wind_data.push_back({7'100,0,0});
+    wind_data.push_back({8'000,vel,0});
 //    wind_data.push_back({2'000,20,90});
 //    wind_data.push_back({4'000,40,270});
     spdlog::info("Model constructor");
@@ -62,7 +71,7 @@ bool icy::Model::Step()
         gpu.p2g();
         gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
         const bool isZeroStep = step % prms.UpdateEveryNthStep == 0;
-        gpu.g2p(isZeroStep, false, (step%10)==0 ? 10 : 0);
+        gpu.g2p(isZeroStep, false, (step%10)==0 ? 0 : 0);
         gpu.record_timings(false);
 
         count_unupdated_steps++;

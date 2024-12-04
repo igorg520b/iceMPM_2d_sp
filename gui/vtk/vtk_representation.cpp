@@ -211,19 +211,6 @@ void icy::VisualRepresentation::SynchronizeValues()
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
-
-
-/*
-        points_mapper->SetLookupTable(hueLut_four);
-        scalarBar->SetLookupTable(hueLut_four);
-
-        for(int i=0;i<nPts;i++)
-        {
-        }
-
-        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-        visualized_values->Modified();
-*/
     }
     else if(VisualizingVariable == VisOpt::color)
     {
@@ -250,20 +237,52 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_polydata->Modified();
         points_filter->Update();
     }
+    else if(VisualizingVariable == VisOpt::special)
+    {
+        scalarBar->VisibilityOff();
+        points_mapper->ScalarVisibilityOn();
+
+        points_mapper->SetColorModeToDirectScalars();
+        points_mapper->Modified();
+
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            float r = s->getValue(SimParams::idx_rgb+0);
+            float g = s->getValue(SimParams::idx_rgb+1);
+            float b = s->getValue(SimParams::idx_rgb+2);
+
+            if(s->getCrushedStatus())
+            {
+                double value = s->getValue(SimParams::idx_Jp_inv)-1;
+                interpolateColor(naturalRidges, 7, (value)*5+0.5, r, g, b);
+            }
+
+            pts_colors->SetValue((vtkIdType)(i*3+0), (unsigned char)(r*255));
+            pts_colors->SetValue((vtkIdType)(i*3+1), (unsigned char)(g*255));
+            pts_colors->SetValue((vtkIdType)(i*3+2), (unsigned char)(b*255));
+        }
+        points_polydata->GetPointData()->SetActiveScalars("pts_colors");
+        pts_colors->Modified();
+
+        points_polydata->Modified();
+        points_filter->Update();
+    }
     else if(VisualizingVariable == VisOpt::Jp_inv)
     {
         scalarBar->VisibilityOn();
         points_mapper->ScalarVisibilityOn();
         points_mapper->SetColorModeToMapScalars();
         points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(lutMPM);
-        scalarBar->SetLookupTable(lutMPM);
-        lutMPM->SetTableRange(centerVal-range, centerVal+range);
+        points_mapper->SetLookupTable(hueLut_pressure);
+        scalarBar->SetLookupTable(hueLut_pressure);
+        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
         for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             double value = s->getValue(SimParams::idx_Jp_inv)-1;
-            if(s->getDisabledStatus()) value = 0;
+//            if(s->getDisabledStatus()) value = 0;
+//            else if(!s->getCrushedStatus()) value = -10;
             visualized_values->SetValue((vtkIdType)i, (float)value);
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
@@ -283,7 +302,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             SOAIterator s = model->gpu.hssoa.begin()+i;
             float value = s->getValue(SimParams::idx_P);
             if(s->getDisabledStatus()) value = -2*range;
-            else if(s->getCrushedStatus()) value = 2*range;
+            // else if(s->getCrushedStatus()) value = 2*range;
             visualized_values->SetValue((vtkIdType)i, value);
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
@@ -303,7 +322,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             SOAIterator s = model->gpu.hssoa.begin()+i;
             float value = s->getValue(SimParams::idx_Q);
             if(s->getDisabledStatus()) value = -2*range;
-            else if(s->getCrushedStatus()) value = 2*range;
+            //else if(s->getCrushedStatus()) value = 2*range;
             visualized_values->SetValue((vtkIdType)i, value);
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
@@ -424,4 +443,30 @@ void icy::VisualRepresentation::interpolateLut(const float lutArray[][3], const 
         // Set the interpolated color in the lookup table
         table->SetTableValue(i, r, g, b, 1.0); // Alpha is set to 1.0 (opaque)
     }
+}
+
+
+void icy::VisualRepresentation::interpolateColor(const float colorArray[][3],
+                                                 int nColors, float value, float& r_out, float& g_out, float& b_out) {
+    if (nColors < 2) {
+        throw std::invalid_argument("Color array must have at least two colors for interpolation.");
+    }
+
+    // Clamp value to range [0, 1]
+    value = std::clamp(value, 0.0f, 1.0f);
+
+    // Find the segment
+    float segmentSize = 1.0f / (nColors - 1); // Divide [0, 1] into nColors-1 segments
+    int segmentIndex = static_cast<int>(value / segmentSize); // Determine which segment we're in
+    segmentIndex = std::min(segmentIndex, nColors - 2); // Ensure index doesn't go out of bounds
+
+    // Compute local position within the segment
+    float localT = (value - segmentIndex * segmentSize) / segmentSize;
+
+    // Interpolate between the two colors
+    const float* color1 = colorArray[segmentIndex];
+    const float* color2 = colorArray[segmentIndex + 1];
+    r_out = (1 - localT) * color1[0] + localT * color2[0];
+    g_out = (1 - localT) * color1[1] + localT * color2[1];
+    b_out = (1 - localT) * color1[2] + localT * color2[2];
 }

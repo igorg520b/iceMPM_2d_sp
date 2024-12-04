@@ -64,6 +64,8 @@ __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[
 
 __device__ PointMatrix2r Water(const t_PointReal J);
 
+__device__ t_PointReal smoothstep(t_PointReal x);
+
 
 struct GPU_Partition
 {

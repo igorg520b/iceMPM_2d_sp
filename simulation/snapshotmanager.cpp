@@ -97,34 +97,42 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
 
     file.close();
 
-    // get block dimensions
-    auto boundaries = model->gpu.hssoa.getBlockDimensions();
-    model->prms.xmin = boundaries.first.x();
-    model->prms.ymin = boundaries.first.y();
-    model->prms.xmax = boundaries.second.x();
-    model->prms.ymax = boundaries.second.y();
-    spdlog::info("block extent x: [{}, {}], y: [{}, {}]", model->prms.xmin, model->prms.xmax, model->prms.ymin, model->prms.ymax);
+
+    HostSideSOA &hssoa = model->gpu.hssoa;
+    hssoa.convertToIntegerCellFormat(model->prms.cellsize);
+
+    // analyze color data
+    std::vector<int> categories(colordata.size());
+    for(SOAIterator it = hssoa.begin(); it!=hssoa.end(); ++it)
+    {
+        ProxyPoint &p = *it;
+        t_PointReal r = p.getValue(SimParams::idx_rgb+0);
+        t_PointReal g = p.getValue(SimParams::idx_rgb+1);
+        t_PointReal b = p.getValue(SimParams::idx_rgb+2);
+        Eigen::Vector3f rgb(r,g,b);
+        auto [category, interpValue] = categorizeColor(rgb);
+        categories[category]++;
+        uint32_t val = p.getValueInt(SimParams::idx_utility_data);
+        if(category <= 4)
+        {
+            val |= 0x20000;     // (mark for removal)
+        }
+        else if(category <= 11)
+        {
+            val |= 0x10000;     // crushed
+        }
+        else if(category <= 12)
+        {
+            val |= 0x40000;     // crushed
+        }
+        p.setValueInt(SimParams::idx_utility_data, val);
+    }
+    for(int i=0;i<categories.size();i++)
+        spdlog::info("category {}; count {}", i, categories[i]);
 
 
-    const t_PointReal &h = model->prms.cellsize;
-    const t_PointReal box_x = model->prms.GridXTotal*h;
-    const t_PointReal length = model->prms.xmax - model->prms.xmin;
-    const t_PointReal x_offset = (box_x - length)/2;
-    const t_PointReal y_offset = 2*h;
-
-    PointVector2r offset(x_offset, y_offset);
-//    if(!offsetIncluded) model->gpu.hssoa.offsetBlock(offset);
-    model->gpu.hssoa.convertToIntegerCellFormat(model->prms.cellsize);
     model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY);
     model->gpu.hssoa.InitializeBlock();
-
-    // set indenter starting position
-    const float block_left = x_offset;
-    const float block_top = model->prms.ymax + y_offset;
-
-    const float r = model->prms.IndDiameter/2;
-    const float ht = r - model->prms.IndDepth;
-    const float x_ind_offset = sqrt(r*r - ht*ht);
 
     // particle volume and mass
     model->prms.ComputeHelperVariables();
@@ -141,4 +149,35 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     spdlog::info("LoadRawPoints done; nPoitns {}\n",nPoints);
 }
 
+std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3f& rgb)
+{
+    float minDist = std::numeric_limits<float>::max();
+    int bestInterval = -1;
+    float bestPosition = 0.0f;
 
+    for (size_t i = 0; i < colordata.size() - 1; ++i) {
+        // Convert std::array<float, 3> to Eigen::Vector3f
+        Eigen::Vector3f p0 = arrayToEigen(colordata[i]);
+        Eigen::Vector3f p1 = arrayToEigen(colordata[i + 1]);
+
+        Eigen::Vector3f diff = p1 - p0;
+        float segmentLengthSq = diff.squaredNorm();
+
+        if (segmentLengthSq == 0.0f) continue; // Skip degenerate segments
+
+        Eigen::Vector3f v = rgb - p0;
+        float t = v.dot(diff) / segmentLengthSq;
+        t = std::clamp(t, 0.0f, 1.0f);
+
+        Eigen::Vector3f closestPoint = p0 + t * diff;
+        float distSq = (rgb - closestPoint).squaredNorm();
+
+        if (distSq < minDist) {
+            minDist = distSq;
+            bestInterval = static_cast<int>(i);
+            bestPosition = t;
+        }
+    }
+
+    return {bestInterval, bestPosition};
+}

@@ -386,6 +386,14 @@ __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const
 }
 
 
+__device__ t_PointReal smoothstep(t_PointReal x)
+{
+    if(x<0) x = 0;
+    if(x>1) x = 1;
+    return (x*x)*(3.0 - 2.0 * x);
+}
+
+
 
 
 __device__ void Wolper_Drucker_Prager(const t_PointReal &p_tr, const t_PointReal &q_tr, const t_PointReal &Je_tr,
@@ -394,12 +402,73 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
 {
     const t_PointReal &mu = gprms.mu;
     const t_PointReal &kappa = gprms.kappa;
-    const t_PointReal &tan_phi = gprms.DP_tan_phi;
+    t_PointReal tan_phi = gprms.DP_tan_phi;
     const t_PointReal &DP_threshold_p = gprms.DP_threshold_p;
 
     const t_PointReal &pmax = gprms.IceCompressiveStrength;
     const t_PointReal &qmax = gprms.IceShearStrength;
 
+
+    if(p_tr < DP_threshold_p)
+    {
+        if(Jp_inv < 0.1)
+        {
+            t_PointReal sqrt_Je_new = sqrt(Je_tr);
+            PointVector2r vSigma_new(sqrt_Je_new,sqrt_Je_new); //= Vector2d::Constant(1.)*sqrt(Je_new);  //Matrix2d::Identity() * pow(Je_new, 1./(double)d);
+            Fe = U*vSigma_new.asDiagonal()*V.transpose();
+        }
+        else
+        {
+
+        // stretching in tension - no resistance
+            PointVector2r vSigma_new(1.0,1.0);
+            Fe = U*vSigma_new.asDiagonal()*V.transpose();
+            Jp_inv /= Je_tr;
+        }
+        return;
+    }
+
+    // determine q_yeld from the combination of DP / elliptic yield surface, whichever is lower
+    t_PointReal q_yield = 0;
+    t_PointReal smstp = smoothstep((Jp_inv-0.5)/2.5);
+//    tan_phi /= smstp;
+    if(p_tr < pmax)
+    {
+        t_PointReal q_from_dp = (p_tr-DP_threshold_p)*tan_phi;
+        const t_PointReal pmin = -gprms.IceTensileStrength;
+        t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_tr)*(p_tr-pmin))*qmax/(pmax-pmin);
+        q_yield = min(q_from_failure_surface, q_from_dp);
+    }
+
+    if(q_tr > q_yield)
+    {
+        // plasticity will be applied
+        // relaxation of p_tr
+        t_PointReal relax_coeff = smstp;
+        t_PointReal p_n_1 = p_tr*relax_coeff;
+        // re-evaluate q
+        t_PointReal q_from_dp = (p_tr-DP_threshold_p)*tan_phi;
+        const t_PointReal pmin = -gprms.IceTensileStrength;
+        t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_tr)*(p_tr-pmin))*qmax/(pmax-pmin);
+        t_PointReal q_n_1 = min(q_from_failure_surface, q_from_dp);
+
+        // given p_n_1 and q_n_1, compute Fe_new
+        t_PointReal Je_new = sqrt(-2*p_n_1/kappa + 1);
+        t_PointReal s_hat_n_1_norm = q_n_1*coeff1_inv;
+        //Matrix2d B_hat_E_new = s_hat_n_1_norm*(pow(Je_tr,2./d)/mu)*s_hat_tr.normalized() + Matrix2d::Identity()*(SigmaSquared.trace()/d);
+
+        PointVector2r vB_hat_E_new = s_hat_n_1_norm*(Je_tr/mu)*v_s_hat_tr.normalized() +
+                                     PointVector2r::Constant(1)*(Je_new);
+
+        PointVector2r vSigma_new = vB_hat_E_new.array().sqrt().matrix();
+        Fe = U*vSigma_new.asDiagonal()*V.transpose();
+        Jp_inv *= Je_new/Je_tr;
+
+    }
+
+
+
+    /*
     if(p_tr < DP_threshold_p || Jp_inv < 1)
     {
         // stretching in tension
@@ -440,6 +509,8 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
             Fe = U*vSigma_new.asDiagonal()*V.transpose();
         }
     }
+
+*/
 }
 
 

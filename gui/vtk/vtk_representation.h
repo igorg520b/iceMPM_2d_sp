@@ -46,7 +46,7 @@ public:
 
     icy::Model *model;
 
-    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp, color};
+    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp, color, special};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[20] = {};
@@ -90,8 +90,9 @@ private:
     void populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
     void interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
 
-    static constexpr float lutArrayMPMColors[101][3] =
-    {{0.25098, 0.556863, 0.756863}, {0.245961, 0.547294,
+    static constexpr float lutArrayMPMColors[102][3] =
+        {{1,1,1},
+                                                        {0.25098, 0.556863, 0.756863}, {0.245961, 0.547294,
       0.749961}, {0.240941, 0.537725, 0.743059}, {0.235922, 0.528157,
       0.736157}, {0.230902, 0.518588, 0.729255}, {0.225882, 0.50902,
       0.722353}, {0.220863, 0.499451, 0.715451}, {0.215843, 0.489882,
@@ -249,8 +250,8 @@ private:
 
 
 
-static constexpr float lutSpecialP[11][3] = {
-    {1.,1.,1.},
+static constexpr float lutSpecialP[10][3] = {
+//    {1.,1.,1.},
     {0xb7/255.,0x24/255.,0x30/255.},
     {0xc2/255.,0x66/255.,0x6e/255.},             // -2
     {0xdf/255.,0xa7/255.,0xac/255.},             // -1
@@ -269,12 +270,29 @@ static constexpr float lutSpecialP[11][3] = {
 static constexpr float lutSpecialSeven[7][3] = {
     {0x2c/255.,0x3e/255.,0x41/255.}, // crushed
     {0xc7/255.,0xcc/255.,0xcb/255.}, // solid
-    {0x6c/255.,0x82/255.,0x8f/255.}, // weakened
+    {0x0/255.,0x82/255.,0x0/255.}, // weakened
     {0,1,0},
     {0, 0.5, 0.5},
-    {0x16/255.,0x1f/255.,0x27/255.},    // open water
+    {0x11/255.,0x18/255.,0x20/255.},    // open water
     {0.35, 0.15, 0.15}
 };
+
+
+static constexpr float naturalRidges[7][3] = {
+    {0x03/255.,0x36/255.,0xb3/255.},
+    {0x27/255.,0x5d/255.,0x96/255.},    //3
+    {0x80/255.,0xac/255.,0xd9/255.},    //1
+
+    {0x77/255.,0x9a/255.,0xae/255.},  // crushed 9
+
+    {0xdf/255.,0xa7/255.,0xac/255.},             // -1
+    {0xc2/255.,0x66/255.,0x6e/255.},             // -2
+    {0xb7/255.,0x24/255.,0x30/255.}
+
+};
+
+static void interpolateColor(const float colorArray[][3],
+                                                 int nColors, float value, float& r_out, float& g_out, float& b_out);
 
 };
 #endif
