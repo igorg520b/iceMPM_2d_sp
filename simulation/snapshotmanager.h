@@ -17,8 +17,16 @@ public:
     icy::Model *model;
 
     void LoadRawPoints(std::string fileName);
+    void LoadWindData(std::string fileName);
 
 private:
+    static constexpr double degreesToRadians(double degrees) {
+        return degrees * M_PI / 180.0;
+    }
+    static double haversineDistance(double lat, double lon1, double lon2);
+
+
+
     static constexpr std::array<std::array<float, 3>, 16> colordata = {{
         {0,0,0},                          // water 0
         {0x0c/255.,0x10/255.,0x0f/255.},  // water 1

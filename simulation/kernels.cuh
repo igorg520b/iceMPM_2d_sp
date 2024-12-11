@@ -103,15 +103,11 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     t_GridReal vx = buffer_grid[1*pitch_grid + idx];
     t_GridReal vy = buffer_grid[2*pitch_grid + idx];
 
-    const t_PointReal &indRsq = gprms.IndRSq;
     const t_PointReal &dt = gprms.InitialTimeStep;
-    const t_PointReal &ind_velocity = gprms.IndVelocity;
     const t_PointReal &cellsize = gprms.cellsize;
     const t_PointReal &vmax = gprms.vmax;
     const t_PointReal &vmax_squared = gprms.vmax_squared;
     const int &gridXTotal = gprms.GridXTotal;
-
-    GridVector2r vco(ind_velocity,0);  // velocity of the collision object (indenter)
 
     Vector2i gi(idx/gridY, idx%gridY);   // integer x-y index of the grid node
     GridVector2r gnpos = gi.cast<t_GridReal>()*cellsize;    // position of the grid node in the whole grid
@@ -403,11 +399,12 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
     const t_PointReal &mu = gprms.mu;
     const t_PointReal &kappa = gprms.kappa;
     t_PointReal tan_phi = gprms.DP_tan_phi;
-    const t_PointReal &DP_threshold_p = gprms.DP_threshold_p;
+    t_PointReal DP_threshold_p = gprms.DP_threshold_p;
 
     const t_PointReal &pmax = gprms.IceCompressiveStrength;
     const t_PointReal &qmax = gprms.IceShearStrength;
 
+    DP_threshold_p *= Jp_inv;
 
     if(p_tr < DP_threshold_p)
     {
@@ -430,7 +427,7 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
 
     // determine q_yeld from the combination of DP / elliptic yield surface, whichever is lower
     t_PointReal q_yield = 0;
-    t_PointReal smstp = smoothstep((Jp_inv-0.5)/2.5);
+    t_PointReal smstp = smoothstep((Jp_inv-0.5)/2.);
 //    tan_phi /= smstp;
     if(p_tr < pmax)
     {

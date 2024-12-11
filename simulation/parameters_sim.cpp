@@ -4,6 +4,13 @@
 
 void SimParams::Reset()
 {
+    SimulationStartUnixTime = -1;
+
+    LatMin = 63.2540559;
+    LonMin = 19.7794673;
+    LatMax = 63.881440;
+    LonMax = 21.877357;
+
     nPtsInitial = 0;
     GlenA = 1e-24;
     windDragCoeff_airDensity = 0.0025 * 1.2;
@@ -21,11 +28,6 @@ void SimParams::Reset()
     PoissonsRatio = 0.3;
     Gravity = 9.81;
     Density = 916*0.2;  // surface density
-
-
-    IndDiameter = 0.324;
-    IndVelocity = 0.2;
-    IndDepth = 0.25;//0.101;
 
     SimulationStep = 0;
     SimulationTime = 0;
@@ -52,7 +54,7 @@ void SimParams::Reset()
 }
 
 
-std::string SimParams::ParseFile(std::string fileName)
+std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 {
     spdlog::info("SimParams ParseFile {}",fileName);
     if(!std::filesystem::exists(fileName)) throw std::runtime_error("configuration file is not found");
@@ -62,9 +64,17 @@ std::string SimParams::ParseFile(std::string fileName)
     fileStream.read(strConfigFile.data(), strConfigFile.length());
     fileStream.close();
 
+
     rapidjson::Document doc;
     doc.Parse(strConfigFile.data());
     if(!doc.IsObject()) throw std::runtime_error("configuration file is not JSON");
+
+    if(doc.HasMember("SimulationStartUnixTime")) SimulationStartUnixTime = doc["SimulationStartUnixTime"].GetInt64();
+
+    if(doc.HasMember("LatMin")) LatMin = doc["LatMin"].GetDouble();
+    if(doc.HasMember("LonMin")) LonMin = doc["LonMin"].GetDouble();
+    if(doc.HasMember("LatMax")) LatMax = doc["LatMax"].GetDouble();
+    if(doc.HasMember("LonMax")) LonMax = doc["LonMax"].GetDouble();
 
     if(doc.HasMember("SetupType")) SetupType = doc["SetupType"].GetInt();
     if(doc.HasMember("InitialTimeStep")) InitialTimeStep = doc["InitialTimeStep"].GetDouble();
@@ -76,9 +86,6 @@ std::string SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("PoissonsRatio")) PoissonsRatio = doc["PoissonsRatio"].GetDouble();
     if(doc.HasMember("Gravity")) Gravity = doc["Gravity"].GetDouble();
     if(doc.HasMember("Density")) Density = doc["Density"].GetDouble();
-    if(doc.HasMember("IndDiameter")) IndDiameter = doc["IndDiameter"].GetDouble();
-    if(doc.HasMember("IndVelocity")) IndVelocity = doc["IndVelocity"].GetDouble();
-    if(doc.HasMember("IndDepth")) IndDepth = doc["IndDepth"].GetDouble();
 
     if(doc.HasMember("IceCompressiveStrength")) IceCompressiveStrength = doc["IceCompressiveStrength"].GetDouble();
     if(doc.HasMember("IceTensileStrength")) IceTensileStrength = doc["IceTensileStrength"].GetDouble();
@@ -93,10 +100,11 @@ std::string SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();
     if(doc.HasMember("tpb_G2P")) tpb_G2P = doc["tpb_G2P"].GetInt();
 
-    ComputeCamClayParams2();
-    ComputeHelperVariables();
+//    ComputeCamClayParams2();
+//    ComputeHelperVariables();
 
-    std::cout << "loaded parameters file " << fileName << std::endl;
+
+    std::map<std::string,std::string> result;
 
     if(!doc.HasMember("InputRawPoints"))
     {
@@ -104,8 +112,17 @@ std::string SimParams::ParseFile(std::string fileName)
         throw std::runtime_error("config parameter missing");
     }
 
-    std::string result = doc["InputRawPoints"].GetString();
-    spdlog::info("ParseFile; raw point data {}",result);
+    result["InputRawPoints"] = doc["InputRawPoints"].GetString();
+    spdlog::info("ParseFile; raw point data {}", result["InputRawPoints"]);
+
+    if(doc.HasMember("InputWindData"))
+    {
+        result["InputWindData"] = doc["InputWindData"].GetString();
+        spdlog::info("ParseFile; InputWindData file {}", result["InputWindData"]);
+    }
+
+    spdlog::info("SimParams::ParseFile done");
+
     return result;
 }
 
@@ -123,7 +140,6 @@ void SimParams::ComputeHelperVariables()
     UpdateEveryNthStep = (int)(SimulationEndTime/(AnimationFramesRequested*InitialTimeStep));
     cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
     Dp_inv = 4./(cellsize*cellsize);
-    IndRSq = IndDiameter*IndDiameter/4.;
     dt_vol_Dpinv = InitialTimeStep*ParticleVolume*Dp_inv;
     dt_Gravity = InitialTimeStep*Gravity;
     vmax = 0.5*cellsize/InitialTimeStep;

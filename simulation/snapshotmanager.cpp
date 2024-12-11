@@ -143,7 +143,6 @@ void icy::SnapshotManager::LoadRawPoints(std::string fileName)
     model->gpu.allocate_arrays();
     model->gpu.transfer_to_device();
 
-    model->Reset();
     model->Prepare();
 
     spdlog::info("LoadRawPoints done; nPoitns {}\n",nPoints);
@@ -180,4 +179,57 @@ std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3
     }
 
     return {bestInterval, bestPosition};
+}
+
+
+
+// Haversine formula implementation
+double icy::SnapshotManager::haversineDistance(double lat, double lon1, double lon2) {
+    // Earth's radius in meters
+    constexpr double R = SimParams::Earth_Radius;
+
+    // Convert coordinates to radians
+    double latRad = degreesToRadians(lat);
+    double lon1Rad = degreesToRadians(lon1);
+    double lon2Rad = degreesToRadians(lon2);
+
+    // Difference in longitude
+    double deltaLon = lon2Rad - lon1Rad;
+
+    // Haversine formula
+    double a = std::pow(std::sin(deltaLon / 2), 2);
+    double c = 2 * std::atan2(std::sqrt(a), std::sqrt(1 - a));
+
+    // Distance along a parallel (latitude constant)
+    double distance = R * c * std::cos(latRad);
+
+    return distance;
+}
+
+
+
+void icy::SnapshotManager::LoadWindData(std::string fileName)
+{
+    spdlog::info("icy::SnapshotManager::LoadWindData - {}", fileName);
+
+    H5::H5File file(fileName, H5F_ACC_RDONLY);
+    H5::DataSet dataset_valid_time = file.openDataSet("valid_time");
+    H5::DataSpace dataspace = dataset_valid_time.getSpace();
+
+    // Get the size of the dataset
+    hsize_t datasetSize;
+    dataspace.getSimpleExtentDims(&datasetSize, nullptr);
+
+    std::vector<int64_t> &valid_time = model->valid_time;
+    valid_time.resize(datasetSize);
+    dataset_valid_time.read(valid_time.data(), H5::PredType::NATIVE_LLONG);
+    spdlog::info("valid_time read {} values", datasetSize);
+
+
+
+    spdlog::info("icy::SnapshotManager::LoadWindData done");
+
+
+    model->use_GFS_wind = true;
+
 }

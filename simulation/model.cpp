@@ -5,6 +5,10 @@
 
 icy::Model::Model()
 {
+    prms.SimulationStep = 0;
+    prms.SimulationTime = 0;
+    SyncTopologyRequired = true;
+
     auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("logs/multisink.txt", true);
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     auto lg = std::make_shared<spdlog::logger>("multi_sink", spdlog::sinks_init_list({console_sink, file_sink}));
@@ -21,23 +25,16 @@ icy::Model::Model()
     wind_data.push_back({500'000,30,0});
     wind_data.push_back({1'000'000,30,0});
 */
-    constexpr float vel = 15;
-    wind_data.push_back({0,0,180});
-    wind_data.push_back({1000,vel,180});
-    wind_data.push_back({1100,0,0});
-    wind_data.push_back({2000,vel,0});
-    wind_data.push_back({2100,0,180});
-    wind_data.push_back({3000,vel,180});
-    wind_data.push_back({3100,0,270});
-    wind_data.push_back({4'000,vel,270});
-    wind_data.push_back({4'100,0,90});
-    wind_data.push_back({5'000,vel,90});
-    wind_data.push_back({5'100,0,270});
-    wind_data.push_back({6'000,vel,270});
-    wind_data.push_back({6'100,0,90});
-    wind_data.push_back({7'000,vel,90});
-    wind_data.push_back({7'100,0,0});
-    wind_data.push_back({8'000,vel,0});
+
+    float angle = 270;
+    for(int i=0;i<50;i++)
+    {
+        float windVelocity = 15;//(float)i/2.+5
+        wind_data.push_back({i*1000, 0, angle});
+        wind_data.push_back({i*1000+900, windVelocity, angle});
+        angle += 90;
+        if(angle >= 360) angle = 0;
+    }
 //    wind_data.push_back({2'000,20,90});
 //    wind_data.push_back({4'000,40,270});
     spdlog::info("Model constructor");
@@ -121,15 +118,6 @@ void icy::Model::UnlockCycleMutex()
     processing_current_cycle_data.unlock();
 }
 
-
-void icy::Model::Reset()
-{
-    spdlog::info("icy::Model::Reset()");
-
-    prms.SimulationStep = 0;
-    prms.SimulationTime = 0;
-    SyncTopologyRequired = true;
-}
 
 void icy::Model::Prepare()
 {

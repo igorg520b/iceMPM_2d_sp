@@ -5,6 +5,7 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <map>
 
 #include <Eigen/Core>
 #include "rapidjson/reader.h"
@@ -14,10 +15,10 @@
 
 // variables related to the formulation of the model
 
-//typedef double t_GridReal;      // data type for grid data
-//typedef double t_PointReal;     // data type to store point data
-typedef float t_GridReal;      // data type for grid data
-typedef float t_PointReal;     // data type to store point data
+// typedef double real;
+typedef float real;
+typedef real t_GridReal;      // data type for grid data
+typedef real t_PointReal;     // data type to store point data
 
 typedef Eigen::Matrix<t_GridReal, 2, 1> GridVector2r;
 typedef Eigen::Matrix<t_GridReal, 2, 2> GridMatrix2r;
@@ -30,6 +31,8 @@ struct SimParams
 public:
     constexpr static float disabled_pts_proportion_threshold = 0.05; // when exceeded, disabled points are removed
     constexpr static t_PointReal pi = 3.14159265358979323846;
+    constexpr static double Earth_Radius = 6371000.0;
+
     constexpr static int dim = 2;
     constexpr static int nGridArrays = 3; // mass, px, py
 
@@ -50,7 +53,9 @@ public:
     int tpb_P2G, tpb_Upd, tpb_G2P;  // threads per block for each operation
 
     int nPtsInitial;
+    int64_t SimulationStartUnixTime;
     int GridXTotal, GridY;
+    t_PointReal LatMin, LatMax, LonMin, LonMax; // coordinates corresponding to the modelled space
 
     t_PointReal InitialTimeStep, SimulationEndTime;
     int AnimationFramesRequested, UpdateEveryNthStep; // run N steps without update
@@ -70,9 +75,6 @@ public:
 
     t_PointReal DP_tan_phi, DP_threshold_p;
 
-    // indentation params
-    t_PointReal IndDiameter, IndRSq, IndVelocity, IndDepth;
-
     t_PointReal cellsize, cellsize_inv, Dp_inv;
     t_PointReal xmin, xmax, ymin, ymax;            // bounding box of the material
     int nxmin, nxmax, nymin, nymax;         // same, but nuber of grid cells
@@ -86,7 +88,7 @@ public:
     t_PointReal dt_vol_Dpinv, dt_Gravity, vmax, vmax_squared;
 
     void Reset();
-    std::string ParseFile(std::string fileName);
+    std::map<std::string,std::string> ParseFile(std::string fileName);  // return additional filenames to load
 
     void ComputeLame();
     void ComputeCamClayParams2();

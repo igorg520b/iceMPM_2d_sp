@@ -35,7 +35,6 @@ class icy::Model
 public:
     Model();
     ~Model();
-    void Reset();
 
     void Prepare();        // invoked once, at simulation start
     bool Step();           // either invoked by Worker or via GUI
@@ -51,6 +50,11 @@ public:
 
     std::mutex processing_current_cycle_data; // locked until the current cycle results' are copied to host and processed
     std::mutex accessing_point_data;
+
+    // wind data from netCDF4 file
+    bool use_GFS_wind = false;  // chagnes to true if netCDF4 file is provided
+    std::vector<int64_t> valid_time;
+
 
 private:
     bool abortRequested;

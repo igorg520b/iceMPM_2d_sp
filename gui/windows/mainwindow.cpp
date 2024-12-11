@@ -290,11 +290,16 @@ void MainWindow::load_parameter_triggered()
 
 void MainWindow::LoadParameterFile(QString qFileName)
 {
-    std::string pointCloudFile = model.prms.ParseFile(qFileName.toStdString());
-    snapshot.LoadRawPoints(pointCloudFile);
+    std::map<std::string,std::string> additionalFiles = model.prms.ParseFile(qFileName.toStdString());
+    snapshot.LoadRawPoints(additionalFiles["InputRawPoints"]);
     this->qLastParameterFile = qFileName;
     this->setWindowTitle(qLastParameterFile);
-    model.Reset();
+
+    if(additionalFiles.count("InputWindData") > 0)
+    {
+        snapshot.LoadWindData(additionalFiles["InputWindData"]);
+    }
+
     representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);
     updateGUI();

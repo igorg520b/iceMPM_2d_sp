@@ -54,17 +54,6 @@ class ParamsWrapper : public QObject
     void setParticleViewSize(double val) {prms->ParticleViewSize=val;}
 
 
-    // indenter
-    Q_PROPERTY(double IndDiameter READ getIndDiameter NOTIFY propertyChanged)
-    double getIndDiameter() {return prms->IndDiameter;}
-
-    Q_PROPERTY(double IndVelocity READ getIndVelocity WRITE setIndVelocity NOTIFY propertyChanged)
-    double getIndVelocity() {return prms->IndVelocity;}
-    void setIndVelocity(double val) {prms->IndVelocity=val;}
-
-    Q_PROPERTY(double IndDepth READ getIndDepth NOTIFY propertyChanged)
-    double getIndDepth() {return prms->IndDepth;}
-
     // ice block
     Q_PROPERTY(int b_PtInitial READ getPointCountActual NOTIFY propertyChanged)
     int getPointCountActual() {return prms->nPtsInitial;}
