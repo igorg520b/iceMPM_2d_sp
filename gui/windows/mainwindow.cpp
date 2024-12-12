@@ -291,7 +291,8 @@ void MainWindow::load_parameter_triggered()
 void MainWindow::LoadParameterFile(QString qFileName)
 {
     std::map<std::string,std::string> additionalFiles = model.prms.ParseFile(qFileName.toStdString());
-    snapshot.LoadRawPoints(additionalFiles["InputRawPoints"]);
+
+    snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"]);
     this->qLastParameterFile = qFileName;
     this->setWindowTitle(qLastParameterFile);
 

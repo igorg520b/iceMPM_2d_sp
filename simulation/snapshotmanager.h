@@ -4,6 +4,8 @@
 #include <array>
 #include <vector>
 #include <string>
+#include <string_view>
+#include <filesystem>
 
 #include <H5Cpp.h>
 #include <Eigen/Core>
@@ -16,15 +18,23 @@ class icy::SnapshotManager
 public:
     icy::Model *model;
 
-    void LoadRawPoints(std::string fileName);
-    void LoadWindData(std::string fileName);
+    void PreparePointsAndSetupGrid(std::string fileName);   // use PNG image file
+    void LoadWindData(std::string fileName);    // netCDF4 data
 
 private:
-    static constexpr double degreesToRadians(double degrees) {
-        return degrees * M_PI / 180.0;
-    }
-    static double haversineDistance(double lat, double lon1, double lon2);
+    int imgx, imgy, channels;
+    unsigned char* png_data;
 
+
+    constexpr static std::string_view pts_cache_path = "_data/point_cache";
+
+    static constexpr double degreesToRadians(double degrees) { return degrees * M_PI / 180.0; }
+    static double haversineDistance(double lat, double lon1, double lon2);
+    static std::string prepare_file_name(int gx, int gy);
+    static bool attempt_to_fill_from_cache(int gx, int gy, std::vector<std::array<float, 2>> &buffer);
+    static void generate_and_save(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
+
+    void load_png(std::string pngFileName);
 
 
     static constexpr std::array<std::array<float, 3>, 16> colordata = {{

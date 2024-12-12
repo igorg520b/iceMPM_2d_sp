@@ -106,14 +106,14 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 
     std::map<std::string,std::string> result;
 
-    if(!doc.HasMember("InputRawPoints"))
+    if(!doc.HasMember("InputPNG"))
     {
-        spdlog::critical("InputRawPoints entry is missing in JSON config file");
+        spdlog::critical("InputPNG entry is missing in JSON config file");
         throw std::runtime_error("config parameter missing");
     }
 
-    result["InputRawPoints"] = doc["InputRawPoints"].GetString();
-    spdlog::info("ParseFile; raw point data {}", result["InputRawPoints"]);
+    result["InputPNG"] = doc["InputPNG"].GetString();
+    spdlog::info("ParseFile; png map data {}", result["InputPNG"]);
 
     if(doc.HasMember("InputWindData"))
     {

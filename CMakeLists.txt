@@ -167,7 +167,7 @@ FetchContent_MakeAvailable(PBrowser)
     
     message(${PBrowser_SOURCE_DIR})
     target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR} ${PBrowser_SOURCE_DIR}/propertybrowser)
-    target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser)
+    target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser generator/poisson_disk_sampling)
     target_link_libraries(gm2 PRIVATE PBrowser)
     #PBrowser
 #[[    if(WIN32)
