@@ -8,7 +8,6 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 option(BUILD_CLI_VERSION "Build CLI version" OFF)
 option(BUILD_GUI_VERSION "Build Qt version" ON)
-option(BUILD_GENERATOR "Build the tool that generates the point cloud" ON)
 
 if(BUILD_GUI_VERSION)
     set(CMAKE_AUTOUIC ON)
@@ -16,7 +15,7 @@ if(BUILD_GUI_VERSION)
     set(CMAKE_AUTORCC ON)
 endif()
 
-set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda")
+#set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda")
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 
@@ -162,28 +161,15 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/gpu_partition.cpp
         simulation/kernels.cuh
 
+        simulation/poisson_disk_sampling.h
+
     )
     set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
     
     message(${PBrowser_SOURCE_DIR})
     target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR} ${PBrowser_SOURCE_DIR}/propertybrowser)
-    target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser generator/poisson_disk_sampling)
+    target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser)
     target_link_libraries(gm2 PRIVATE PBrowser)
-    #PBrowser
-#[[    if(WIN32)
-        target_link_directories(gm2 PRIVATE "C:\\libraries\\pbrowser-build")
-        target_include_directories(gm2 PRIVATE "C:\\libraries\\PBrowser")
-        target_include_directories(gm2 PRIVATE "C:\\libraries\\PBrowser\\propertybrowser")
-        target_include_directories(gm2 PRIVATE "C:\\libraries\\PBrowser\\objectpropertybrowser")
-    else()
-#        target_link_directories(gm2 PRIVATE "/home/s2/Projects-Libraries/build-PBrowser-Desktop_Qt_5_15_2_GCC_64bit-Release")
-        target_include_directories(gm2 PRIVATE External/PBrowser/objectpropertybrowser)
-        target_include_directories(gm2 PRIVATE External/PBrowser/propertybrowser)
-        target_include_directories(gm2 PRIVATE External/PBrowser)
-        add_subdirectory(External/PBrowser)
-    endif()
-    target_link_libraries(gm2 PRIVATE PBrowser)
-#]]
 
     set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
     set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
@@ -234,57 +220,3 @@ vtk_module_autoinit(
 
 endif()
 
-# generator of the input file
-
-if(BUILD_GENERATOR)
-
-    find_package(VTK 9.1 REQUIRED COMPONENTS
-      CommonColor
-      CommonCore
-      FiltersCore
-      FiltersSources
-      FiltersGeometry
-      FiltersGeneral
-      FiltersModeling
-      InteractionStyle
-      RenderingContextOpenGL2
-      RenderingCore
-      RenderingFreeType
-      RenderingGL2PSOpenGL2
-      RenderingOpenGL2
-      IOGeometry
-      RenderingAnnotation
-      RenderingLabel
-      IOImage
-      IOXML
-      ViewsQt
-      CommonDataModel
-      CommonTransforms
-    )
-
-add_executable(GrainIdentifier
-    generator/main.cpp
-
-    generator/2d/bvh2d/SimplePool.h
-    generator/2d/grainprocessor2d.h
-    generator/2d/grainprocessor2d.cpp
-    generator/2d/bvh2d/bvhn2d.h
-    generator/2d/bvh2d/bvhn2d.cpp
-    generator/2d/bvh2d/kdop8.h
-    generator/2d/bvh2d/kdop8.cpp
-)
-
-target_compile_options(GrainIdentifier PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
-target_link_libraries(GrainIdentifier PRIVATE gomp)
-
-target_link_libraries(GrainIdentifier PRIVATE spdlog::spdlog)
-target_link_libraries(GrainIdentifier PRIVATE ${HDF5_LIBRARIES})
-target_link_libraries(GrainIdentifier PRIVATE Eigen3::Eigen)
-target_link_libraries(GrainIdentifier PRIVATE gmsh)
-
-target_include_directories(GrainIdentifier PRIVATE ${HDF5_INCLUDE_DIRS})
-target_include_directories(GrainIdentifier PRIVATE "/home/s2/Projects-other/gmsh/api")
-target_include_directories(GrainIdentifier PRIVATE generator/poisson_disk_sampling generator/2d generator/2d/bvh2d)
-target_include_directories(GrainIdentifier PRIVATE External)
-
-endif()
