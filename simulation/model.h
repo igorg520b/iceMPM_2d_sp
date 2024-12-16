@@ -17,6 +17,7 @@
 #include "parameters_sim.h"
 #include "point.h"
 #include "gpu_implementation5.h"
+#include "windinterpolator.h"
 
 #include <Eigen/Core>
 #include <Eigen/SVD>
@@ -43,6 +44,7 @@ public:
     void UnlockCycleMutex();
 
     SimParams prms;
+    WindInterpolator wind_interpolator;
     std::vector<std::array<float,3>> wind_data;
     float windSpeed, windAngle;
     GPU_Implementation5 gpu;

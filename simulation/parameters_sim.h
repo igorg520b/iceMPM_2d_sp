@@ -15,7 +15,7 @@
 
 // variables related to the formulation of the model
 
-// typedef double real;
+//typedef double real;
 typedef float real;
 typedef real t_GridReal;      // data type for grid data
 typedef real t_PointReal;     // data type to store point data
@@ -32,6 +32,7 @@ public:
     constexpr static float disabled_pts_proportion_threshold = 0.05; // when exceeded, disabled points are removed
     constexpr static t_PointReal pi = 3.14159265358979323846;
     constexpr static double Earth_Radius = 6371000.0;
+    constexpr static float MPM_points_per_cells = 5.0;    // approximate average value
 
     constexpr static int dim = 2;
     constexpr static int nGridArrays = 3; // mass, px, py

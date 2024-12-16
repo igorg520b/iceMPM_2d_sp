@@ -228,7 +228,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
     // either load or generate points
     std::vector<std::array<float, 2>> buffer;   // initial buffer for points
     bool cache_result = attempt_to_fill_from_cache(imgx, imgy, buffer);
-    if(!cache_result) generate_and_save(imgx, imgy, 5.0, buffer);
+    if(!cache_result) generate_and_save(imgx, imgy, SimParams::MPM_points_per_cells, buffer);
 
     // function for obtaining index in png_data from the pixel's 2D index (i,j)
     auto idxInPng = [&](int px, int py) -> int { return 3*((imgy - py - 1) * imgx + px); };
@@ -375,25 +375,9 @@ double icy::SnapshotManager::haversineDistance(double lat, double lon1, double l
 void icy::SnapshotManager::LoadWindData(std::string fileName)
 {
     spdlog::info("icy::SnapshotManager::LoadWindData - {}", fileName);
-
-    H5::H5File file(fileName, H5F_ACC_RDONLY);
-    H5::DataSet dataset_valid_time = file.openDataSet("valid_time");
-    H5::DataSpace dataspace = dataset_valid_time.getSpace();
-
-    // Get the size of the dataset
-    hsize_t datasetSize;
-    dataspace.getSimpleExtentDims(&datasetSize, nullptr);
-
-    std::vector<int64_t> &valid_time = model->valid_time;
-    valid_time.resize(datasetSize);
-    dataset_valid_time.read(valid_time.data(), H5::PredType::NATIVE_LLONG);
-    spdlog::info("valid_time read {} values", datasetSize);
-
-
-
-    spdlog::info("icy::SnapshotManager::LoadWindData done");
-
-
     model->use_GFS_wind = true;
+    model->wind_interpolator.LoadWindData(fileName,
+                                          model->prms.LatMin,model->prms.LatMax,model->prms.LonMin,model->prms.LonMax,
+                                          model->prms.SimulationStartUnixTime);
 
 }

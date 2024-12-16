@@ -46,7 +46,7 @@ public:
 
     icy::Model *model;
 
-    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp, color, special};
+    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp, color, special, wind_u, wind_v, wind_norm};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[20] = {};
@@ -85,7 +85,7 @@ private:
     vtkNew<vtkStructuredGrid> structuredGrid2;
     vtkNew<vtkDataSetMapper> grid_mapper2;
     vtkNew<vtkPoints> grid_points2;
-    vtkNew<vtkIntArray> visualized_values_grid;
+    vtkNew<vtkFloatArray> visualized_values_grid;
 
     void populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
     void interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);

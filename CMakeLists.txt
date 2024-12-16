@@ -19,15 +19,9 @@ endif()
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 
-
-
-find_package(Eigen3 REQUIRED NO_MODULE HINTS "C:\\libraries\\eigen-build")
-if(WIN32)
-    add_compile_definitions(H5_BUILT_AS_DYNAMIC_LIB)
-else()
-    find_package(HDF5 REQUIRED COMPONENTS CXX)
-    find_package(spdlog REQUIRED)
-endif()
+find_package(Eigen3 REQUIRED NO_MODULE)
+find_package(HDF5 REQUIRED COMPONENTS CXX)
+find_package(spdlog REQUIRED)
 
 
 
@@ -64,26 +58,13 @@ set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUD
 set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
 set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
-# spdlog
-if (WIN32)
-    target_link_libraries(cm2 PRIVATE spdlog)
-    target_include_directories(cm2 PRIVATE "C:\\libraries\\spdlog\\include")
-    target_link_directories(cm2 PRIVATE "C:\\libraries\\spdlog-build\\Release")
-else()
-    target_link_libraries(cm2 PRIVATE spdlog::spdlog)
-endif()
+target_link_libraries(cm2 PRIVATE spdlog::spdlog)
 
 target_include_directories(cm2 PRIVATE simulation simulation/hssoa)
 target_link_libraries(cm2 PRIVATE Eigen3::Eigen)
 
-# HDF5
-if(WIN32)
-    target_link_directories(cm2 PRIVATE "C:\\libraries\\hdf5-build\\bin\\Release")
-    target_link_libraries(cm2 PRIVATE hdf5_cpp hdf5 )
-else()
-    target_link_libraries(cm2 PRIVATE ${HDF5_LIBRARIES})
-    target_include_directories(cm2 PRIVATE ${HDF5_INCLUDE_DIRS})
-endif()
+target_link_libraries(cm2 PRIVATE ${HDF5_LIBRARIES})
+target_include_directories(cm2 PRIVATE ${HDF5_INCLUDE_DIRS})
 
 endif()
 
@@ -162,6 +143,9 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/kernels.cuh
 
         simulation/poisson_disk_sampling.h
+        
+        simulation/windinterpolator.cpp
+        simulation/windinterpolator.h
 
     )
     set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
@@ -178,7 +162,7 @@ FetchContent_MakeAvailable(PBrowser)
     target_link_libraries(gm2 PRIVATE Qt5::Widgets Qt5::Core)
 
     # Eigen
-    find_package(Eigen3 REQUIRED NO_MODULE HINTS "C:\\libraries\\eigen-build")
+    find_package(Eigen3 REQUIRED NO_MODULE)
     target_link_libraries(gm2 PRIVATE Eigen3::Eigen)
 
     # VTK
@@ -187,31 +171,17 @@ FetchContent_MakeAvailable(PBrowser)
 
 
     # HDF5
-    if(WIN32)
-        target_link_directories(gm2 PRIVATE "C:\\libraries\\hdf5-build\\bin\\Release")
-        target_link_libraries(gm2 PRIVATE hdf5_cpp hdf5 )
-    else()
-        target_link_libraries(gm2 PRIVATE ${HDF5_LIBRARIES})
-        target_include_directories(gm2 PRIVATE ${HDF5_INCLUDE_DIRS})
-    endif()
+    target_link_libraries(gm2 PRIVATE ${HDF5_LIBRARIES})
+    target_include_directories(gm2 PRIVATE ${HDF5_INCLUDE_DIRS})
 
     # spdlog
-    if (WIN32)
-        target_link_libraries(gm2 PRIVATE spdlog)
-        target_include_directories(gm2 PRIVATE "C:\\libraries\\spdlog\\include")
-        target_link_directories(gm2 PRIVATE "C:\\libraries\\spdlog-build\\Release")
-    else()
-        target_link_libraries(gm2 PRIVATE spdlog::spdlog)
-    endif()
+    target_link_libraries(gm2 PRIVATE spdlog::spdlog)
 
 
     # OpenMP
-#[[    if(WIN32)
-        target_compile_options(iceMPM_GUI PRIVATE /openmp)
-    else()
+#[[
         target_compile_options(iceMPM_GUI PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
         target_link_libraries(iceMPM_GUI PRIVATE gomp)
-    endif()
 ]]
 vtk_module_autoinit(
   TARGETS gm2

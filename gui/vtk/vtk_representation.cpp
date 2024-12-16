@@ -212,6 +212,66 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
     }
+
+    else if(VisualizingVariable == VisOpt::wind_u)
+    {
+        int gx = model->prms.GridXTotal;
+        int gy = model->prms.GridY;
+        actor_points->VisibilityOff();
+
+        bool updateRequired;
+        float tb;
+        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+
+                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
+                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
+
+                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
+                float value = wv.x();
+                visualized_values_grid->SetValue(idx_visual, value);
+            }
+
+        grid_mapper2->SetLookupTable(hueLut_temperature);
+        hueLut_temperature->SetTableRange(-10, 10);
+
+        visualized_values_grid->Modified();
+    }
+    else if(VisualizingVariable == VisOpt::wind_norm)
+    {
+        int gx = model->prms.GridXTotal;
+        int gy = model->prms.GridY;
+        actor_points->VisibilityOff();
+
+        bool updateRequired;
+        float tb;
+        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+
+                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
+                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
+
+                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
+                float value = wv.norm();
+                visualized_values_grid->SetValue(idx_visual, value);
+            }
+
+        grid_mapper2->SetLookupTable(hueLut_Southwest);
+        hueLut_Southwest->SetTableRange(0, 15);
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut_Southwest);
+
+        visualized_values_grid->Modified();
+    }
     else if(VisualizingVariable == VisOpt::color)
     {
         scalarBar->VisibilityOff();

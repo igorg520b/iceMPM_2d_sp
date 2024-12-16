@@ -1,0 +1,58 @@
+#ifndef WINDINTERPOLATOR_H
+#define WINDINTERPOLATOR_H
+
+#include <string_view>
+#include <string>
+#include <utility>
+#include <vector>
+#include <H5Cpp.h>
+#include <Eigen/Core>
+
+class WindInterpolator
+{
+public:
+    WindInterpolator();
+
+    void LoadWindData(std::string netCDF4FileName = "/home/s2/Projects-CUDA/iceMPM_2d_sp/_wind_data/data_stream-oper_stepType-instant.nc",
+                      double latMin = 63.2540559, double latMax = 63.881440,
+                      double lonMin = 19.7794673, double lonMax = 21.877357,
+                      int64_t sim_start_date = 1521547200);
+
+    constexpr static int allocatedLatExtent = 10;
+    constexpr static int allocatedLonExtent = 20;    // grid max dims must be known at compile time, because it goes into __constant__
+    constexpr static double gridCellSize = 0.25; // in degrees
+    constexpr static int timeResolution = 3600; // data updated every hour
+    constexpr static size_t gridArraySize = allocatedLatExtent*allocatedLonExtent*4*sizeof(float);
+    float grid[allocatedLatExtent][allocatedLonExtent][4];  // copy to __constant__ on the device
+    double gridLatMin, gridLonMin;   // this is where the grid starts (copy to SimParams)
+
+     // returns true if the contents of "grid" array changed;
+    // interpolationParam is a value in [0,1) range between the two selected time frames
+    void setTime(const double simulation_time, bool &updateRequired, float &interpolationParam);
+    Eigen::Vector2f interpolationResult(float lat, float lon, float tb);
+
+    int currentInterval = -1;   // selected time interval in the "grid" array
+private:
+    bool isDataLoaded = false;
+    double LatMin, LatMax, LonMin, LonMax;  // region of interest
+    int64_t simulation_start_date;  // set once upon data load
+
+    int extentLat, extentLon;   // actual extent
+    int idxLatMin, idxLatMax, idxLonMin, idxLonMax;
+
+    std::vector<double> latitudes, longitudes;
+    std::vector<int64_t> valid_time;
+    std::vector<float> u_data, v_data;  // raw data loaded from netCDF4
+
+    void read_indices_from_HDF5(H5::H5File &file);
+    void read_UV_from_HDF5(H5::H5File &file);
+    void verify_deltas();
+    void find_indices_of_overlapping_region();
+
+    size_t getIndexInUV(size_t timeIndex, size_t idxLat, size_t idxLon);
+
+
+
+};
+
+#endif // WINDINTERPOLATOR_H

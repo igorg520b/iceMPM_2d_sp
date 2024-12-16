@@ -124,6 +124,8 @@ void icy::Model::Prepare()
     spdlog::info("icy::Model::Prepare()");
     abortRequested = false;
     gpu.update_constants();
+
+
 }
 
 std::pair<float, float> icy::Model::interpolateWind(float current_time) {

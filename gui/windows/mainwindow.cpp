@@ -288,23 +288,6 @@ void MainWindow::load_parameter_triggered()
     LoadParameterFile(qFileName);
 }
 
-void MainWindow::LoadParameterFile(QString qFileName)
-{
-    std::map<std::string,std::string> additionalFiles = model.prms.ParseFile(qFileName.toStdString());
-
-    snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"]);
-    this->qLastParameterFile = qFileName;
-    this->setWindowTitle(qLastParameterFile);
-
-    if(additionalFiles.count("InputWindData") > 0)
-    {
-        snapshot.LoadWindData(additionalFiles["InputWindData"]);
-    }
-
-    representation.SynchronizeTopology();
-    pbrowser->setActiveObject(params);
-    updateGUI();
-}
 
 
 void MainWindow::simulation_data_ready()
@@ -390,3 +373,23 @@ void MainWindow::screenshot()
     writerPNG->Write();
     renderWindow->DoubleBufferOn();
 }
+
+
+void MainWindow::LoadParameterFile(QString qFileName)
+{
+    std::map<std::string,std::string> additionalFiles = model.prms.ParseFile(qFileName.toStdString());
+
+    snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"]);
+    this->qLastParameterFile = qFileName;
+    this->setWindowTitle(qLastParameterFile);
+
+    if(additionalFiles.count("InputWindData") > 0)
+    {
+        snapshot.LoadWindData(additionalFiles["InputWindData"]);
+    }
+
+    representation.SynchronizeTopology();
+    pbrowser->setActiveObject(params);
+    updateGUI();
+}
+
