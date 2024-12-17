@@ -18,6 +18,49 @@ __device__ int gpu_disabled_points_count;
 __constant__ SimParams gprms;
 __constant__ float wgrid[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4];    // wind data
 
+__device__ GridVector2r get_wind_vector(float lat, float lon, float tb)
+{
+    const t_GridReal &gridLatMin = gprms.gridLatMin;
+    const t_GridReal &gridLonMin = gprms.gridLonMin;
+
+    // space
+    int lat_cell = (int)((lat-gridLatMin)/WindInterpolator::gridCellSize);
+    int lon_cell = (int)((lon-gridLonMin)/WindInterpolator::gridCellSize);
+
+    // Compute local coordinates within the cell
+    float localLon = lon - (gridLonMin + lon_cell * WindInterpolator::gridCellSize);
+    float localLat = lat - (gridLatMin + lat_cell * WindInterpolator::gridCellSize);
+
+    // Compute barycentric coordinates
+    float ub = localLon / WindInterpolator::gridCellSize;
+    float vb = localLat / WindInterpolator::gridCellSize;
+
+    GridVector2r cell_values0[2][2], cell_values1[2][2];
+    for(int i=0;i<2;i++)
+        for(int j=0;j<2;j++)
+        {
+            cell_values0[i][j] = GridVector2r(wgrid[lat_cell+i][lon_cell+j][0], wgrid[lat_cell+i][lon_cell+j][1]);
+            cell_values1[i][j] = GridVector2r(wgrid[lat_cell+i][lon_cell+j][2], wgrid[lat_cell+i][lon_cell+j][3]);
+        }
+    GridVector2r ipVal[2];
+
+    ipVal[0] =
+        (1 - ub) * (1 - vb) * cell_values0[0][0] +
+        ub * (1 - vb) * cell_values0[0][1] +
+        (1 - ub) * vb * cell_values0[1][0] +
+        ub * vb * cell_values0[1][1];
+
+    ipVal[1] =
+        (1 - ub) * (1 - vb) * cell_values1[0][0] +
+        ub * (1 - vb) * cell_values1[0][1] +
+        (1 - ub) * vb * cell_values1[1][0] +
+        ub * vb * cell_values1[1][1];
+
+    GridVector2r final_result = (1-tb)*ipVal[0] + tb*ipVal[1];
+    return final_result;
+}
+
+
 
 
 __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
@@ -92,7 +135,7 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
                                               t_GridReal *buffer_grid,
                                               t_PointReal simulation_time, const uint8_t *grid_status,
-                                              const GridVector2r vWind)
+                                              GridVector2r vWind, const float interpolation_coeff)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= nNodes) return;
@@ -129,6 +172,11 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         const t_GridReal water_coeff = 1e-4 * gprms.InitialTimeStep;
 
         GridVector2r waterVelVector(0,0);
+
+        float lat = gprms.LatMin + (gprms.LatMax-gprms.LatMin)*(float)gi.y()/(float)gprms.GridY;
+        float lon = gprms.LonMin + (gprms.LonMax-gprms.LonMin)*(float)gi.x()/(float)gprms.GridXTotal;
+
+        vWind = get_wind_vector(lat, lon, interpolation_coeff);
         velocity = (1-air_coeff-water_coeff)*velocity + vWind*air_coeff + waterVelVector*water_coeff;
 
 

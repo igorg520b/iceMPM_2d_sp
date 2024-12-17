@@ -40,6 +40,7 @@ public:
 
     void synchronize(); // call before terminating the main thread
     void update_constants();
+    void update_wind_velocity_grid();
     void reset_grid();
     void reset_timings();
 

@@ -35,7 +35,7 @@ public:
     constexpr static float MPM_points_per_cells = 5.0;    // approximate average value
 
     constexpr static int dim = 2;
-    constexpr static int nGridArrays = 3; // mass, px, py
+    constexpr static int nGridArrays = 4; // mass, px, py, wind.norm
 
     // index of the corresponding array in SoA
     constexpr static size_t idx_utility_data = 0;
@@ -57,6 +57,7 @@ public:
     int64_t SimulationStartUnixTime;
     int GridXTotal, GridY;
     t_PointReal LatMin, LatMax, LonMin, LonMax; // coordinates corresponding to the modelled space
+    t_GridReal gridLatMin, gridLonMin;
 
     t_PointReal InitialTimeStep, SimulationEndTime;
     int AnimationFramesRequested, UpdateEveryNthStep; // run N steps without update

@@ -379,5 +379,6 @@ void icy::SnapshotManager::LoadWindData(std::string fileName)
     model->wind_interpolator.LoadWindData(fileName,
                                           model->prms.LatMin,model->prms.LatMax,model->prms.LonMin,model->prms.LonMax,
                                           model->prms.SimulationStartUnixTime);
-
+    model->prms.gridLatMin = model->wind_interpolator.gridLatMin;
+    model->prms.gridLonMin = model->wind_interpolator.gridLonMin;
 }

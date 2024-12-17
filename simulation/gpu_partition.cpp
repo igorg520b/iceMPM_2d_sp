@@ -187,6 +187,13 @@ void GPU_Partition::update_constants()
     spdlog::info("Constant symbols copied to device {}; partition {}", Device, PartitionID);
 }
 
+void GPU_Partition::update_wind_velocity_grid(float data[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4])
+{
+    cudaSetDevice(Device);
+    size_t data_size = sizeof(float)*WindInterpolator::allocatedLatExtent*WindInterpolator::allocatedLonExtent*4;
+    cudaError_t err = cudaMemcpyToSymbolAsync(wgrid, data, data_size,0,cudaMemcpyHostToDevice, streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("update_wind_velocity_grid");
+}
 
 
 
@@ -213,7 +220,7 @@ void GPU_Partition::p2g()
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("p2g kernel");
 }
 
-void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind)
+void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind, const float interpolation_coeff)
 {
     cudaSetDevice(Device);
     const int nGridNodes = prms->GridY * (GridX_partition);
@@ -223,7 +230,8 @@ void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind
 
     partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(nGridNodes,
                                                                       nGridPitch, grid_array,
-                                                                      simulation_time, grid_status_array, vWind);
+                                                                      simulation_time, grid_status_array, vWind,
+                                                                      interpolation_coeff);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
 }
 

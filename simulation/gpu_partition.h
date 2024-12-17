@@ -14,6 +14,7 @@
 #include "parameters_sim.h"
 #include "point.h"
 #include "host_side_soa.h"
+#include "windinterpolator.h"
 
 
 // kernels
@@ -24,7 +25,8 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
                                               t_GridReal *_buffer_grid,
                                               t_PointReal simulation_time, const uint8_t *grid_status,
-                                              const GridVector2r vWind);
+                                              const GridVector2r vWind,
+                                              const float interpolation_coeff);
 
 __global__ void partition_kernel_g2p(const bool recordPQ,
                                      const int pitch_grid,
@@ -66,6 +68,8 @@ __device__ PointMatrix2r Water(const t_PointReal J);
 
 __device__ t_PointReal smoothstep(t_PointReal x);
 
+__device__ GridVector2r get_wind_vector(float lat, float lon, float tb);
+
 
 struct GPU_Partition
 {
@@ -78,12 +82,13 @@ struct GPU_Partition
     void transfer_points_from_soa_to_device(HostSideSOA &hssoa, int point_idx_offset);
     void transfer_grid_data_to_device(HostSideSOA &hssoa);
     void update_constants();
+    void update_wind_velocity_grid(float data[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4]);
     void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset);
 
     // calculation
     void reset_grid();
     void p2g();
-    void update_nodes(float simulation_time, const GridVector2r vWind);
+    void update_nodes(float simulation_time, const GridVector2r vWind, const float interpolation_coeff);
     void g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw);
 
     // analysis

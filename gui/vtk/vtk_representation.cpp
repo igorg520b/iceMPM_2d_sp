@@ -200,13 +200,14 @@ void icy::VisualRepresentation::SynchronizeValues()
     {
         SOAIterator s = model->gpu.hssoa.begin()+i;
         PointVector2r pos = s->getPos(model->prms.cellsize);
-        points->SetPoint((vtkIdType)i, pos[0], pos[1], 0);
+        points->SetPoint((vtkIdType)i, pos[0], pos[1], -1.0);
     }
     points->Modified();
     actor_points->GetProperty()->SetPointSize(model->prms.ParticleViewSize);
     double range = std::pow(10,ranges[VisualizingVariable]);
     double centerVal = 0;
 
+    actor_points->VisibilityOn();
 
 
     if(VisualizingVariable == VisOpt::status)
@@ -239,7 +240,7 @@ void icy::VisualRepresentation::SynchronizeValues()
 
         bool updateRequired;
         float tb;
-        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+//        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
 
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
@@ -268,7 +269,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         actor_points->VisibilityOff();
         bool updateRequired;
         float tb;
-        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+//        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
 
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
@@ -298,7 +299,7 @@ void icy::VisualRepresentation::SynchronizeValues()
 
         bool updateRequired;
         float tb;
-        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+//        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
 
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)

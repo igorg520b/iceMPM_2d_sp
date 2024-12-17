@@ -200,13 +200,11 @@ size_t WindInterpolator::getIndexInUV(size_t timeIndex, size_t idxLat, size_t id
     return timeIndex * extentLat * extentLon + (extentLat - idxLat - 1) * extentLon + idxLon;
 }
 
-void WindInterpolator::setTime(const double simulation_time, bool &updateRequired, float &interpolationParam)
+bool WindInterpolator::setTime(const double simulation_time)
 {
-    if(!isInitialized) return;
+    if(!isInitialized) return false;
     uint64_t sim_time_seconds = static_cast<int64_t>(simulation_time) + simulation_start_date;
     int interval = (int)((sim_time_seconds - valid_time.front()) / timeResolution);
-    interpolationParam = (float)(simulation_time + (simulation_start_date - valid_time.front() - interval*timeResolution))/(float)timeResolution;
-
 
     if(currentInterval != interval)
     {
@@ -232,10 +230,22 @@ void WindInterpolator::setTime(const double simulation_time, bool &updateRequire
                 gridv[idxLat][idxLon][1].x() = u_data[getIndexInUV(interval+1, idxLat, idxLon)];
                 gridv[idxLat][idxLon][1].y() = v_data[getIndexInUV(interval+1, idxLat, idxLon)];
             }
-        updateRequired = true;
+        spdlog::info("UPDATE REQUIRED");
+        return true;
     }
-    updateRequired = false;
+    return false;
 }
+
+float WindInterpolator::interpolationCoeffFromTime(const double simulation_time)
+{
+    if(!isInitialized) return 0;
+    uint64_t sim_time_seconds = static_cast<int64_t>(simulation_time) + simulation_start_date;
+    int interval = (int)((sim_time_seconds - valid_time.front()) / timeResolution);
+    float interpolationParam = (float)(simulation_time + (simulation_start_date - valid_time.front() - interval*timeResolution))/(float)timeResolution;
+    if(currentInterval != interval) throw std::runtime_error("WindInterpolator::interpolationCoeffFromTime");
+    return interpolationParam;
+}
+
 
 Eigen::Vector2f WindInterpolator::interpolationResult(float lat, float lon, float tb)
 {

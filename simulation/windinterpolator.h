@@ -30,7 +30,8 @@ public:
 
      // returns true if the contents of "grid" array changed;
     // interpolationParam is a value in [0,1) range between the two selected time frames
-    void setTime(const double simulation_time, bool &updateRequired, float &interpolationParam);
+    bool setTime(const double simulation_time); // return true if transfer of "grid" to GPU is required
+    float interpolationCoeffFromTime(const double simulation_time);
     Eigen::Vector2f interpolationResult(float lat, float lon, float tb);
 
     int currentInterval = -1;   // selected time interval in the "grid" array

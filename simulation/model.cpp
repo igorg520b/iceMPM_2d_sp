@@ -66,6 +66,9 @@ bool icy::Model::Step()
 
         gpu.reset_grid();
         gpu.p2g();
+
+        if(wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
+
         gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
         const bool isZeroStep = step % prms.UpdateEveryNthStep == 0;
         gpu.g2p(isZeroStep, false, (step%10)==0 ? 0 : 0);
