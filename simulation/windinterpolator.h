@@ -32,12 +32,12 @@ public:
     Eigen::Vector2f interpolationResult(float lat, float lon, float tb);
 
     int currentInterval = -1;   // selected time interval in the "grid" array
-private:
-    bool isDataLoaded = false;
+    bool isInitialized = false;
+    int extentLat, extentLon;   // actual extent
     double LatMin, LatMax, LonMin, LonMax;  // region of interest
+private:
     int64_t simulation_start_date;  // set once upon data load
 
-    int extentLat, extentLon;   // actual extent
     int idxLatMin, idxLatMax, idxLonMin, idxLonMax;
 
     std::vector<double> latitudes, longitudes;

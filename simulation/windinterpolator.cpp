@@ -24,7 +24,7 @@ void WindInterpolator::LoadWindData(std::string netCDF4FileName,
 
     find_indices_of_overlapping_region();
     read_UV_from_HDF5(file);
-    isDataLoaded = true;
+    isInitialized = true;
     spdlog::info("WindInterpolator::LoadWindData done");
 }
 
@@ -202,7 +202,7 @@ size_t WindInterpolator::getIndexInUV(size_t timeIndex, size_t idxLat, size_t id
 
 void WindInterpolator::setTime(const double simulation_time, bool &updateRequired, float &interpolationParam)
 {
-    if(!isDataLoaded) return;
+    if(!isInitialized) return;
     uint64_t sim_time_seconds = static_cast<int64_t>(simulation_time) + simulation_start_date;
     int interval = (int)((sim_time_seconds - valid_time.front()) / timeResolution);
     interpolationParam = (float)(simulation_time + (simulation_start_date - valid_time.front() - interval*timeResolution))/(float)timeResolution;
@@ -222,10 +222,10 @@ void WindInterpolator::setTime(const double simulation_time, bool &updateRequire
         for(int idxLat = 0; idxLat < extentLat; idxLat++)
             for(int idxLon = 0; idxLon < extentLon; idxLon++)
             {
-                grid[idxLat][idxLon][0] = u_data[getIndexInUV(interval, idxLatMin-idxLat, idxLonMin+idxLon)];
-                grid[idxLat][idxLon][1] = v_data[getIndexInUV(interval, idxLatMin-idxLat, idxLonMin+idxLon)];
-                grid[idxLat][idxLon][2] = u_data[getIndexInUV(interval+1, idxLatMin-idxLat, idxLonMin+idxLon)];
-                grid[idxLat][idxLon][3] = v_data[getIndexInUV(interval+1, idxLatMin-idxLat, idxLonMin+idxLon)];
+                grid[idxLat][idxLon][0] = u_data[getIndexInUV(interval, idxLat, idxLon)];
+                grid[idxLat][idxLon][1] = v_data[getIndexInUV(interval, idxLat, idxLon)];
+                grid[idxLat][idxLon][2] = u_data[getIndexInUV(interval+1, idxLat, idxLon)];
+                grid[idxLat][idxLon][3] = v_data[getIndexInUV(interval+1, idxLat, idxLon)];
             }
         updateRequired = true;
     }
@@ -234,7 +234,7 @@ void WindInterpolator::setTime(const double simulation_time, bool &updateRequire
 
 Eigen::Vector2f WindInterpolator::interpolationResult(float lat, float lon, float tb)
 {
-    if(!isDataLoaded) return Eigen::Vector2f::Zero();
+    if(!isInitialized) return Eigen::Vector2f::Zero();
 
     // space
     int lat_cell = (int)((lat-gridLatMin)/gridCellSize);
@@ -262,8 +262,8 @@ Eigen::Vector2f WindInterpolator::interpolationResult(float lat, float lon, floa
 
     Eigen::Vector2f interpolatedValue0 =
         (1 - ub) * (1 - vb) * cell_values0[0][0] +
-        ub * (1 - vb) * cell_values0[1][0] +
-        (1 - ub) * vb * cell_values0[0][1] +
+        ub * (1 - vb) * cell_values0[0][1] +
+        (1 - ub) * vb * cell_values0[1][0] +
         ub * vb * cell_values0[1][1];
 
     Eigen::Vector2f interpolatedValue1 =

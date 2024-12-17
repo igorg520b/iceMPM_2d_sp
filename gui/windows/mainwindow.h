@@ -83,6 +83,7 @@ private Q_SLOTS:
 
     void comboboxIndexChanged_visualizations(int index);
     void limits_changed(double val);
+    void sliderValueChanged(int val);
 
 private:
     void updateGUI();   // when simulation is started/stopped or when a step is advanced
@@ -102,11 +103,11 @@ private:
     QLabel *labelStepCount;
     QLabel *labelWindSpeed, *labelWindDirection;
     QComboBox *comboBox_visualizations;
-    // QSlider *slider1;
     QDoubleSpinBox *qdsbValRange;   // high and low limits for value scale
 
     ObjectPropertyBrowser *pbrowser;    // to show simulation settings/properties
     QSplitter *splitter;
+    QSlider *slider1;
 
     // VTK
     vtkNew<vtkGenericOpenGLRenderWindow> renderWindow;

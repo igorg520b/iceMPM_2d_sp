@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <chrono>
+#include <ctime>
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 
@@ -80,9 +82,8 @@ MainWindow::MainWindow(QWidget *parent)
 
 // anything that includes the Model
     renderer->AddActor(representation.actor_points);
-//    renderer->AddActor(representation.actor_grid);
+    renderer->AddActor(representation.actor_grid);
     renderer->AddActor(representation.actor_grid2);
-//    renderer->AddActor(representation.actor_indenter);
     renderer->AddActor(representation.actorText);
     renderer->AddActor(representation.scalarBar);
 
@@ -92,6 +93,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(comboBox_visualizations, QOverload<int>::of(&QComboBox::currentIndexChanged),
             [&](int index){ comboboxIndexChanged_visualizations(index); });
+
+
+    // slider
+    slider1 = new QSlider(Qt::Horizontal);
+    ui->toolBar->addWidget(slider1);
+    slider1->setTracking(true);
+    slider1->setMinimum(0);
+    slider1->setMaximum(1000);
+    connect(slider1, SIGNAL(valueChanged(int)), this, SLOT(sliderValueChanged(int)));
+
 
     // read/restore saved settings
     settingsFileName = QDir::currentPath() + "/cm.ini";
@@ -393,3 +404,29 @@ void MainWindow::LoadParameterFile(QString qFileName)
     updateGUI();
 }
 
+void MainWindow::sliderValueChanged(int val)
+{
+    float b_val = (float)val/1000.;
+    float max_val = 4.5*24*3600;
+    float set_val = b_val*max_val;
+    model.prms.SimulationTime = b_val*max_val;
+    representation.SynchronizeValues();
+//    spdlog::info("selected time: {} hours",set_val/3600.);
+    renderWindow->Render();
+
+    int64_t display_date = set_val + model.prms.SimulationStartUnixTime;
+
+    std::time_t unix_time = display_date;
+
+    // Convert to tm structure
+    std::tm* tm_time = std::localtime(&unix_time);
+
+    // Format the time
+    char buffer[100];
+    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S", tm_time);
+
+    // Log using spdlog
+    spdlog::info("Formatted date and time: {}", buffer);
+//    model.SetIndenterPosition(0.001 * val);
+//    render_results();
+}

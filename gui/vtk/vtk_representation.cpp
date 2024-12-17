@@ -53,13 +53,13 @@ icy::VisualRepresentation::VisualRepresentation()
 
     actor_grid->SetMapper(grid_mapper);
     actor_grid->GetProperty()->SetEdgeVisibility(true);
-    actor_grid->GetProperty()->SetEdgeColor(0.8,0.8,0.8);
+    actor_grid->GetProperty()->SetEdgeColor(0.2,0.2,0.2);
     actor_grid->GetProperty()->LightingOff();
     actor_grid->GetProperty()->ShadingOff();
     actor_grid->GetProperty()->SetInterpolationToFlat();
     actor_grid->PickableOff();
-    actor_grid->GetProperty()->SetColor(0.98,0.98,0.98);
-//    actor_grid->GetProperty()->SetRepresentationToWireframe();
+    actor_grid->GetProperty()->SetColor(0.1,0.1,0.1);
+    actor_grid->GetProperty()->SetRepresentationToWireframe();
 
     // grid2
     visualized_values_grid->SetName("visualized_values_grid");
@@ -120,18 +120,35 @@ void icy::VisualRepresentation::SynchronizeTopology()
     int gx = model->prms.GridXTotal;
     int gy = model->prms.GridY;
     t_PointReal &h = model->prms.cellsize;
-    structuredGrid->SetDimensions(gx, gy, 1);
 
-    grid_points->SetNumberOfPoints(gx*gy);
-    for(int idx_y=0; idx_y<gy; idx_y++)
-        for(int idx_x=0; idx_x<gx; idx_x++)
-        {
-            float x = idx_x * h;
-            float y = idx_y * h;
-            double pt_pos[3] {x, y, -2.0};
-            grid_points->SetPoint((vtkIdType)(idx_x+idx_y*gx), pt_pos);
-        }
-    structuredGrid->SetPoints(grid_points);
+    // GRID1 now shows the parallels and meridians
+    int nGridLat = model->wind_interpolator.extentLat;
+    int nGridLon = model->wind_interpolator.extentLon;
+
+    double lami = model->wind_interpolator.LatMin;
+    double lamx = model->wind_interpolator.LatMax;
+    double lomi = model->wind_interpolator.LonMin;
+    double lomx = model->wind_interpolator.LonMax;
+    auto latToGrid = [&](float lat) { return h*gy*(lat-lami)/(lamx-lami); };
+    auto lonToGrid = [&](float lon) { return h*gx*(lon-lomi)/(lomx-lomi); };
+
+    if(model->wind_interpolator.isInitialized)
+    {
+        structuredGrid->SetDimensions(nGridLon, nGridLat, 1);
+        grid_points->SetNumberOfPoints(nGridLon*nGridLat);
+        for(int idx_y=0; idx_y<nGridLat; idx_y++)
+            for(int idx_x=0; idx_x<nGridLon; idx_x++)
+            {
+                float lon = model->wind_interpolator.gridLonMin + idx_x*WindInterpolator::gridCellSize;
+                float lat = model->wind_interpolator.gridLatMin + idx_y*WindInterpolator::gridCellSize;
+                double x = lonToGrid(lon);
+                double y = latToGrid(lat);
+                double pt_pos[3] {x, y, -0.5};
+                grid_points->SetPoint((vtkIdType)(idx_x+idx_y*nGridLon), pt_pos);
+            }
+        structuredGrid->SetPoints(grid_points);
+    }
+
 
     // grid2
     int gx1 = gx+1;
@@ -211,6 +228,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
+        grid_mapper2->SetLookupTable(hueLut_four);
     }
 
     else if(VisualizingVariable == VisOpt::wind_u)
@@ -236,10 +254,41 @@ void icy::VisualRepresentation::SynchronizeValues()
                 visualized_values_grid->SetValue(idx_visual, value);
             }
 
-        grid_mapper2->SetLookupTable(hueLut_temperature);
-        hueLut_temperature->SetTableRange(-10, 10);
+        grid_mapper2->SetLookupTable(hueLut_pressure);
+        hueLut_pressure->SetTableRange(-range, range);
 
         visualized_values_grid->Modified();
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut_pressure);
+    }
+    else if(VisualizingVariable == VisOpt::wind_v)
+    {
+        int gx = model->prms.GridXTotal;
+        int gy = model->prms.GridY;
+        actor_points->VisibilityOff();
+        bool updateRequired;
+        float tb;
+        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+
+                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
+                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
+
+                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
+                float value = wv.y();
+                visualized_values_grid->SetValue(idx_visual, value);
+            }
+
+        grid_mapper2->SetLookupTable(hueLut_pressure);
+        hueLut_pressure->SetTableRange(-range, range);
+
+        visualized_values_grid->Modified();
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut_pressure);
     }
     else if(VisualizingVariable == VisOpt::wind_norm)
     {
@@ -265,7 +314,7 @@ void icy::VisualRepresentation::SynchronizeValues()
             }
 
         grid_mapper2->SetLookupTable(hueLut_Southwest);
-        hueLut_Southwest->SetTableRange(0, 15);
+        hueLut_Southwest->SetTableRange(0, range);
 
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_Southwest);
@@ -296,6 +345,7 @@ void icy::VisualRepresentation::SynchronizeValues()
 
         points_polydata->Modified();
         points_filter->Update();
+        grid_mapper2->SetLookupTable(hueLut_four);
     }
     else if(VisualizingVariable == VisOpt::special)
     {
@@ -327,6 +377,7 @@ void icy::VisualRepresentation::SynchronizeValues()
 
         points_polydata->Modified();
         points_filter->Update();
+        grid_mapper2->SetLookupTable(hueLut_four);
     }
     else if(VisualizingVariable == VisOpt::Jp_inv)
     {
@@ -347,6 +398,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
+        grid_mapper2->SetLookupTable(hueLut_four);
     }
     else if(VisualizingVariable == VisOpt::P)
     {

@@ -49,7 +49,7 @@ public:
     enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp, color, special, wind_u, wind_v, wind_norm};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
-    double ranges[20] = {};
+    double ranges[30] = {};
 
     void SynchronizeValues();
     void SynchronizeTopology();
