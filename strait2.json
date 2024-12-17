@@ -8,9 +8,9 @@
 "SimulationStartUnixTime":1521547200,
 
 "InitialTimeStep":0.065,
-"SimulationEndTime":5e4,
+"SimulationEndTime":950000,
 "ParticleViewSize":1.0,
-"AnimationFramesRequested":10000,
+"AnimationFramesRequested":50000,
 
 "YoungsModulus":5.0e8,
 "IceCompressiveStrength":100e6,

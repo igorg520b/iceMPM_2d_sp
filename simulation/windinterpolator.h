@@ -24,6 +24,8 @@ public:
     constexpr static int timeResolution = 3600; // data updated every hour
     constexpr static size_t gridArraySize = allocatedLatExtent*allocatedLonExtent*4*sizeof(float);
     float grid[allocatedLatExtent][allocatedLonExtent][4];  // copy to __constant__ on the device
+    Eigen::Vector2f gridv[allocatedLatExtent][allocatedLonExtent][2];
+
     double gridLatMin, gridLonMin;   // this is where the grid starts (copy to SimParams)
 
      // returns true if the contents of "grid" array changed;

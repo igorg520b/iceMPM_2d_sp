@@ -226,6 +226,11 @@ void WindInterpolator::setTime(const double simulation_time, bool &updateRequire
                 grid[idxLat][idxLon][1] = v_data[getIndexInUV(interval, idxLat, idxLon)];
                 grid[idxLat][idxLon][2] = u_data[getIndexInUV(interval+1, idxLat, idxLon)];
                 grid[idxLat][idxLon][3] = v_data[getIndexInUV(interval+1, idxLat, idxLon)];
+
+                gridv[idxLat][idxLon][0].x() = u_data[getIndexInUV(interval, idxLat, idxLon)];
+                gridv[idxLat][idxLon][0].y() = v_data[getIndexInUV(interval, idxLat, idxLon)];
+                gridv[idxLat][idxLon][1].x() = u_data[getIndexInUV(interval+1, idxLat, idxLon)];
+                gridv[idxLat][idxLon][1].y() = v_data[getIndexInUV(interval+1, idxLat, idxLon)];
             }
         updateRequired = true;
     }
@@ -259,25 +264,32 @@ Eigen::Vector2f WindInterpolator::interpolationResult(float lat, float lon, floa
             cell_values0[i][j] = Eigen::Vector2f(grid[lat_cell+i][lon_cell+j][0],grid[lat_cell+i][lon_cell+j][1]);
             cell_values1[i][j] = Eigen::Vector2f(grid[lat_cell+i][lon_cell+j][2],grid[lat_cell+i][lon_cell+j][3]);
         }
+    Eigen::Vector2f ipVal[2];
 
-    Eigen::Vector2f interpolatedValue0 =
+    ipVal[0] =
         (1 - ub) * (1 - vb) * cell_values0[0][0] +
         ub * (1 - vb) * cell_values0[0][1] +
         (1 - ub) * vb * cell_values0[1][0] +
         ub * vb * cell_values0[1][1];
 
-    Eigen::Vector2f interpolatedValue1 =
+    ipVal[1] =
         (1 - ub) * (1 - vb) * cell_values1[0][0] +
-        ub * (1 - vb) * cell_values1[1][0] +
-        (1 - ub) * vb * cell_values1[0][1] +
+        ub * (1 - vb) * cell_values1[0][1] +
+        (1 - ub) * vb * cell_values1[1][0] +
         ub * vb * cell_values1[1][1];
+/*
 
-//    spdlog::info("iv0: u {}; v {}", interpolatedValue0.x(), interpolatedValue0.y());
-//    spdlog::info("iv1: u {}; v {}", interpolatedValue1.x(), interpolatedValue1.y());
+    for(int k=0;k<2;k++)
+    {
+        ipVal[k] = (1 - ub) * (1 - vb) * gridv[lat_cell][lon_cell][k] +
+                   ub * (1 - vb) * gridv[lat_cell][lon_cell+1][k] +
+                   (1 - ub) * vb * gridv[lat_cell+1][lon_cell][k] +
+                   ub * vb * gridv[lat_cell+1][lon_cell+1][k];
+    }
 
+*/
 
-    Eigen::Vector2f final_result = (1-tb)*interpolatedValue0 + tb*interpolatedValue1;
-//    return final_result;
-    return interpolatedValue0;
+    Eigen::Vector2f final_result = (1-tb)*ipVal[0] + tb*ipVal[1];
+    return final_result;
 }
 

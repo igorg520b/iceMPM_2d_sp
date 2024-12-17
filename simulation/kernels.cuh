@@ -1,6 +1,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "parameters_sim.h"
+#include "windinterpolator.h"
 
 
 using namespace Eigen;
@@ -15,6 +16,7 @@ constexpr uint32_t status_weakened = 0x40000;
 __device__ uint8_t gpu_error_indicator;
 __device__ int gpu_disabled_points_count;
 __constant__ SimParams gprms;
+__constant__ float wgrid[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4];    // wind data
 
 
 

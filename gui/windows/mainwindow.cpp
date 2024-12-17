@@ -320,6 +320,15 @@ void MainWindow::updateGUI()
     labelWindDirection->setText(QString("%1 deg").arg(model.windAngle,0,'f',0));
 
 
+    // display date
+    int64_t display_date = (int64_t)model.prms.SimulationTime + model.prms.SimulationStartUnixTime;
+    std::time_t unix_time = display_date;
+    std::tm* tm_time = std::gmtime(&unix_time);
+    // Format the time
+    char buffer[100];
+    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
+    representation.actorText->SetInput(buffer);
+
     //statusLabel->setText(QString("per cycle: %1 ms").arg(model.compute_time_per_cycle,0,'f',3));
 
     if(model.SyncTopologyRequired)
@@ -397,6 +406,7 @@ void MainWindow::LoadParameterFile(QString qFileName)
     if(additionalFiles.count("InputWindData") > 0)
     {
         snapshot.LoadWindData(additionalFiles["InputWindData"]);
+        model.use_GFS_wind = true;
     }
 
     representation.SynchronizeTopology();
@@ -406,27 +416,20 @@ void MainWindow::LoadParameterFile(QString qFileName)
 
 void MainWindow::sliderValueChanged(int val)
 {
+
     float b_val = (float)val/1000.;
-    float max_val = 4.5*24*3600;
+    float max_val = 11.0*24*3600;
     float set_val = b_val*max_val;
     model.prms.SimulationTime = b_val*max_val;
     representation.SynchronizeValues();
-//    spdlog::info("selected time: {} hours",set_val/3600.);
     renderWindow->Render();
 
-    int64_t display_date = set_val + model.prms.SimulationStartUnixTime;
+    int64_t display_date = (int64_t)set_val + model.prms.SimulationStartUnixTime;
 
     std::time_t unix_time = display_date;
-
-    // Convert to tm structure
-    std::tm* tm_time = std::localtime(&unix_time);
-
+    std::tm* tm_time = std::gmtime(&unix_time);
     // Format the time
     char buffer[100];
-    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S", tm_time);
-
-    // Log using spdlog
-    spdlog::info("Formatted date and time: {}", buffer);
-//    model.SetIndenterPosition(0.001 * val);
-//    render_results();
+    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
+    representation.actorText->SetInput(buffer);
 }
