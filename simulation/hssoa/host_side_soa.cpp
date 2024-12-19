@@ -67,26 +67,13 @@ void HostSideSOA::Allocate(int pts_capacity, int gridTotal)
     size = 0;
     memset(host_buffer, 0, allocation_size);
 
+    point_colors_rgb.resize(pts_capacity);
+
     // grid buffer
     grid_status_buffer.resize(gridTotal);
     //grid_status_buffer
     spdlog::info("HSSOA allocate capacity {} pt; toal {} Gb", capacity, (double)allocation_size/(1024.*1024.*1024.));
 }
-
-
-void HostSideSOA::InitializeBlock()
-{
-    for(SOAIterator it = begin(); it!=end(); ++it)
-    {
-        ProxyPoint &p = *it;
-        p.setValue(SimParams::idx_Jp_inv, 1.f);
-        p.setValue(SimParams::idx_Qp, 1.f);
-        for(int i=0; i<SimParams::dim; i++)
-                p.setValue(SimParams::Fe00+i*2+i, 1.f);
-    }
-    spdlog::info("HostSideSOA::InitializeBlock() done");
-}
-
 
 
 

@@ -119,7 +119,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
 
     int gx = model->prms.GridXTotal;
     int gy = model->prms.GridY;
-    t_PointReal &h = model->prms.cellsize;
+    const double h = model->prms.cellsize;
 
     // GRID1 now shows the parallels and meridians
     int nGridLat = model->wind_interpolator.extentLat;
@@ -238,9 +238,8 @@ void icy::VisualRepresentation::SynchronizeValues()
         int gy = model->prms.GridY;
         actor_points->VisibilityOff();
 
-        bool updateRequired;
-        float tb;
-//        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+        model->wind_interpolator.setTime(wind_visualization_time);
+        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
 
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
@@ -267,9 +266,8 @@ void icy::VisualRepresentation::SynchronizeValues()
         int gx = model->prms.GridXTotal;
         int gy = model->prms.GridY;
         actor_points->VisibilityOff();
-        bool updateRequired;
-        float tb;
-//        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+        model->wind_interpolator.setTime(wind_visualization_time);
+        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
 
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
@@ -297,9 +295,8 @@ void icy::VisualRepresentation::SynchronizeValues()
         int gy = model->prms.GridY;
         actor_points->VisibilityOff();
 
-        bool updateRequired;
-        float tb;
-//        model->wind_interpolator.setTime(model->prms.SimulationTime, updateRequired, tb);
+        model->wind_interpolator.setTime(wind_visualization_time);
+        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
 
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
@@ -334,12 +331,14 @@ void icy::VisualRepresentation::SynchronizeValues()
         for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            float r = s->getValue(SimParams::idx_rgb+0);
-            float g = s->getValue(SimParams::idx_rgb+1);
-            float b = s->getValue(SimParams::idx_rgb+2);
-            pts_colors->SetValue((vtkIdType)(i*3+0), (unsigned char)(r*255));
-            pts_colors->SetValue((vtkIdType)(i*3+1), (unsigned char)(g*255));
-            pts_colors->SetValue((vtkIdType)(i*3+2), (unsigned char)(b*255));
+            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
+            uint32_t rgb = model->gpu.hssoa.point_colors_rgb[pt_idx];
+            uint8_t r = (rgb >> 16) & 0xff;
+            uint8_t g = (rgb >> 8) & 0xff;
+            uint8_t b = rgb & 0xff;
+            pts_colors->SetValue((vtkIdType)(i*3+0), r);
+            pts_colors->SetValue((vtkIdType)(i*3+1), g);
+            pts_colors->SetValue((vtkIdType)(i*3+2), b);
         }
         points_polydata->GetPointData()->SetActiveScalars("pts_colors");
         pts_colors->Modified();
@@ -359,9 +358,15 @@ void icy::VisualRepresentation::SynchronizeValues()
         for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            float r = s->getValue(SimParams::idx_rgb+0);
-            float g = s->getValue(SimParams::idx_rgb+1);
-            float b = s->getValue(SimParams::idx_rgb+2);
+            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
+            uint32_t rgb = model->gpu.hssoa.point_colors_rgb[pt_idx];
+            uint8_t _r = (rgb >> 16) & 0xff;
+            uint8_t _g = (rgb >> 8) & 0xff;
+            uint8_t _b = rgb & 0xff;
+
+            float r = _r/255.;
+            float g = _g/255.;
+            float b = _b/255.;
 
             if(s->getCrushedStatus())
             {

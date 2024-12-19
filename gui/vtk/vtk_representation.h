@@ -45,6 +45,7 @@ public:
     VisualRepresentation();
 
     icy::Model *model;
+    double wind_visualization_time;
 
     enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp, color, special, wind_u, wind_v, wind_norm};
     Q_ENUM(VisOpt)

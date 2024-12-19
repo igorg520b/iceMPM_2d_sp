@@ -1,10 +1,11 @@
 #include "model.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
-
+#include <thread>
 
 icy::Model::Model()
 {
+    snapshot.model = this;
     prms.SimulationStep = 0;
     prms.SimulationTime = 0;
     SyncTopologyRequired = true;
@@ -19,13 +20,6 @@ icy::Model::Model()
     gpu.model = this;
     GPU_Partition::prms = &this->prms;
 /*
-    wind_data.push_back({0,0,45});
-    wind_data.push_back({20'000,20,45});
-    wind_data.push_back({100'000,25,45});
-    wind_data.push_back({500'000,30,0});
-    wind_data.push_back({1'000'000,30,0});
-*/
-
     float angle = 270;
     for(int i=0;i<50;i++)
     {
@@ -35,8 +29,7 @@ icy::Model::Model()
         angle += 90;
         if(angle >= 360) angle = 0;
     }
-//    wind_data.push_back({2'000,20,90});
-//    wind_data.push_back({4'000,40,270});
+*/
     spdlog::info("Model constructor");
 }
 
@@ -47,6 +40,8 @@ icy::Model::~Model() {}
 
 bool icy::Model::Step()
 {
+    if(prms.SimulationStep == 0) { snapshot.SaveSnapshot(); snapshot.SaveFrame(); }
+
     float simulation_time = prms.SimulationTime;
     std::cout << '\n';
     spdlog::info("step {} ({}) started; sim_time {:>6.3}; host pts {}; cap {}",
@@ -59,9 +54,9 @@ bool icy::Model::Step()
     do
     {
         simulation_time += prms.InitialTimeStep;
-        spd_and_angle = interpolateWind(simulation_time);
-        windSpeed = spd_and_angle.first;
-        windAngle = spd_and_angle.second;
+        //spd_and_angle = interpolateWind(simulation_time);
+        //windSpeed = spd_and_angle.first;
+        //windAngle = spd_and_angle.second;
         const int step = prms.SimulationStep+count_unupdated_steps;
 
         gpu.reset_grid();
@@ -70,11 +65,16 @@ bool icy::Model::Step()
         if(wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
 
         gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
-        const bool isZeroStep = step % prms.UpdateEveryNthStep == 0;
-        gpu.g2p(isZeroStep, false, (step%10)==0 ? 0 : 0);
+        const bool isCycleStart = step % prms.UpdateEveryNthStep == 0;
+        gpu.g2p(isCycleStart, false, false);
         gpu.record_timings(false);
 
         count_unupdated_steps++;
+        if(intentionalSlowdown)
+        {
+            gpu.synchronize();
+            std::this_thread::sleep_for(std::chrono::milliseconds(intentionalSlowdown));
+        }
     } while((prms.SimulationStep+count_unupdated_steps) % prms.UpdateEveryNthStep != 0);
 
     processing_current_cycle_data.lock();   // if locked, previous results are not yet processed by the host
@@ -108,6 +108,11 @@ bool icy::Model::Step()
         SyncTopologyRequired = true;
         spdlog::info("Model::Step() rebalancing done");
     }
+
+    bool saveSnapshot = prms.AnimationFrameNumber()%SimParams::snapshotFrequency == 0;
+    if(saveSnapshot) { snapshot.SaveSnapshot(); snapshot.previous_frame_exists = false; }
+    snapshot.SaveFrame();
+
 
     accessing_point_data.unlock();
 

@@ -12,9 +12,7 @@ void SimParams::Reset()
     LonMax = 21.877357;
 
     nPtsInitial = 0;
-    GlenA = 1e-24;
     windDragCoeff_airDensity = 0.0025 * 1.2;
-    waterDrag_waterDensity = 0.000005 * 1025;
 
     InitialTimeStep = 3.e-5;
     YoungsModulus = 5.e8;
@@ -26,8 +24,7 @@ void SimParams::Reset()
     AnimationFramesRequested = 5000;
 
     PoissonsRatio = 0.3;
-    Gravity = 9.81;
-    Density = 916*0.2;  // surface density
+    SurfaceDensity = 916*0.2;  // surface density
 
     SimulationStep = 0;
     SimulationTime = 0;
@@ -37,21 +34,20 @@ void SimParams::Reset()
     IceShearStrength = 1e6;
     IceTensileStrength2 = 10e6;
 
-    DP_tan_phi = std::tan(30*pi/180.);
+    DP_phi = 62;
     DP_threshold_p = 0;
 
     tpb_P2G = 256;
     tpb_Upd = 512;
     tpb_G2P = 128;
 
-    SetupType = 0;
     GrainVariability = 0.50;
 
     ComputeLame();
-    ComputeCamClayParams2();
     ComputeHelperVariables();
-    spdlog::info("SimParams reset");
+    spdlog::info("SimParams reset; nPtsArrays {}", nPtsArrays);
 }
+
 
 
 std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
@@ -76,7 +72,6 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("LatMax")) LatMax = doc["LatMax"].GetDouble();
     if(doc.HasMember("LonMax")) LonMax = doc["LonMax"].GetDouble();
 
-    if(doc.HasMember("SetupType")) SetupType = doc["SetupType"].GetInt();
     if(doc.HasMember("InitialTimeStep")) InitialTimeStep = doc["InitialTimeStep"].GetDouble();
     if(doc.HasMember("AnimationFramesRequested")) AnimationFramesRequested = doc["AnimationFramesRequested"].GetInt();
 
@@ -84,25 +79,20 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("ParticleViewSize")) ParticleViewSize = doc["ParticleViewSize"].GetDouble();
     if(doc.HasMember("SimulationEndTime")) SimulationEndTime = doc["SimulationEndTime"].GetDouble();
     if(doc.HasMember("PoissonsRatio")) PoissonsRatio = doc["PoissonsRatio"].GetDouble();
-    if(doc.HasMember("Gravity")) Gravity = doc["Gravity"].GetDouble();
-    if(doc.HasMember("Density")) Density = doc["Density"].GetDouble();
+    if(doc.HasMember("SurfaceDensity")) SurfaceDensity = doc["SurfaceDensity"].GetDouble();
 
     if(doc.HasMember("IceCompressiveStrength")) IceCompressiveStrength = doc["IceCompressiveStrength"].GetDouble();
     if(doc.HasMember("IceTensileStrength")) IceTensileStrength = doc["IceTensileStrength"].GetDouble();
     if(doc.HasMember("IceTensileStrength2")) IceTensileStrength2 = doc["IceTensileStrength2"].GetDouble();
     if(doc.HasMember("IceShearStrength")) IceShearStrength = doc["IceShearStrength"].GetDouble();
 
-    if(doc.HasMember("DP_phi")) DP_tan_phi = std::tan(doc["DP_phi"].GetDouble()*pi/180);
+    if(doc.HasMember("DP_phi")) DP_phi = doc["DP_phi"].GetDouble();
     if(doc.HasMember("DP_threshold_p")) DP_threshold_p = doc["DP_threshold_p"].GetDouble();
     if(doc.HasMember("GrainVariability")) GrainVariability = doc["GrainVariability"].GetDouble();
 
     if(doc.HasMember("tpb_P2G")) tpb_P2G = doc["tpb_P2G"].GetInt();
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();
     if(doc.HasMember("tpb_G2P")) tpb_G2P = doc["tpb_G2P"].GetInt();
-
-//    ComputeCamClayParams2();
-//    ComputeHelperVariables();
-
 
     std::map<std::string,std::string> result;
 
@@ -135,33 +125,106 @@ void SimParams::ComputeLame()
 
 void SimParams::ComputeHelperVariables()
 {
-    ParticleMass = ParticleVolume * Density;
+    ParticleMass = ParticleVolume * SurfaceDensity;
 
     UpdateEveryNthStep = (int)(SimulationEndTime/(AnimationFramesRequested*InitialTimeStep));
     cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
     Dp_inv = 4./(cellsize*cellsize);
     dt_vol_Dpinv = InitialTimeStep*ParticleVolume*Dp_inv;
-    dt_Gravity = InitialTimeStep*Gravity;
     vmax = 0.5*cellsize/InitialTimeStep;
     vmax_squared = vmax*vmax;
-}
 
-void SimParams::ComputeCamClayParams2()
-{
     ComputeLame();
-    NACC_beta = IceTensileStrength/IceCompressiveStrength;
-    const double &beta = NACC_beta;
-    const double &q = IceShearStrength;
-    const double &p0 = IceCompressiveStrength;
-    NACC_M = (2*q*sqrt(1+2*beta))/(p0*(1+beta));
-    NACC_Msq = NACC_M*NACC_M;
-    spdlog::info("ComputeCamClayParams2() done");
 }
 
-void SimParams::ComputeIntegerBlockCoords()
-{
-    nxmin = floor(xmin/cellsize);
-    nxmax = ceil(xmax/cellsize);
-    nymin = floor(ymin/cellsize);
-    nymax = ceil(ymax/cellsize);
+
+
+
+void SimParams::SaveParametersAsHDF5Attributes(H5::DataSet &dataset) {
+    // Create a scalar dataspace for the attributes
+    H5::DataSpace att_dspace(H5S_SCALAR);
+
+    // Save each member as an attribute
+    dataset.createAttribute("nPtsInitial", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &nPtsInitial);
+    dataset.createAttribute("SimulationStartUnixTime", H5::PredType::NATIVE_INT64, att_dspace).write(H5::PredType::NATIVE_INT64, &SimulationStartUnixTime);
+    dataset.createAttribute("GridXTotal", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &GridXTotal);
+    dataset.createAttribute("GridY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &GridY);
+
+    dataset.createAttribute("LatMin", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &LatMin);
+    dataset.createAttribute("LatMax", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &LatMax);
+    dataset.createAttribute("LonMin", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &LonMin);
+    dataset.createAttribute("LonMax", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &LonMax);
+
+    dataset.createAttribute("gridLatMin", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &gridLatMin);
+    dataset.createAttribute("gridLonMin", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &gridLonMin);
+    dataset.createAttribute("DimensionHorizontal", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &DimensionHorizontal);
+    dataset.createAttribute("DimensionVertical", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &DimensionVertical);
+    dataset.createAttribute("InitialTimeStep", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &InitialTimeStep);
+    dataset.createAttribute("SimulationEndTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationEndTime);
+
+    dataset.createAttribute("AnimationFramesRequested", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &AnimationFramesRequested);
+    dataset.createAttribute("windDragCoeff_airDensity", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &windDragCoeff_airDensity);
+    dataset.createAttribute("SurfaceDensity", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SurfaceDensity);
+
+    dataset.createAttribute("PoissonsRatio", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &PoissonsRatio);
+    dataset.createAttribute("YoungsModulus", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &YoungsModulus);
+
+    dataset.createAttribute("IceCompressiveStrength", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &IceCompressiveStrength);
+
+    dataset.createAttribute("IceTensileStrength", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &IceTensileStrength);
+    dataset.createAttribute("IceShearStrength", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &IceShearStrength);
+    dataset.createAttribute("IceTensileStrength2", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &IceTensileStrength2);
+    dataset.createAttribute("DP_phi", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &DP_phi);
+    dataset.createAttribute("DP_threshold_p", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &DP_threshold_p);
+    dataset.createAttribute("cellsize", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &cellsize);
+
+    dataset.createAttribute("ParticleVolume", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &ParticleVolume);
+    dataset.createAttribute("ParticleViewSize", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &ParticleViewSize);
+    dataset.createAttribute("GrainVariability", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &GrainVariability);
 }
+
+void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset) {
+    // Read each attribute and assign it to the corresponding member variable
+    dataset.openAttribute("nPtsInitial").read(H5::PredType::NATIVE_INT, &nPtsInitial);
+    dataset.openAttribute("SimulationStartUnixTime").read(H5::PredType::NATIVE_INT64, &SimulationStartUnixTime);
+    dataset.openAttribute("GridXTotal").read(H5::PredType::NATIVE_INT, &GridXTotal);
+    dataset.openAttribute("GridY").read(H5::PredType::NATIVE_INT, &GridY);
+
+    dataset.openAttribute("LatMin").read(H5::PredType::NATIVE_DOUBLE, &LatMin);
+    dataset.openAttribute("LatMax").read(H5::PredType::NATIVE_DOUBLE, &LatMax);
+    dataset.openAttribute("LonMin").read(H5::PredType::NATIVE_DOUBLE, &LonMin);
+    dataset.openAttribute("LonMax").read(H5::PredType::NATIVE_DOUBLE, &LonMax);
+
+    dataset.openAttribute("gridLatMin").read(H5::PredType::NATIVE_DOUBLE, &gridLatMin);
+    dataset.openAttribute("gridLonMin").read(H5::PredType::NATIVE_DOUBLE, &gridLonMin);
+
+    dataset.openAttribute("DimensionHorizontal").read(H5::PredType::NATIVE_DOUBLE, &DimensionHorizontal);
+    dataset.openAttribute("DimensionVertical").read(H5::PredType::NATIVE_DOUBLE, &DimensionVertical);
+    dataset.openAttribute("InitialTimeStep").read(H5::PredType::NATIVE_DOUBLE, &InitialTimeStep);
+
+    dataset.openAttribute("SimulationEndTime").read(H5::PredType::NATIVE_DOUBLE, &SimulationEndTime);
+    dataset.openAttribute("AnimationFramesRequested").read(H5::PredType::NATIVE_INT, &AnimationFramesRequested);
+    dataset.openAttribute("windDragCoeff_airDensity").read(H5::PredType::NATIVE_DOUBLE, &windDragCoeff_airDensity);
+    dataset.openAttribute("SurfaceDensity").read(H5::PredType::NATIVE_DOUBLE, &SurfaceDensity);
+    dataset.openAttribute("PoissonsRatio").read(H5::PredType::NATIVE_DOUBLE, &PoissonsRatio);
+    dataset.openAttribute("YoungsModulus").read(H5::PredType::NATIVE_DOUBLE, &YoungsModulus);
+    dataset.openAttribute("IceCompressiveStrength").read(H5::PredType::NATIVE_DOUBLE, &IceCompressiveStrength);
+    dataset.openAttribute("IceTensileStrength").read(H5::PredType::NATIVE_DOUBLE, &IceTensileStrength);
+    dataset.openAttribute("IceShearStrength").read(H5::PredType::NATIVE_DOUBLE, &IceShearStrength);
+    dataset.openAttribute("IceTensileStrength2").read(H5::PredType::NATIVE_DOUBLE, &IceTensileStrength2);
+    dataset.openAttribute("DP_phi").read(H5::PredType::NATIVE_DOUBLE, &DP_phi);
+    dataset.openAttribute("DP_threshold_p").read(H5::PredType::NATIVE_DOUBLE, &DP_threshold_p);
+    dataset.openAttribute("cellsize").read(H5::PredType::NATIVE_DOUBLE, &cellsize);
+    dataset.openAttribute("ParticleVolume").read(H5::PredType::NATIVE_DOUBLE, &ParticleVolume);
+    dataset.openAttribute("ParticleViewSize").read(H5::PredType::NATIVE_DOUBLE, &ParticleViewSize);
+    dataset.openAttribute("GrainVariability").read(H5::PredType::NATIVE_DOUBLE, &GrainVariability);
+
+    tpb_P2G = 256;
+    tpb_Upd = 512;
+    tpb_G2P = 128;
+    ComputeLame();
+    ComputeHelperVariables();
+
+}
+
+

@@ -14,9 +14,100 @@
 #include <fstream>
 #include <algorithm>
 #include <utility>
+#include <type_traits>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+
+void icy::SnapshotManager::SaveFrame()
+{
+    std::string s_path(frame_path);
+    std::filesystem::path directory_path(frame_path);
+    if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
+
+    std::string fileName = fmt::format("{}/frame_{:05d}.h5", s_path, frame);
+    H5::H5File file(fileName, H5F_ACC_TRUNC);
+
+}
+
+
+
+void icy::SnapshotManager::SaveSnapshot()
+{
+    //snapshot_path
+    std::string s_path(snapshot_path);
+    std::filesystem::path directory_path(snapshot_path);
+    if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
+
+    int frame = model->prms.AnimationFrameNumber();
+    if(frame == 0)
+    {
+        // save wind data, grid/land, and point colors
+        std::string fileName = s_path + "/_grid_and_wind.h5";
+        H5::H5File file(fileName, H5F_ACC_TRUNC);
+
+        // save grid/land data
+        hsize_t dims_grid[2] = {(hsize_t)model->prms.GridXTotal, (hsize_t)model->prms.GridY};
+        H5::DataSpace dataspace_grid(2, dims_grid);
+
+        H5::DataSet dataset = file.createDataSet("grid", H5::PredType::NATIVE_UINT8, dataspace_grid);
+        dataset.write(model->gpu.hssoa.grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
+
+
+        hsize_t dims_points[1] = {model->gpu.hssoa.point_colors_rgb.size()};
+        H5::DataSpace dataspace_points(1, dims_points);
+        H5::DataSet dataset_pt_colors = file.createDataSet("point_colors_rgb", H5::PredType::NATIVE_UINT32, dataspace_points);
+        dataset_pt_colors.write(model->gpu.hssoa.point_colors_rgb.data(), H5::PredType::NATIVE_UINT32);
+
+        // save parameters and wind data
+        model->prms.SaveParametersAsHDF5Attributes(dataset);
+        model->wind_interpolator.SaveToOwnHDF5(file);
+    }
+
+    // save current state
+    std::string fileName = fmt::format("{}/snapshot_{:05d}.h5", s_path, frame);
+    H5::H5File file(fileName, H5F_ACC_TRUNC);
+
+
+    // points
+    hsize_t dims_points[2] = {SimParams::nPtsArrays, model->gpu.hssoa.size};
+    H5::DataSpace dataspace_points(2, dims_points);
+
+    // Define memory dataspace
+
+    H5::DSetCreatPropList proplist;
+    hsize_t chunk_size = (hsize_t)std::min((unsigned)256*1024, model->gpu.hssoa.size);
+    hsize_t chunk_dims[2] = {SimParams::nPtsArrays, chunk_size};
+    proplist.setChunk(2, chunk_dims);
+    proplist.setDeflate(5);
+
+    H5::DataType dtype;
+    if constexpr(std::is_same_v<t_PointReal, float>) dtype = H5::PredType::NATIVE_FLOAT;
+    else dtype = H5::PredType::NATIVE_DOUBLE;
+
+    // Define the hyperslab in the memory space
+    hsize_t mem_dims[2] = {SimParams::nPtsArrays, model->gpu.hssoa.capacity};
+    H5::DataSpace memspace(2, mem_dims);
+    hsize_t mem_offset[2] = {0, 0};  // Start at the beginning of the memory array
+    hsize_t mem_count[2] = {SimParams::nPtsArrays, model->gpu.hssoa.size};  // Number of elements to select
+    memspace.selectHyperslab(H5S_SELECT_SET, mem_count, mem_offset);
+
+    // Write the data to the dataset
+    H5::DataSet dataset_pts = file.createDataSet("pts_data", dtype, dataspace_points, proplist);
+    dataset_pts.write(model->gpu.hssoa.host_buffer, dtype, memspace, dataspace_points);
+
+    H5::DataSpace att_dspace(H5S_SCALAR);
+    dataset_pts.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &model->prms.SimulationStep);
+
+    double simulationTime = static_cast<double>(model->prms.SimulationTime);
+    dataset_pts.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &simulationTime);
+
+    dataset_pts.createAttribute("HSSOA_size", H5::PredType::NATIVE_UINT, att_dspace).write(H5::PredType::NATIVE_UINT, &model->gpu.hssoa.size);
+
+    int nPtsArrays = SimParams::nPtsArrays;
+    dataset_pts.createAttribute("nPtsArrays", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &nPtsArrays);
+}
 
 
 void icy::SnapshotManager::load_png(std::string pngFileName)
@@ -178,25 +269,29 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
 
 std::string icy::SnapshotManager::prepare_file_name(int gx, int gy)
 {
-    std::string fileName = fmt::format("{}/point_cache_{:05d}_{:05d}.h5", pts_cache_path, gx, gy);
-    return fileName;
-
+    return fmt::format("{}/point_cache_{:05d}_{:05d}.h5", pts_cache_path, gx, gy);
 }
 
 
 std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3f& rgb)
 {
-    if(rgb.x() > 0.95 && rgb.y() < 0.05 && rgb.z() < 0.05) return {-1, 0}; // land
+    if(rgb.x() > 0.95 && rgb.y() < 0.05 && rgb.z() < 0.05) return {-1, 0.f}; // land
+//    if(rgb.x() >= 0xca/255. && rgb.y() >= 0xca/255. && rgb.z() >= 0xca/255.) return {2, 0.f}; // intact ice
+    if(rgb.x() >= 0xcd/255. && rgb.y() >= 0xd5/255. && rgb.z() >= 0xd6/255.) return {2, 0.f}; // intact ice
 
 
+
+    // check if open water
     float minDist = std::numeric_limits<float>::max();
     int bestInterval = -1;
     float bestPosition = 0.0f;
+    constexpr float openWaterThreshold = 0.05f;
 
-    for (size_t i = 0; i < colordata.size() - 1; ++i) {
+    for (int i = 0; i < colordata_OpenWater.size() - 1; ++i)
+    {
         // Convert std::array<float, 3> to Eigen::Vector3f
-        Eigen::Vector3f p0 = arrayToEigen(colordata[i]);
-        Eigen::Vector3f p1 = arrayToEigen(colordata[i + 1]);
+        Eigen::Vector3f p0 = arrayToEigen(colordata_OpenWater[i]);
+        Eigen::Vector3f p1 = arrayToEigen(colordata_OpenWater[i + 1]);
 
         Eigen::Vector3f diff = p1 - p0;
         float segmentLengthSq = diff.squaredNorm();
@@ -204,21 +299,22 @@ std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3
         if (segmentLengthSq == 0.0f) continue; // Skip degenerate segments
 
         Eigen::Vector3f v = rgb - p0;
-        float t = v.dot(diff) / segmentLengthSq;
-        t = std::clamp(t, 0.0f, 1.0f);
+        Eigen::Vector3f proj = p0 + diff * v.dot(diff)/diff.squaredNorm();
+        float dist = (rgb - proj).norm();
 
-        Eigen::Vector3f closestPoint = p0 + t * diff;
-        float distSq = (rgb - closestPoint).squaredNorm();
-
-        if (distSq < minDist) {
-            minDist = distSq;
-            bestInterval = static_cast<int>(i);
-            bestPosition = t;
+        if (dist < minDist) {
+            minDist = dist;
+            bestInterval = i;
         }
     }
+    if(minDist < openWaterThreshold) return {0, 0.f};
 
-    return {bestInterval, bestPosition};
+    // check if crushed
+    float result = projectPointOntoCurve(rgb, colordata_Crushed);
+
+    return {1,result};
 }
+
 
 void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
 {
@@ -250,7 +346,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
         if(r > 250 && g < 5 && b < 5) return false;
         Eigen::Vector3f rgb((float)r/255.,(float)g/255.,(float)b/255.);
         auto [category, interpValue] = categorizeColor(rgb);
-        if(category <= 4) return false; // either land or water
+        if(category <= 0) return false; // either land or water
         else return true; // some sort of ice
     });
 
@@ -262,6 +358,8 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
 
     // compute the X-dimension from lat/lon using haversineDistance()
     double XScale = haversineDistance((model->prms.LatMin + model->prms.LatMax)*0.5, model->prms.LonMin, model->prms.LonMax);
+    model->prms.DimensionHorizontal = XScale;
+    model->prms.DimensionVertical = XScale * model->prms.GridY / model->prms.GridXTotal;
 
     // compute cellsize
     model->prms.cellsize = XScale / (model->prms.GridXTotal-1);
@@ -269,11 +367,10 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
     spdlog::info("assumed horizontal scale: {}; cellsize {}", XScale, model->prms.cellsize);
 
     // sequentially transfer points from "buffer" to hssoa (only those counted), scale coordinates
-    int count = 0;
+    uint32_t count = 0;
     HostSideSOA &hssoa = model->gpu.hssoa;
     for(std::array<float,2> &pt : buffer)
     {
-
         auto [i,j] = idxPt(pt);
         if(i<=1 || j<=1 || i>= (imgx-2) || j>= (imgy-2)) continue; // exclude points at the boundary
         int idx_png = idxInPng(i,j);
@@ -282,26 +379,35 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
         unsigned char b = png_data[idx_png + 2];
         Eigen::Vector3f rgb((float)r/255.,(float)g/255.,(float)b/255.);
         auto [category, interpValue] = categorizeColor(rgb);
-        if(category <= 4) continue; // either land or water
+        if(category <= 0) continue; // either land or water
+        if(count == model->prms.nPtsInitial) throw std::runtime_error("when transferring from buffer to SOA - index error");
 
         // write into SOA
-        if(count == model->prms.nPtsInitial)
-        {
-            spdlog::critical("when transferring from buffer to SOA, there is and index error");
-            throw std::runtime_error("when transferring from buffer to SOA, there is and index error");
-        }
         SOAIterator it = hssoa.begin()+count;
         ProxyPoint &p = *it;
         p.setValue(SimParams::posx, pt[0]*XScale);      // set point's x-position in SOA
         p.setValue(SimParams::posx+1, pt[1]*XScale);    // set point's y-position in SOA
-        p.setValue(SimParams::idx_rgb+0, rgb[0]);
-        p.setValue(SimParams::idx_rgb+1, rgb[1]);
-        p.setValue(SimParams::idx_rgb+2, rgb[2]);
+
+        uint32_t rgba = (static_cast<uint32_t>(r) << 16) |  (static_cast<uint32_t>(g) << 8) |  static_cast<uint32_t>(b);
+        hssoa.point_colors_rgb[count] = rgba;
+        p.setValueInt(SimParams::integer_point_idx, count);
 
         uint32_t val = 0;
-        if(category <= 11) val |= 0x10000;     // crushed
-        else if(category <= 12) val |= 0x40000;     // weakened
-        p.setValueInt(SimParams::idx_utility_data, val);
+        if(category == 1)
+        {
+            val |= 0x10000;     // crushed
+            p.setValueInt(SimParams::idx_utility_data, val);
+            p.setValue(SimParams::idx_initial_strength, interpValue*0.8+0.2);
+        }
+        else
+        {
+            p.setValue(SimParams::idx_initial_strength, 1.f);
+        }
+
+        p.setValue(SimParams::idx_Jp_inv, 1.f);
+        p.setValue(SimParams::idx_Qp, 1.f);
+        for(int idx=0; idx<SimParams::dim; idx++)
+            p.setValue(SimParams::Fe00+idx*2+idx, 1.f);
 
         count++;
     }
@@ -326,7 +432,6 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
         }
 
     //model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY);
-    model->gpu.hssoa.InitializeBlock();
 
     // particle volume and mass
     model->prms.ComputeHelperVariables();
@@ -381,4 +486,54 @@ void icy::SnapshotManager::LoadWindData(std::string fileName)
                                           model->prms.SimulationStartUnixTime);
     model->prms.gridLatMin = model->wind_interpolator.gridLatMin;
     model->prms.gridLonMin = model->wind_interpolator.gridLonMin;
+}
+
+
+
+// Function to project a point onto the curve
+float icy::SnapshotManager::projectPointOntoCurve(const Eigen::Vector3f& rgb, const std::array<std::array<float, 3>, 8>& curve)
+{
+    float minDistance = std::numeric_limits<float>::max();
+    float relativePosition = 0.0f;
+
+    // Total length of the curve
+    float totalLength = 0.0f;
+
+    // Loop through the segments
+    for (size_t i = 0; i < curve.size() - 1; ++i) {
+        // Define segment points
+        Eigen::Vector3f p0(curve[i][0], curve[i][1], curve[i][2]);
+        Eigen::Vector3f p1(curve[i+1][0], curve[i+1][1], curve[i+1][2]);
+
+        // Vector along the segment
+        Eigen::Vector3f segment = p1 - p0;
+
+        // Project rgb onto the infinite line
+        float t = (rgb - p0).dot(segment) / segment.squaredNorm();
+
+        // Clamp t to [0, 1] to stay on the segment
+        t = std::clamp(t, 0.0f, 1.0f);
+
+        // Compute the projected point
+        Eigen::Vector3f projection = p0 + t * segment;
+
+        // Compute the distance from rgb to the projection
+        float distance = (rgb - projection).norm();
+
+        // Update the closest segment if necessary
+        if (distance < minDistance) {
+            minDistance = distance;
+
+            // Compute relative position along the curve
+            float segmentLength = segment.norm();
+            float positionOnSegment = totalLength + t * segmentLength;
+            totalLength += segmentLength;
+
+            relativePosition = positionOnSegment / totalLength;
+        } else {
+            totalLength += segment.norm();
+        }
+    }
+
+    return relativePosition; // Relative position in [0, 1]
 }

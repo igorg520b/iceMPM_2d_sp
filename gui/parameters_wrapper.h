@@ -61,42 +61,22 @@ class ParamsWrapper : public QObject
     Q_PROPERTY(QString b_Grid READ getGridDimensions NOTIFY propertyChanged)
     QString getGridDimensions() {return QString("%1 x %2").arg(prms->GridXTotal).arg(prms->GridY);}
 
-    Q_PROPERTY(double nacc_beta READ getNaccBeta NOTIFY propertyChanged)
-    double getNaccBeta() {return prms->NACC_beta;}
-
-    Q_PROPERTY(double nacc_pc READ getNaccPc NOTIFY propertyChanged)
-    double getNaccPc() {return (1 - prms->NACC_beta)*prms->IceCompressiveStrength/2.;}
-
-    Q_PROPERTY(double nacc_M READ getNaccM NOTIFY propertyChanged)
-    double getNaccM() {return sqrt(prms->NACC_M);}
-
-
-
     // Drucker-Prager
     Q_PROPERTY(double DP_threshold_p READ getDP_threshold_p WRITE setDP_threshold_p NOTIFY propertyChanged)
     double getDP_threshold_p() {return prms->DP_threshold_p;}
     void setDP_threshold_p(double val) {prms->DP_threshold_p = val;}
 
-    Q_PROPERTY(double DP_phi READ getDPPhi WRITE setDPPhi NOTIFY propertyChanged)
-    double getDPPhi() {return std::atan(prms->DP_tan_phi)*180/SimParams::pi;}
-    void setDPPhi(double val) {prms->DP_tan_phi = tan(val*SimParams::pi/180);}
+    Q_PROPERTY(double DP_phi READ getDPPhi NOTIFY propertyChanged)
+    double getDPPhi() {return prms->DP_phi;}
 
-    Q_PROPERTY(double DP_tan_phi READ getDPTanPhi NOTIFY propertyChanged)
-    double getDPTanPhi() {return prms->DP_tan_phi;}
-
-
-    Q_PROPERTY(double ice_CompressiveStr READ getIce_CompressiveStr WRITE setIce_CompressiveStr NOTIFY propertyChanged)
+    Q_PROPERTY(double ice_CompressiveStr READ getIce_CompressiveStr NOTIFY propertyChanged)
     double getIce_CompressiveStr() {return prms->IceCompressiveStrength;}
-    void setIce_CompressiveStr(double val) {prms->IceCompressiveStrength = val; prms->ComputeCamClayParams2();}
 
-    Q_PROPERTY(double ice_TensileStr READ getIce_TensileStr WRITE setIce_TensileStr NOTIFY propertyChanged)
+    Q_PROPERTY(double ice_TensileStr READ getIce_TensileStr NOTIFY propertyChanged)
     double getIce_TensileStr() {return prms->IceTensileStrength;}
-    void setIce_TensileStr(double val) {prms->IceTensileStrength = val; prms->ComputeCamClayParams2();}
 
-    Q_PROPERTY(double ice_ShearStr READ getIce_ShearStr WRITE setIce_ShearStr NOTIFY propertyChanged)
+    Q_PROPERTY(double ice_ShearStr READ getIce_ShearStr NOTIFY propertyChanged)
     double getIce_ShearStr() {return prms->IceShearStrength;}
-    void setIce_ShearStr(double val) {prms->IceShearStrength = val; prms->ComputeCamClayParams2();}
-
 
     Q_PROPERTY(int tpb_P2G READ get_tpb_P2G WRITE set_tpb_P2G NOTIFY propertyChanged)
     int get_tpb_P2G() {return prms->tpb_P2G;}
@@ -110,13 +90,13 @@ class ParamsWrapper : public QObject
     int get_tpb_G2P() {return prms->tpb_G2P;}
     void set_tpb_G2P(int val) { prms->tpb_G2P = val; }
 
-    Q_PROPERTY(double pt_per_cell READ getPtPerCell NOTIFY propertyChanged)
-    double getPtPerCell() {return prms->PointsPerCell();}
-
     Q_PROPERTY(double grainVariability READ getGrainVariability NOTIFY propertyChanged)
     double getGrainVariability() {return prms->GrainVariability;}
 
-
+    Q_PROPERTY(QString span READ getSpan NOTIFY propertyChanged)
+    QString getSpan() {
+        return QString("%1 x %2 km").arg(prms->DimensionHorizontal/1000, 0, 'f', 1).arg(prms->DimensionVertical/1000, 0, 'f', 1);
+    }
 
 public:
     ParamsWrapper(SimParams *p)

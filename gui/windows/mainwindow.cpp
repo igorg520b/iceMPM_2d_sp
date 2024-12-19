@@ -20,7 +20,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     params = new ParamsWrapper(&model.prms);
-    snapshot.model = &model;
     representation.model = &model;
     worker = new BackgroundWorker(&model);
     representation.SynchronizeTopology();
@@ -55,6 +54,11 @@ MainWindow::MainWindow(QWidget *parent)
     qdsbValRange->setSingleStep(0.25);
     ui->toolBar->addWidget(qdsbValRange);
 
+    qsbIntentionalSlowdown = new QSpinBox();
+    qsbIntentionalSlowdown->setRange(0,1000);
+    qsbIntentionalSlowdown->setValue(0);
+    ui->toolBar->addWidget(qsbIntentionalSlowdown);
+
     // statusbar
     statusLabel = new QLabel();
     labelElapsedTime = new QLabel();
@@ -82,7 +86,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 // anything that includes the Model
     renderer->AddActor(representation.actor_points);
-    renderer->AddActor(representation.actor_grid);
+//    renderer->AddActor(representation.actor_grid);
     renderer->AddActor(representation.actor_grid2);
     renderer->AddActor(representation.actorText);
     renderer->AddActor(representation.scalarBar);
@@ -193,6 +197,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->actionLoad_Parameters, &QAction::triggered, this, &MainWindow::load_parameter_triggered);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MainWindow::limits_changed);
+    connect(qsbIntentionalSlowdown,QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::spinbox_slowdown_value_changed);
 
     connect(worker, SIGNAL(workerPaused()), SLOT(background_worker_paused()));
     connect(worker, SIGNAL(stepCompleted()), SLOT(simulation_data_ready()));
@@ -304,8 +309,6 @@ void MainWindow::load_parameter_triggered()
 void MainWindow::simulation_data_ready()
 {
     updateGUI();
-//    snapshot.SaveSnapshot(outputDirectory);
-//    snapshot.SavePQ(outputDirectory);
     if(ui->actionTake_Screenshots->isChecked())
         screenshot();
     model.UnlockCycleMutex();
@@ -316,9 +319,8 @@ void MainWindow::updateGUI()
 {
     labelStepCount->setText(QString::number(model.prms.SimulationStep));
     labelElapsedTime->setText(QString("%1 s").arg(model.prms.SimulationTime,0,'f',0));
-    labelWindSpeed->setText(QString("%1 m/s").arg(model.windSpeed,0,'f',2));
-    labelWindDirection->setText(QString("%1 deg").arg(model.windAngle,0,'f',0));
-
+//    labelWindSpeed->setText(QString("%1 m/s").arg(model.windSpeed,0,'f',2));
+//    labelWindDirection->setText(QString("%1 deg").arg(model.windAngle,0,'f',0));
 
     // display date
     int64_t display_date = (int64_t)model.prms.SimulationTime + model.prms.SimulationStartUnixTime;
@@ -399,13 +401,13 @@ void MainWindow::LoadParameterFile(QString qFileName)
 {
     std::map<std::string,std::string> additionalFiles = model.prms.ParseFile(qFileName.toStdString());
 
-    snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"]);
+    model.snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"]);
     this->qLastParameterFile = qFileName;
     this->setWindowTitle(qLastParameterFile);
 
     if(additionalFiles.count("InputWindData") > 0)
     {
-        snapshot.LoadWindData(additionalFiles["InputWindData"]);
+        model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
         model.use_GFS_wind = true;
     }
 
@@ -420,7 +422,8 @@ void MainWindow::sliderValueChanged(int val)
     float b_val = (float)val/1000.;
     float max_val = 11.0*24*3600;
     float set_val = b_val*max_val;
-    model.prms.SimulationTime = b_val*max_val;
+
+    representation.wind_visualization_time = b_val*max_val;
     representation.SynchronizeValues();
     renderWindow->Render();
 
@@ -432,4 +435,9 @@ void MainWindow::sliderValueChanged(int val)
     char buffer[100];
     std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
     representation.actorText->SetInput(buffer);
+}
+
+void MainWindow::spinbox_slowdown_value_changed(int val)
+{
+    model.intentionalSlowdown = val;
 }

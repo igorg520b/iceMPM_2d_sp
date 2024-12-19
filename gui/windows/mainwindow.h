@@ -23,6 +23,7 @@
 #include <QIODevice>
 #include <QSettings>
 #include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QFileInfo>
 
 #include <QVTKOpenGLNativeWidget.h>
@@ -84,6 +85,7 @@ private Q_SLOTS:
     void comboboxIndexChanged_visualizations(int index);
     void limits_changed(double val);
     void sliderValueChanged(int val);
+    void spinbox_slowdown_value_changed(int val);
 
 private:
     void updateGUI();   // when simulation is started/stopped or when a step is advanced
@@ -94,7 +96,6 @@ private:
 
     BackgroundWorker *worker;
     icy::VisualRepresentation representation;
-    icy::SnapshotManager snapshot;
     ParamsWrapper *params;
 
     QString settingsFileName;       // includes current dir
@@ -104,6 +105,7 @@ private:
     QLabel *labelWindSpeed, *labelWindDirection;
     QComboBox *comboBox_visualizations;
     QDoubleSpinBox *qdsbValRange;   // high and low limits for value scale
+    QSpinBox *qsbIntentionalSlowdown;
 
     ObjectPropertyBrowser *pbrowser;    // to show simulation settings/properties
     QSplitter *splitter;

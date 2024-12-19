@@ -39,7 +39,8 @@ __global__ void partition_kernel_g2p(const bool recordPQ,
 
 __device__ void svd2x2(const PointMatrix2r &mA, PointMatrix2r &mU, PointVector2r &mS, PointMatrix2r &mV);
 
-__device__ void Wolper_Drucker_Prager(const t_PointReal &p_tr, const t_PointReal &q_tr, const t_PointReal &Je_tr,
+__device__ void Wolper_Drucker_Prager(const t_PointReal &initial_strength,
+                                      const t_PointReal &p_tr, const t_PointReal &q_tr, const t_PointReal &Je_tr,
                                       const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquared, const PointVector2r &v_s_hat_tr,
                                       PointMatrix2r &Fe, t_PointReal &Jp_inv);
 
@@ -51,7 +52,7 @@ __device__ void ComputeSVD(const PointMatrix2r &Fe, PointMatrix2r &U, PointVecto
                            const t_PointReal &kappa, const t_PointReal &mu, const t_PointReal &Je_tr);
 
 __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_tr,
-                          const t_PointReal &kappa, const t_PointReal &mu, const PointMatrix2r &F);
+                          const double &kappa, const double &mu, const PointMatrix2r &F);
 
 __device__ void GetParametersForGrain(uint32_t utility_data, t_PointReal &pmin, t_PointReal &pmax, t_PointReal &qmax,
                                       t_PointReal &beta, t_PointReal &mSq, t_PointReal &pmin2);
@@ -63,8 +64,6 @@ __device__ PointVector2r dev_d(PointVector2r Adiag);
 __device__ PointMatrix2r dev(PointMatrix2r A);
 
 __device__ void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3]);
-
-__device__ PointMatrix2r Water(const t_PointReal J);
 
 __device__ t_PointReal smoothstep(t_PointReal x);
 

@@ -18,6 +18,7 @@
 #include "point.h"
 #include "gpu_implementation5.h"
 #include "windinterpolator.h"
+#include "snapshotmanager.h"
 
 #include <Eigen/Core>
 #include <Eigen/SVD>
@@ -45,6 +46,7 @@ public:
 
     SimParams prms;
     WindInterpolator wind_interpolator;
+    icy::SnapshotManager snapshot;
     std::vector<std::array<float,3>> wind_data;
     float windSpeed, windAngle;
     GPU_Implementation5 gpu;
@@ -55,8 +57,7 @@ public:
 
     // wind data from netCDF4 file
     bool use_GFS_wind = false;  // chagnes to true if netCDF4 file is provided
-    std::vector<int64_t> valid_time;
-
+    int intentionalSlowdown = 0; // add delay after each computation step to unload GPU
 
 private:
     bool abortRequested;

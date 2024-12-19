@@ -23,10 +23,14 @@ public:
     constexpr static double gridCellSize = 0.25; // in degrees
     constexpr static int timeResolution = 3600; // data updated every hour
     constexpr static size_t gridArraySize = allocatedLatExtent*allocatedLonExtent*4*sizeof(float);
+
     float grid[allocatedLatExtent][allocatedLonExtent][4];  // copy to __constant__ on the device
     Eigen::Vector2f gridv[allocatedLatExtent][allocatedLonExtent][2];
 
+    int extentLat, extentLon, nTimeIntervals;   // actual extent
     double gridLatMin, gridLonMin;   // this is where the grid starts (copy to SimParams)
+    int64_t valid_time_front;
+    double LatMin, LatMax, LonMin, LonMax;  // region of interest
 
      // returns true if the contents of "grid" array changed;
     // interpolationParam is a value in [0,1) range between the two selected time frames
@@ -36,21 +40,13 @@ public:
 
     int currentInterval = -1;   // selected time interval in the "grid" array
     bool isInitialized = false;
-    int extentLat, extentLon;   // actual extent
-    double LatMin, LatMax, LonMin, LonMax;  // region of interest
+
+    void SaveToOwnHDF5(H5::H5File &file);
 private:
     int64_t simulation_start_date;  // set once upon data load
 
-    int idxLatMin, idxLatMax, idxLonMin, idxLonMax;
 
-    std::vector<double> latitudes, longitudes;
-    std::vector<int64_t> valid_time;
     std::vector<float> u_data, v_data;  // raw data loaded from netCDF4
-
-    void read_indices_from_HDF5(H5::H5File &file);
-    void read_UV_from_HDF5(H5::H5File &file);
-    void verify_deltas();
-    void find_indices_of_overlapping_region();
 
     size_t getIndexInUV(size_t timeIndex, size_t idxLat, size_t idxLon);
 
