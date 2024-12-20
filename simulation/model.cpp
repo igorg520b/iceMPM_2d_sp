@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <thread>
 
-icy::Model::Model()
+icy::Model::Model() : frame_ready(false), done(false)
 {
     snapshot.model = this;
     prms.SimulationStep = 0;
@@ -30,17 +30,66 @@ icy::Model::Model()
         if(angle >= 360) angle = 0;
     }
 */
+    saver_thread = std::thread(&icy::Model::SaveThread, this);
     spdlog::info("Model constructor");
 }
 
 
+void icy::Model::SaveFrameRequest(int SimulationStep, double SimulationTime)
+{
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        saving_SimulationStep = SimulationStep;
+        saving_SimulationTime = SimulationTime;
+        frame_ready = true; // Indicate that a new frame is ready
+    }
+    frame_cv.notify_one(); // Notify the saver thread
+}
 
 
-icy::Model::~Model() {}
+icy::Model::~Model()
+{
+    {
+    std::lock_guard<std::mutex> lock(frame_mutex);
+    done = true; // Signal that we're done
+    saving_SimulationStep = -1;
+    }
+    frame_cv.notify_one(); // Notify the saver thread
+    saver_thread.join();   // Wait for the thread to finish
+}
+
+
+// Frame-saving thread function
+void icy::Model::SaveThread() {
+    while (true) {
+        // Wait for a frame to save or for the simulation to finish
+        {
+            std::unique_lock<std::mutex> lock(frame_mutex);
+            frame_cv.wait(lock, [this] { return frame_ready || done.load(); });
+
+            if (frame_ready) {
+                frame_ready = false; // Mark the frame as consumed
+            } else if (done.load()) {
+                break; // Exit if simulation is finished
+            }
+        }
+
+        // Save the frame outside the critical section
+        if (saving_SimulationStep != -1) {
+            bool saveSnapshot = (saving_SimulationStep/prms.UpdateEveryNthStep)%SimParams::snapshotFrequency == 0;
+            accessing_point_data.lock();
+            if(saveSnapshot) snapshot.SaveSnapshot(saving_SimulationStep, saving_SimulationTime);
+            snapshot.SaveFrame(saving_SimulationStep, saving_SimulationTime);
+            accessing_point_data.unlock();
+
+            saving_SimulationStep = -1;
+        }
+    }
+}
 
 bool icy::Model::Step()
 {
-    if(prms.SimulationStep == 0) { snapshot.SaveSnapshot(); snapshot.SaveFrame(); }
+    if(prms.SimulationStep == 0) SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
 
     float simulation_time = prms.SimulationTime;
     std::cout << '\n';
@@ -109,12 +158,9 @@ bool icy::Model::Step()
         spdlog::info("Model::Step() rebalancing done");
     }
 
-    bool saveSnapshot = prms.AnimationFrameNumber()%SimParams::snapshotFrequency == 0;
-    if(saveSnapshot) { snapshot.SaveSnapshot(); snapshot.previous_frame_exists = false; }
-    snapshot.SaveFrame();
-
-
     accessing_point_data.unlock();
+    SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
+
 
     return (prms.SimulationTime < prms.SimulationEndTime);
 }
@@ -130,7 +176,7 @@ void icy::Model::UnlockCycleMutex()
 void icy::Model::Prepare()
 {
     spdlog::info("icy::Model::Prepare()");
-    abortRequested = false;
+    //abortRequested = false;
     gpu.update_constants();
 
 

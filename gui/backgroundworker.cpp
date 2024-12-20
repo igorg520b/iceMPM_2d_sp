@@ -21,13 +21,13 @@ void BackgroundWorker::Pause()
 {
     if(!running) return;
     timeToPause = true;
-    controller->RequestAbort();
+    //controller->RequestAbort();
 }
 
 // exit the worker thread
 void BackgroundWorker::Finalize()
 {
-    controller->RequestAbort();
+    //controller->RequestAbort();
     kill=true;
     condition.wakeOne();
     bool result = wait();

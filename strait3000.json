@@ -1,5 +1,5 @@
 {
-"InputPNG":"/home/s2/Documents/_Kvarken_images/strait2_March_20_2000.png",
+"InputPNG":"/home/s2/Projects-CUDA/iceMPM_2d_sp/_maps/strait2_March_20_3000.png",
 "InputWindData":"/home/s2/Projects-CUDA/iceMPM_2d_sp/_wind_data/data_stream-oper_stepType-instant.nc",
 "LatMin":63.2540559,
 "LonMin":19.7794673,
@@ -7,7 +7,7 @@
 "LonMax":21.877357,
 "SimulationStartUnixTime":1521547200,
 
-"InitialTimeStep":0.021,
+"InitialTimeStep":0.014,
 "SimulationEndTime":900000,
 "ParticleViewSize":1.0,
 "AnimationFramesRequested":10000,
@@ -21,6 +21,7 @@
 "GrainVariability":0.95,
 
 "PoissonsRatio":0.3,
+"Gravity":9.81,
 
 "tpb_P2G":256,
 "tpb_Upd":512,

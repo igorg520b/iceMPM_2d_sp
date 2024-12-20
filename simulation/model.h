@@ -13,6 +13,9 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <thread>
+#include <condition_variable>
+#include <atomic>
 
 #include "parameters_sim.h"
 #include "point.h"
@@ -40,7 +43,6 @@ public:
 
     void Prepare();        // invoked once, at simulation start
     bool Step();           // either invoked by Worker or via GUI
-    void RequestAbort() {abortRequested = true;}   // asynchronous stop
 
     void UnlockCycleMutex();
 
@@ -60,7 +62,17 @@ public:
     int intentionalSlowdown = 0; // add delay after each computation step to unload GPU
 
 private:
-    bool abortRequested;
+    void SaveThread();
+    void SaveFrameRequest(int SimulationStep, double SimulationTime);
+    std::thread saver_thread;
+    std::mutex frame_mutex;
+    std::condition_variable frame_cv;
+    bool frame_ready;
+    std::atomic<bool> done;
+    int saving_SimulationStep = -1;
+    double saving_SimulationTime;
+
+
     std::pair<float, float> interpolateWind(float current_time);
 };
 

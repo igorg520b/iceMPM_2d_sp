@@ -14,7 +14,7 @@
 #include <cuda_runtime.h>
 
 #include <functional>
-
+#include <vector>
 
 namespace icy { class Model; }
 
@@ -27,9 +27,10 @@ class GPU_Implementation5
 public:
     icy::Model *model;
     std::vector<GPU_Partition> partitions;
-    HostSideSOA hssoa;
+    HostSideSOA hssoa;  // mainly stores host-side points
+    std::vector<t_GridReal> grid_visualized_data;
 
-    std::function<void()> transfer_completion_callback;
+    std::function<void()> transfer_completion_callback; // currently not used
 
     void initialize();
     void allocate_arrays();
@@ -48,8 +49,6 @@ public:
     void update_nodes(float simulation_time, float windSpeed, float windAngle);
     void g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw);
     void record_timings(const bool enablePointTransfer);
-
-    // the size of this buffer (in the number of points) is stored in PointsHostBufferCapacity
 
 private:
 

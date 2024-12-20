@@ -16,8 +16,8 @@
 #include <H5Cpp.h>
 // variables related to the formulation of the model
 
-//typedef double real;
-typedef float real;
+typedef double real;
+//typedef float real;
 typedef real t_GridReal;      // data type for grid data
 typedef real t_PointReal;     // data type to store point data
 
@@ -36,7 +36,7 @@ public:
     constexpr static float MPM_points_per_cells = 5.0;    // approximate average value
 
     constexpr static int dim = 2;
-    constexpr static int nGridArrays = 3; // mass, px, py, wind.norm
+    constexpr static int nGridArrays = 3; // mass, px, py
     constexpr static int snapshotFrequency = 25;
 
     // index of the corresponding array in SoA

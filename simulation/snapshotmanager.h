@@ -7,6 +7,7 @@
 #include <string_view>
 #include <filesystem>
 
+
 #include <H5Cpp.h>
 #include <Eigen/Core>
 
@@ -20,16 +21,17 @@ public:
 
     void PreparePointsAndSetupGrid(std::string fileName);   // use PNG image file
     void LoadWindData(std::string fileName);    // netCDF4 data
-    void SaveSnapshot();
-    void SaveFrame();
+    void SaveSnapshot(int SimulationStep, double SimulationTime);
+    void SaveFrame(int SimulationStep, double SimulationTime);
 
 private:
-    int imgx, imgy, channels;
-    unsigned char* png_data;
+    std::vector<uint8_t> tmp;   // used for counting points per cell and image generation
+    std::vector<float> vis_r, vis_g, vis_b, vis_alpha, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
 
     constexpr static std::string_view pts_cache_path = "_data/point_cache";
     constexpr static std::string_view snapshot_path = "_data/snapshots";
     constexpr static std::string_view frame_path = "_data/frames";
+    constexpr static std::string_view image_path = "_data/images";
 
     static constexpr double degreesToRadians(double degrees) { return degrees * M_PI / 180.0; }
     static double haversineDistance(double lat, double lon1, double lon2);
@@ -37,7 +39,7 @@ private:
     static bool attempt_to_fill_from_cache(int gx, int gy, std::vector<std::array<float, 2>> &buffer);
     static void generate_and_save(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
 
-    void load_png(std::string pngFileName);
+    void load_png(std::string pngFileName, unsigned char* &png_data);
 
 
     static constexpr std::array<std::array<float, 3>, 6> colordata_OpenWater = {{

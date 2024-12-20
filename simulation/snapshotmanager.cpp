@@ -20,27 +20,124 @@
 #include "stb_image.h"
 
 
-void icy::SnapshotManager::SaveFrame()
+void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
 {
+    const int gridSize = model->prms.GridXTotal*model->prms.GridY;
+    tmp.assign(gridSize*3,0); // in case we render a 3-channel image
+    vis_vx.assign(gridSize,0);
+    vis_vy.assign(gridSize,0);
+    vis_r.assign(gridSize,0);
+    vis_g.assign(gridSize,0);
+    vis_b.assign(gridSize,0);
+
+    vis_Jpinv.assign(gridSize,0);
+    vis_P.assign(gridSize,0);
+    vis_Q.assign(gridSize,0);
+
+    vis_alpha.assign(gridSize,0);
+
+    const int nPts = model->gpu.hssoa.size;
+
+    for(int i=0;i<nPts;i++)
+    {
+        SOAIterator s = model->gpu.hssoa.begin()+i;
+        //PointVector2r pos = s->getPos(model->prms.cellsize);
+        int cellIdx = s->getCellIndex(model->prms.GridY);
+
+        tmp[cellIdx]++;
+        vis_vx[cellIdx] += static_cast<float>(s->getValue(SimParams::velx+0));
+        vis_vy[cellIdx] += static_cast<float>(s->getValue(SimParams::velx+1));
+
+        int pt_idx = s->getValueInt(SimParams::integer_point_idx);
+        uint32_t rgb = model->gpu.hssoa.point_colors_rgb[pt_idx];
+        uint8_t r = (rgb >> 16) & 0xff;
+        uint8_t g = (rgb >> 8) & 0xff;
+        uint8_t b = rgb & 0xff;
+
+        vis_r[cellIdx] += r/255.;
+        vis_g[cellIdx] += g/255.;
+        vis_b[cellIdx] += b/255.;
+
+        vis_Jpinv[cellIdx] += static_cast<float>(s->getValue(SimParams::idx_Jp_inv));
+        vis_P[cellIdx] += static_cast<float>(s->getValue(SimParams::idx_P));
+        vis_Q[cellIdx] += static_cast<float>(s->getValue(SimParams::idx_Q));
+    }
+
+#pragma omp parallel for
+    for(int i=0;i<gridSize;i++)
+    {
+        int n = tmp[i];
+        float coeff = 1./n;
+        vis_vx[i] *= coeff;
+        vis_vy[i] *= coeff;
+        vis_r[i] *= coeff;
+        vis_g[i] *= coeff;
+        vis_b[i] *= coeff;
+        vis_Jpinv[i] *= coeff;
+        vis_P[i] *= coeff;
+        vis_Q[i] *= coeff;
+        vis_alpha[i] = std::min(n*0.2f,1.f);
+    }
+
+
     std::string s_path(frame_path);
     std::filesystem::path directory_path(frame_path);
     if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
+    int frame = SimulationStep / model->prms.UpdateEveryNthStep;
 
     std::string fileName = fmt::format("{}/frame_{:05d}.h5", s_path, frame);
     H5::H5File file(fileName, H5F_ACC_TRUNC);
 
+    hsize_t dims_grid[2] = {(hsize_t)model->prms.GridXTotal, (hsize_t)model->prms.GridY};
+    H5::DataSpace dataspace_grid(2, dims_grid);
+
+    H5::DSetCreatPropList proplist;
+    hsize_t chunk_dims[2] = {256, (hsize_t)model->prms.GridY};
+    proplist.setChunk(2, chunk_dims);
+    proplist.setDeflate(3);
+
+    H5::DataSet ds_vis_vx = file.createDataSet("vis_vx", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_vx.write(vis_vx.data(), H5::PredType::NATIVE_FLOAT);
+
+    H5::DataSet ds_vis_vy = file.createDataSet("vis_vy", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_vy.write(vis_vy.data(), H5::PredType::NATIVE_FLOAT);
+
+    H5::DataSet ds_vis_JpInv = file.createDataSet("vis_Jpinv", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_JpInv.write(vis_Jpinv.data(), H5::PredType::NATIVE_FLOAT);
+
+    H5::DataSet ds_vis_P = file.createDataSet("vis_P", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_P.write(vis_P.data(), H5::PredType::NATIVE_FLOAT);
+
+    H5::DataSet ds_vis_Q = file.createDataSet("vis_Q", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_Q.write(vis_Q.data(), H5::PredType::NATIVE_FLOAT);
+
+    H5::DataSet ds_vis_r = file.createDataSet("vis_r", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_r.write(vis_r.data(), H5::PredType::NATIVE_FLOAT);
+    H5::DataSet ds_vis_g = file.createDataSet("vis_g", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_g.write(vis_g.data(), H5::PredType::NATIVE_FLOAT);
+    H5::DataSet ds_vis_b = file.createDataSet("vis_b", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_b.write(vis_b.data(), H5::PredType::NATIVE_FLOAT);
+    H5::DataSet ds_vis_alpha = file.createDataSet("vis_alpha", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
+    ds_vis_alpha.write(vis_alpha.data(), H5::PredType::NATIVE_FLOAT);
+
+    H5::DataSet ds_count = file.createDataSet("count", H5::PredType::NATIVE_UINT8, dataspace_grid, proplist);
+    ds_count.write(tmp.data(), H5::PredType::NATIVE_UINT8);
+
+    H5::DataSpace att_dspace(H5S_SCALAR);
+    ds_count.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &SimulationStep);
+    ds_count.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
 }
 
 
 
-void icy::SnapshotManager::SaveSnapshot()
+void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTime)
 {
     //snapshot_path
     std::string s_path(snapshot_path);
     std::filesystem::path directory_path(snapshot_path);
     if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
 
-    int frame = model->prms.AnimationFrameNumber();
+    int frame = SimulationStep / model->prms.UpdateEveryNthStep;
     if(frame == 0)
     {
         // save wind data, grid/land, and point colors
@@ -98,19 +195,15 @@ void icy::SnapshotManager::SaveSnapshot()
     dataset_pts.write(model->gpu.hssoa.host_buffer, dtype, memspace, dataspace_points);
 
     H5::DataSpace att_dspace(H5S_SCALAR);
-    dataset_pts.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &model->prms.SimulationStep);
-
-    double simulationTime = static_cast<double>(model->prms.SimulationTime);
-    dataset_pts.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &simulationTime);
-
+    dataset_pts.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &SimulationStep);
+    dataset_pts.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
     dataset_pts.createAttribute("HSSOA_size", H5::PredType::NATIVE_UINT, att_dspace).write(H5::PredType::NATIVE_UINT, &model->gpu.hssoa.size);
-
     int nPtsArrays = SimParams::nPtsArrays;
     dataset_pts.createAttribute("nPtsArrays", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &nPtsArrays);
 }
 
 
-void icy::SnapshotManager::load_png(std::string pngFileName)
+void icy::SnapshotManager::load_png(std::string pngFileName, unsigned char* &png_data)
 {
     if (!std::filesystem::exists(pngFileName))
     {
@@ -118,6 +211,8 @@ void icy::SnapshotManager::load_png(std::string pngFileName)
         throw std::runtime_error("png does not exist");
     }
 
+    int channels;
+    int imgx, imgy;
     const char* filename = pngFileName.c_str();
     png_data = stbi_load(filename, &imgx, &imgy, &channels, 3); // request 3 channels - RGB
 
@@ -319,7 +414,10 @@ std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3
 void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
 {
     spdlog::info("icy::SnapshotManager::PreparePointsAndSetupGrid {}",fileName);
-    load_png(fileName);
+    unsigned char* png_data;
+    load_png(fileName, png_data);
+    const int &imgx = model->prms.GridXTotal;
+    const int &imgy = model->prms.GridY;
 
     // either load or generate points
     std::vector<std::array<float, 2>> buffer;   // initial buffer for points
@@ -397,7 +495,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
         {
             val |= 0x10000;     // crushed
             p.setValueInt(SimParams::idx_utility_data, val);
-            p.setValue(SimParams::idx_initial_strength, interpValue*0.8+0.2);
+            p.setValue(SimParams::idx_initial_strength, interpValue*0.3+0.1);
         }
         else
         {
@@ -447,8 +545,6 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
     stbi_image_free(png_data);
     spdlog::info("PreparePointsAndSetupGrid done\n");
 }
-
-
 
 
 
