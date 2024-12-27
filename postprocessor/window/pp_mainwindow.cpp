@@ -23,9 +23,10 @@ PPMainWindow::~PPMainWindow() {delete ui;}
 
 PPMainWindow::PPMainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , ui(new Ui::PPMainWindow)
+    , ui(new Ui::PPMainWindow), representation(frameData)
 {
     ui->setupUi(this);
+//    representation.frameData = this->frameData;
 
     // VTK
     qt_vtk_widget = new QVTKOpenGLNativeWidget();
@@ -49,7 +50,8 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     ui->toolBar->addWidget(qdsbValRange);
 
 // anything that includes the Model
-//    renderer->AddActor(representation.actor_grid);
+    renderer->AddActor(representation.actor_grid_main);
+    renderer->AddActor(representation.actor_text);
 
     // populate combobox
     QMetaEnum qme = QMetaEnum::fromType<VTKVisualization::VisOpt>();
@@ -169,6 +171,8 @@ void PPMainWindow::open_frame_triggered()
 
     if(qFileName.isNull())return;
     frameData.LoadHDF5Frame(qFileName.toStdString());
+    representation.SynchronizeTopology();
+    renderWindow->Render();
 }
 
 

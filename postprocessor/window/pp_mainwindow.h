@@ -69,6 +69,8 @@ private Q_SLOTS:
 
 private:
     FrameData frameData;
+    VTKVisualization representation;
+
     void updateGUI();
     void OpenSnapshot(QString fileName);
 

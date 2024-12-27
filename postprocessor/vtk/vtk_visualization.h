@@ -34,13 +34,16 @@
 #include <vtkFloatArray.h>
 #include <vtkIntArray.h>
 
+#include "framedata.h"
 
 class VTKVisualization : public QObject
 {
     Q_OBJECT
 
 public:
-    VTKVisualization();
+    FrameData &frameData;
+
+    VTKVisualization(FrameData& fd);
 
     double wind_visualization_time;
 

@@ -7,7 +7,7 @@
 
 
 
-VTKVisualization::VTKVisualization()
+VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
 {
     populateLut(lutArrayTemperatureAdj, (sizeof(lutArrayTemperatureAdj)/(sizeof(lutArrayTemperatureAdj[0]))), hueLut_temperature);
     populateLut(lutSouthwest, (sizeof(lutSouthwest)/(sizeof(lutSouthwest[0]))), hueLut_Southwest);
@@ -26,30 +26,30 @@ VTKVisualization::VTKVisualization()
     txtprop->SetColor(0,0,0);
     actor_text->SetDisplayPosition(500, 30);
 
+    // main grid
+    mapper_grid_main->SetInputData(structuredGrid_main);
+    actor_grid_main->SetMapper(mapper_grid_main);
+
+    actor_grid_main->GetProperty()->SetEdgeVisibility(false);
+    actor_grid_main->GetProperty()->LightingOff();
+    actor_grid_main->GetProperty()->ShadingOff();
+    actor_grid_main->PickableOff();
+
+    // main grid color data
+    visualized_values_grid->SetName("visualized_values_grid");
+    structuredGrid_main->GetCellData()->AddArray(visualized_values_grid);
+    structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
+    mapper_grid_main->UseLookupTableScalarRangeOn();
+
 
  /*
-    // GRID
-    grid_mapper->SetInputData(structuredGrid);
 //    grid_mapper->SetLookupTable(hueLut);
 
-    actor_grid->SetMapper(grid_mapper);
-    actor_grid->GetProperty()->SetEdgeVisibility(true);
     actor_grid->GetProperty()->SetEdgeColor(0.2,0.2,0.2);
-    actor_grid->GetProperty()->LightingOff();
-    actor_grid->GetProperty()->ShadingOff();
-    actor_grid->GetProperty()->SetInterpolationToFlat();
-    actor_grid->PickableOff();
     actor_grid->GetProperty()->SetColor(0.1,0.1,0.1);
     actor_grid->GetProperty()->SetRepresentationToWireframe();
 
     // grid2
-    visualized_values_grid->SetName("visualized_values_grid");
-    structuredGrid2->GetCellData()->AddArray(visualized_values_grid);
-    structuredGrid2->GetCellData()->SetActiveScalars("visualized_values_grid");
-
-    grid_mapper2->SetInputData(structuredGrid2);
-    grid_mapper2->SetLookupTable(hueLut_four);
-    grid_mapper2->UseLookupTableScalarRangeOn();
     points_mapper->UseLookupTableScalarRangeOn();
 
 
@@ -81,10 +81,32 @@ VTKVisualization::VTKVisualization()
 
 void VTKVisualization::SynchronizeTopology()
 {
+    spdlog::info("SynchronizeTopology()");
+    // actor_grid_main
+    const int gx = frameData.prms.GridXTotal;
+    const int gy = frameData.prms.GridY;
+    const double h = frameData.prms.cellsize;
+
+    int gx1 = gx+1;
+    int gy1 = gy+1;
+
+    structuredGrid_main->SetDimensions(gx1, gy1, 1);
+    grid_main_points->SetNumberOfPoints(gx1*gy1);
+    for(int idx_y=0; idx_y<=gy; idx_y++)
+        for(int idx_x=0; idx_x<=gx; idx_x++)
+        {
+            double x = (idx_x-0.5)*h;
+            double y = (idx_y-0.5)*h;
+            double pt_pos[3] {x, y, -3.0};
+            grid_main_points->SetPoint((vtkIdType)(idx_x+idx_y*gx1), pt_pos);
+        }
+    structuredGrid_main->SetPoints(grid_main_points);
+
+
+
     /*
     model->accessing_point_data.lock();
 
-    spdlog::info("SynchronizeTopology()");
 
     const int nPts = model->gpu.hssoa.size;
     points->SetNumberOfPoints(nPts);
@@ -122,50 +144,42 @@ void VTKVisualization::SynchronizeTopology()
             }
         structuredGrid->SetPoints(grid_points);
     }
-
-
-    // grid2
-    int gx1 = gx+1;
-    int gy1 = gy+1;
-    structuredGrid2->SetDimensions(gx1, gy1, 1);
-    grid_points2->SetNumberOfPoints(gx1*gy1);
-    for(int idx_y=0; idx_y<=gy; idx_y++)
-        for(int idx_x=0; idx_x<=gx; idx_x++)
-        {
-            float x = ((float)idx_x - 0.5) * h;
-            float y = ((float)idx_y - 0.5) * h;
-            double pt_pos[3] {x, y, -3.0};
-            grid_points2->SetPoint((vtkIdType)(idx_x+idx_y*gx1), pt_pos);
-        }
-    structuredGrid2->SetPoints(grid_points2);
-
-    visualized_values_grid->SetNumberOfValues(gx*gy);
-    std::vector<uint8_t> &gb = model->gpu.hssoa.grid_status_buffer;
-    if(gb.size() > 0)
-    {
-        spdlog::info("gb size {}; gx {}; gy {}",gb.size(), gx, gy);
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-                int idx_storage = idx_y + idx_x*gy;
-                int value = gb[idx_storage]+5;
-                visualized_values_grid->SetValue(idx_visual, value);
-            }
-
-        visualized_values_grid->Modified();
-    }
-
-
-
-    model->accessing_point_data.unlock();
-    SynchronizeValues();
 */
+
+    SynchronizeValues();
 }
 
 
 void VTKVisualization::SynchronizeValues()
 {
+    const int gx = frameData.prms.GridXTotal;
+    const int gy = frameData.prms.GridY;
+
+    if(VisualizingVariable == VisOpt::none)
+    {
+        scalarBar->VisibilityOff();
+        visualized_values_grid->SetNumberOfValues(gx*gy);
+        std::vector<uint8_t> &gb = frameData.grid_status_buffer;
+        if(gb.size() > 0)
+        {
+            for(int idx_y=0; idx_y<gy; idx_y++)
+                for(int idx_x=0; idx_x<gx; idx_x++)
+                {
+                    int idx_visual = idx_x + idx_y*gx;
+                    int idx_storage = idx_y + idx_x*gy;
+                    int value = gb[idx_storage]+5;
+                    visualized_values_grid->SetValue(idx_visual, value);
+                }
+            visualized_values_grid->Modified();
+        }
+
+        mapper_grid_main->SetLookupTable(hueLut_four);
+        visualized_values_grid->Modified();
+    }
+
+
+
+
     /*
     model->accessing_point_data.lock();
 
