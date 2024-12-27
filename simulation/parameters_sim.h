@@ -96,6 +96,7 @@ public:
 
     void SaveParametersAsHDF5Attributes(H5::DataSet &dataset);
     void ReadParametersFromHDF5Attributes(H5::DataSet &dataset);
+    void Printout();    // for testing
 };
 
 #endif

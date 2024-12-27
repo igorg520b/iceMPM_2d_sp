@@ -228,3 +228,30 @@ void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset) {
 }
 
 
+void SimParams::Printout()
+{
+    spdlog::info("Simulation Parameters:");
+    spdlog::info("nPtsInitial: {}", nPtsInitial);
+    spdlog::info("SimulationStartUnixTime: {}", SimulationStartUnixTime);
+    spdlog::info("Grid {} x {}", GridXTotal, GridY);
+    spdlog::info("LatMin: {}, LatMax: {}, LonMin: {}, LonMax: {}", LatMin, LatMax, LonMin, LonMax);
+    spdlog::info("gridLatMin: {}, gridLonMin: {}", gridLatMin, gridLonMin);
+    spdlog::info("DimensionHorizontal: {}, DimensionVertical: {}", DimensionHorizontal, DimensionVertical);
+    spdlog::info("InitialTimeStep: {}, SimulationEndTime: {}", InitialTimeStep, SimulationEndTime);
+    spdlog::info("AnimationFramesRequested: {}", AnimationFramesRequested);
+    spdlog::info("SimulationStep: {}", SimulationStep);
+    spdlog::info("SimulationTime: {}", SimulationTime);
+    spdlog::info("windDragCoeff_airDensity: {}", windDragCoeff_airDensity);
+    spdlog::info("SurfaceDensity: {}, PoissonsRatio: {}, YoungsModulus: {}", SurfaceDensity, PoissonsRatio, YoungsModulus);
+    spdlog::info("IceCompressiveStrength: {}, IceTensileStrength: {}, IceShearStrength: {}, IceTensileStrength2: {}",
+                 IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2);
+    spdlog::info("DP_phi: {}, DP_threshold_p: {}", DP_phi, DP_threshold_p);
+    spdlog::info("cellsize: {}", cellsize);
+    spdlog::info("ParticleVolume: {}, ParticleViewSize: {}", ParticleVolume, ParticleViewSize);
+    spdlog::info("GrainVariability: {}", GrainVariability);
+    spdlog::info("dt_vol_Dpinv: {}, vmax: {}, vmax_squared: {}", dt_vol_Dpinv, vmax, vmax_squared);
+    spdlog::info("lambda: {}, mu: {}, kappa: {}", lambda, mu, kappa);
+    spdlog::info("ParticleMass: {}", ParticleMass);
+    spdlog::info("cellsize_inv: {}, Dp_inv: {}", cellsize_inv, Dp_inv);
+    spdlog::info("UpdateEveryNthStep: {}", UpdateEveryNthStep);
+}

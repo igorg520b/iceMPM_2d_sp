@@ -8,21 +8,86 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 option(BUILD_CLI_VERSION "Build CLI version" OFF)
 option(BUILD_GUI_VERSION "Build Qt version" ON)
+option(BUILD_POSTPROCESSOR "Build Qt version" ON)
 
-if(BUILD_GUI_VERSION)
+if(BUILD_GUI_VERSION OR BUILD_POSTPROCESSOR)
     set(CMAKE_AUTOUIC ON)
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
 endif()
 
-#set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda")
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
-
 
 find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 find_package(spdlog REQUIRED)
 
+
+if(BUILD_POSTPROCESSOR)
+    find_package(VTK 9.1 REQUIRED COMPONENTS
+      CommonColor
+      CommonCore
+      FiltersSources
+      FiltersGeometry
+      InteractionStyle
+      RenderingContextOpenGL2
+      RenderingCore
+      RenderingFreeType
+      RenderingGL2PSOpenGL2
+      RenderingOpenGL2
+      IOGeometry
+      RenderingAnnotation
+      RenderingLabel
+      IOImage
+      ViewsQt
+    )
+    find_package(Qt5 COMPONENTS Widgets REQUIRED)
+    add_compile_definitions(QT_NO_KEYWORDS)
+
+    add_executable(pp
+    	postprocessor/pp_main.cpp
+    	postprocessor/window/pp_mainwindow.cpp
+    	postprocessor/window/pp_mainwindow.h
+    	postprocessor/window/pp_mainwindow.ui
+        icons.qrc
+        
+        postprocessor/vtk/vtk_visualization.cpp
+        postprocessor/vtk/vtk_visualization.h
+
+        # simulation
+        simulation/parameters_sim.h
+        simulation/parameters_sim.cpp
+
+        simulation/windinterpolator.cpp
+        simulation/windinterpolator.h
+
+        postprocessor/framedata.h
+        postprocessor/framedata.cpp
+    )
+
+    target_include_directories(pp PRIVATE postprocessor postprocessor/window postprocessor/vtk simulation simulation/hssoa)
+    target_link_libraries(pp PRIVATE Qt5::Widgets Qt5::Core)
+
+    # Eigen
+    find_package(Eigen3 REQUIRED NO_MODULE)
+    target_link_libraries(pp PRIVATE Eigen3::Eigen)
+
+    # VTK
+    target_link_libraries(pp PRIVATE ${VTK_LIBRARIES})
+
+    # HDF5
+    target_link_libraries(pp PRIVATE ${HDF5_LIBRARIES})
+    target_include_directories(pp PRIVATE ${HDF5_INCLUDE_DIRS})
+
+    # spdlog
+    target_link_libraries(pp PRIVATE spdlog::spdlog)
+
+vtk_module_autoinit(
+  TARGETS pp
+  MODULES ${VTK_LIBRARIES}
+)
+
+endif()
 
 
 if(BUILD_CLI_VERSION)
@@ -81,7 +146,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(PBrowser)
 
 
-    find_package(VTK 9.1 HINTS "C:\\libraries\\vtk-build\\lib\\cmake\\vtk-9.1" REQUIRED COMPONENTS
+    find_package(VTK 9.1 REQUIRED COMPONENTS
       CommonColor
       CommonCore
       FiltersSources
