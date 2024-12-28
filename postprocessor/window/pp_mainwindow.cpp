@@ -75,7 +75,7 @@ PPMainWindow::PPMainWindow(QWidget *parent)
 
     if(fi.exists())
     {
-/*        QSettings settings(settingsFileName,QSettings::IniFormat);
+        QSettings settings(settingsFileName,QSettings::IniFormat);
         QVariant var;
 
         vtkCamera* camera = renderer->GetActiveCamera();
@@ -101,30 +101,12 @@ PPMainWindow::PPMainWindow(QWidget *parent)
             memcpy(representation.ranges, ba.constData(), ba.size());
         }
 
-        var = settings.value("take_screenshots");
-        if(!var.isNull())
-        {
-            bool b = var.toBool();
-            ui->actionTake_Screenshots->setChecked(b);
-        }
-
-        comboBox_visualizations->setCurrentIndex(settings.value("vis_option").toInt());
-
-        var = settings.value("splitter_size_0");
-        if(!var.isNull())
-        {
-            int sz1 = var.toInt();
-            int sz2 = settings.value("splitter_size_1").toInt();
-            splitter->setSizes(QList<int>({sz1, sz2}));
-        }
-
         var = settings.value("vis_option");
         if(!var.isNull())
         {
             comboBox_visualizations->setCurrentIndex(var.toInt());
             qdsbValRange->setValue(representation.ranges[var.toInt()]);
         }
-*/
     }
     else
     {
@@ -139,6 +121,7 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     writerPNG->SetInputConnection(windowToImageFilter->GetOutputPort());
 
     connect(ui->actionOpen_Frame, &QAction::triggered, this, &PPMainWindow::open_frame_triggered);
+    connect(ui->action_camera_reset, &QAction::triggered, this, &PPMainWindow::cameraReset_triggered);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PPMainWindow::limits_changed);
 
@@ -187,9 +170,8 @@ void PPMainWindow::closeEvent(QCloseEvent* event)
 {
     qDebug() << "close event";
 
-    /*
     QSettings settings(settingsFileName,QSettings::IniFormat);
-    qDebug() << "MainWindow: closing main window; " << settings.fileName();
+    qDebug() << "PPMainWindow: closing main window; " << settings.fileName();
 
     double data[10];
     renderer->GetActiveCamera()->GetPosition(&data[0]);
@@ -207,17 +189,6 @@ void PPMainWindow::closeEvent(QCloseEvent* event)
     settings.setValue("visualization_ranges", ranges);
 
     settings.setValue("vis_option", comboBox_visualizations->currentIndex());
-
-    if(!qLastParameterFile.isEmpty()) settings.setValue("lastParameterFile", qLastParameterFile);
-
-    QList<int> szs = splitter->sizes();
-    settings.setValue("splitter_size_0", szs[0]);
-    settings.setValue("splitter_size_1", szs[1]);
-
-    settings.setValue("take_screenshots", ui->actionTake_Screenshots->isChecked());
-
-*/
-
 
     event->accept();
 }
@@ -240,10 +211,16 @@ void PPMainWindow::cameraReset_triggered()
     renderer->ResetCamera();
     camera->ParallelProjectionOn();
     camera->SetClippingRange(1e-1,1e3);
-    camera->SetFocalPoint(0, 0., 0.);
-    camera->SetPosition(0.0, 0.0, 50.0);
+
+    const double dx = frameData.prms.DimensionHorizontal/2;
+    const double dy = frameData.prms.DimensionVertical/2;
+
+    qDebug() << "dx " << dx << "\ndy " << dy;
+
+    camera->SetPosition(dx, dy, 50.);
+    camera->SetFocalPoint(dx, dy, 0.);
     camera->SetViewUp(0.0, 1.0, 0.0);
-    camera->SetParallelScale(2.5);
+    camera->SetParallelScale(std::min(dx,dy)*1.1);
 
     camera->Modified();
     renderWindow->Render();
