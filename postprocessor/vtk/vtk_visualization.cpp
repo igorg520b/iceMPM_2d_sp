@@ -9,12 +9,7 @@
 
 VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
 {
-    populateLut(lutArrayTemperatureAdj, (sizeof(lutArrayTemperatureAdj)/(sizeof(lutArrayTemperatureAdj[0]))), hueLut_temperature);
-    populateLut(lutSouthwest, (sizeof(lutSouthwest)/(sizeof(lutSouthwest[0]))), hueLut_Southwest);
-    populateLut(lutArrayPastel, (sizeof(lutArrayPastel)/(sizeof(lutArrayPastel[0]))), hueLut_pastel);
-    populateLut(lutArrayMPMColors, (sizeof(lutArrayMPMColors)/(sizeof(lutArrayMPMColors[0]))), lutMPM);
-    populateLut(lutSpecialSeven, (sizeof(lutSpecialSeven)/(sizeof(lutSpecialSeven[0]))), hueLut_four);
-
+    populateLut(lutSpecialCount, (sizeof(lutSpecialCount)/(sizeof(lutSpecialCount[0]))), hueLut_count);
     interpolateLut(lutSpecialP, (sizeof(lutSpecialP)/(sizeof(lutSpecialP[0]))), hueLut_pressure);
 
     // text
@@ -38,8 +33,13 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     // main grid color data
     visualized_values_grid->SetName("visualized_values_grid");
     structuredGrid_main->GetCellData()->AddArray(visualized_values_grid);
-    structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
     mapper_grid_main->UseLookupTableScalarRangeOn();
+
+    pts_colors->SetName("pts_colors");
+    pts_colors->SetNumberOfComponents(3);
+    structuredGrid_main->GetCellData()->AddArray(pts_colors);
+
+    structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
 
 
  /*
@@ -82,6 +82,8 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
 void VTKVisualization::SynchronizeTopology()
 {
     spdlog::info("SynchronizeTopology()");
+    if(!frameData.dataLoaded) return;
+
     // actor_grid_main
     const int gx = frameData.prms.GridXTotal;
     const int gy = frameData.prms.GridY;
@@ -102,6 +104,8 @@ void VTKVisualization::SynchronizeTopology()
         }
     structuredGrid_main->SetPoints(grid_main_points);
 
+    visualized_values_grid->SetNumberOfValues(gx*gy);
+    pts_colors->SetNumberOfValues(gx*gy*3);
 
 
     /*
@@ -152,14 +156,14 @@ void VTKVisualization::SynchronizeTopology()
 
 void VTKVisualization::SynchronizeValues()
 {
+    if(!frameData.dataLoaded) return;
+    std::vector<uint8_t> &gb = frameData.grid_status_buffer;
     const int gx = frameData.prms.GridXTotal;
     const int gy = frameData.prms.GridY;
 
     if(VisualizingVariable == VisOpt::none)
     {
         scalarBar->VisibilityOff();
-        visualized_values_grid->SetNumberOfValues(gx*gy);
-        std::vector<uint8_t> &gb = frameData.grid_status_buffer;
         if(gb.size() > 0)
         {
             for(int idx_y=0; idx_y<gy; idx_y++)
@@ -167,14 +171,85 @@ void VTKVisualization::SynchronizeValues()
                 {
                     int idx_visual = idx_x + idx_y*gx;
                     int idx_storage = idx_y + idx_x*gy;
-                    int value = gb[idx_storage]+5;
+                    int value = gb[idx_storage];
                     visualized_values_grid->SetValue(idx_visual, value);
                 }
             visualized_values_grid->Modified();
         }
 
-        mapper_grid_main->SetLookupTable(hueLut_four);
+        mapper_grid_main->SetLookupTable(hueLut_count);
+        mapper_grid_main->SetColorModeToMapScalars();
         visualized_values_grid->Modified();
+        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
+
+    }
+    else if(VisualizingVariable == VisOpt::count)
+    {
+        scalarBar->VisibilityOff();
+        if(gb.size() > 0)
+        {
+            for(int idx_y=0; idx_y<gy; idx_y++)
+                for(int idx_x=0; idx_x<gx; idx_x++)
+                {
+                    int idx_visual = idx_x + idx_y*gx;
+                    int idx_storage = idx_y + idx_x*gy;
+                    int value = gb[idx_storage];
+                    if(value == 0 && frameData.count[idx_storage]>0) value = 1 + frameData.count[idx_storage];
+                    visualized_values_grid->SetValue(idx_visual, value);
+                }
+            visualized_values_grid->Modified();
+        }
+
+        mapper_grid_main->SetLookupTable(hueLut_count);
+        mapper_grid_main->SetColorModeToMapScalars();
+        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
+
+
+        visualized_values_grid->Modified();
+    }
+    else if(VisualizingVariable == VisOpt::colors)
+    {
+        scalarBar->VisibilityOff();
+        if(gb.size() > 0)
+        {
+            for(int idx_y=0; idx_y<gy; idx_y++)
+                for(int idx_x=0; idx_x<gx; idx_x++)
+                {
+                    int idx_visual = idx_x + idx_y*gx;
+                    int idx_storage = idx_y + idx_x*gy;
+                    int land = gb[idx_storage];
+                    int count = frameData.count[idx_storage];
+                    float r = frameData.vis_r[idx_storage];
+                    float g = frameData.vis_g[idx_storage];
+                    float b = frameData.vis_b[idx_storage];
+                    float a = frameData.vis_alpha[idx_storage];
+
+                    float coeff = 0;
+                    if(!land) coeff = std::min(count/3.,1.);
+
+                    if(land)
+                    {
+                        pts_colors->SetValue((vtkIdType)(idx_visual*3+0), 0.35*255);
+                        pts_colors->SetValue((vtkIdType)(idx_visual*3+1), 0.15*255);
+                        pts_colors->SetValue((vtkIdType)(idx_visual*3+2), 0.15*255);
+                    }
+                    else
+                    {
+                        unsigned char ur = (unsigned char)((1-coeff)*0x11 + coeff*255*r);
+                        unsigned char ug = (unsigned char)((1-coeff)*0x18 + coeff*255*g);
+                        unsigned char ub = (unsigned char)((1-coeff)*0x20 + coeff*255*b);
+                        pts_colors->SetValue((vtkIdType)(idx_visual*3+0), ur);
+                        pts_colors->SetValue((vtkIdType)(idx_visual*3+1), ug);
+                        pts_colors->SetValue((vtkIdType)(idx_visual*3+2), ub);
+                    }
+                }
+            visualized_values_grid->Modified();
+            structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
+            mapper_grid_main->SetColorModeToDirectScalars();
+
+        }
+
+        mapper_grid_main->SetLookupTable(hueLut_count);
     }
 
 

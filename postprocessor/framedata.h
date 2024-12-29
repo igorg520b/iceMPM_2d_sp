@@ -11,6 +11,7 @@
 class FrameData
 {
 public:
+    bool dataLoaded = false;
     SimParams prms;
 
     FrameData();
@@ -18,6 +19,9 @@ public:
 
 
     std::vector<uint8_t> grid_status_buffer;
+    std::vector<uint8_t> count;
+    std::vector<float> vis_r, vis_g, vis_b, vis_alpha, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
+
 private:
     void LoadWindData(std::string initialGridAndWindFileName);
 };

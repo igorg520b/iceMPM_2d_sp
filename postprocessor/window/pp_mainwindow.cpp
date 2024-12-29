@@ -161,9 +161,9 @@ void PPMainWindow::open_frame_triggered()
 
 void PPMainWindow::comboboxIndexChanged_visualizations(int index)
 {
-    //    representation.ChangeVisualizationOption(index);
-    //    qdsbValRange->setValue(representation.ranges[index]);
-    //    renderWindow->Render();
+    representation.ChangeVisualizationOption(index);
+    qdsbValRange->setValue(representation.ranges[index]);
+    renderWindow->Render();
 }
 
 void PPMainWindow::closeEvent(QCloseEvent* event)
