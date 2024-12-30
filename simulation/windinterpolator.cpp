@@ -327,3 +327,37 @@ void WindInterpolator::SaveToOwnHDF5(H5::H5File &file)
     u_ds.createAttribute("LonMax", H5::PredType::NATIVE_DOUBLE, att_sp).write(H5::PredType::NATIVE_DOUBLE, &LonMax);
 }
 
+void WindInterpolator::ReadFromOwnHDF5(H5::H5File &file)
+{
+    H5::DataSet uDataset = file.openDataSet("u_data");
+
+    uDataset.openAttribute("extentLat").read(H5::PredType::NATIVE_INT, &extentLat);
+    uDataset.openAttribute("extentLon").read(H5::PredType::NATIVE_INT, &extentLon);
+    uDataset.openAttribute("nTimeIntervals").read(H5::PredType::NATIVE_INT, &nTimeIntervals);
+
+    H5::DataSpace dataspace = uDataset.getSpace();
+    // Get the dimensions of the dataset
+    hsize_t dims[3];
+    dataspace.getSimpleExtentDims(dims, nullptr);
+    if(dims[0] != nTimeIntervals || dims[1] != extentLat || dims[2] != extentLon)
+        throw std::runtime_error("WindInterpolator::Read dataset size mismatch");
+
+
+    uDataset.openAttribute("gridLatMin").read(H5::PredType::NATIVE_DOUBLE, &gridLatMin);
+    uDataset.openAttribute("gridLonMin").read(H5::PredType::NATIVE_DOUBLE, &gridLonMin);
+
+    uDataset.openAttribute("valid_time_front").read(H5::PredType::NATIVE_INT64, &valid_time_front);
+    uDataset.openAttribute("simulation_start_date").read(H5::PredType::NATIVE_INT64, &simulation_start_date);
+
+    uDataset.openAttribute("LatMin").read(H5::PredType::NATIVE_DOUBLE, &LatMin);
+    uDataset.openAttribute("LatMax").read(H5::PredType::NATIVE_DOUBLE, &LatMax);
+    uDataset.openAttribute("LonMin").read(H5::PredType::NATIVE_DOUBLE, &LonMin);
+    uDataset.openAttribute("LonMax").read(H5::PredType::NATIVE_DOUBLE, &LonMax);
+
+    u_data.resize(nTimeIntervals*extentLat*extentLon);
+    v_data.resize(nTimeIntervals*extentLat*extentLon);
+    uDataset.read(u_data.data(),H5::PredType::NATIVE_FLOAT);
+    file.openDataSet("v_data").read(v_data.data(),H5::PredType::NATIVE_FLOAT);
+}
+
+

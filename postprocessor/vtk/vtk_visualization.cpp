@@ -4,13 +4,15 @@
 #include <algorithm>
 #include <iostream>
 #include <spdlog/spdlog.h>
-
+#include <Eigen/Core>
 
 
 VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
 {
     populateLut(lutSpecialCount, (sizeof(lutSpecialCount)/(sizeof(lutSpecialCount[0]))), hueLut_count);
-    interpolateLut(lutSpecialP, (sizeof(lutSpecialP)/(sizeof(lutSpecialP[0]))), hueLut_pressure);
+    interpolateLut(lutSpecialJ, (sizeof(lutSpecialJ)/(sizeof(lutSpecialJ[0]))), hueLut_J);
+    interpolateLut(naturalRidges, (sizeof(naturalRidges)/(sizeof(naturalRidges[0]))), hueLut_Jpinv);
+    interpolateLut(lutSpecialQ, (sizeof(lutSpecialQ)/(sizeof(lutSpecialQ[0]))), hueLut_Q);
 
     // text
     vtkTextProperty* txtprop = actor_text->GetTextProperty();
@@ -42,6 +44,35 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
 
 
+    // scalar bar
+    scalarBar->SetLookupTable(hueLut_count);
+    scalarBar->SetMaximumWidthInPixels(180);
+    scalarBar->SetBarRatio(0.1);
+    scalarBar->SetMaximumHeightInPixels(250);
+    scalarBar->GetPositionCoordinate()->SetCoordinateSystemToNormalizedDisplay();
+    scalarBar->GetPositionCoordinate()->SetValue(0.01,0.015, 0.0);
+    scalarBar->SetLabelFormat("%.1e");
+    scalarBar->GetLabelTextProperty()->BoldOff();
+    scalarBar->GetLabelTextProperty()->ItalicOff();
+    scalarBar->GetLabelTextProperty()->ShadowOff();
+    scalarBar->GetLabelTextProperty()->SetColor(0.1,0.1,0.1);
+    scalarBar->GetLabelTextProperty()->SetFontFamilyToTimes();
+
+    scalarBar->SetUnconstrainedFontSize(true);
+    scalarBar->GetLabelTextProperty()->SetFontSize(40);
+
+
+    // rectangle frame
+    rectangleActor->SetMapper(rectangleMapper);
+    rectangleActor->GetProperty()->SetColor(0.0, 0.0, 0.0); // Red color
+    rectangleActor->GetProperty()->SetLineWidth(2.0);       // Line thickness
+
+    rectangleMapper->SetInputData(rectanglePolyData);
+    rectanglePolyData->SetPoints(rectanglePoints);
+    rectanglePolyData->SetLines(rectangleLines);
+
+
+
  /*
 //    grid_mapper->SetLookupTable(hueLut);
 
@@ -61,18 +92,6 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     actor_grid2->PickableOff();
     actor_grid2->GetProperty()->SetColor(0.98,0.98,0.98);
 
-    // scalar bar
-    scalarBar->SetLookupTable(lutMPM);
-    scalarBar->SetMaximumWidthInPixels(130);
-    scalarBar->SetBarRatio(0.07);
-    scalarBar->SetMaximumHeightInPixels(200);
-    scalarBar->GetPositionCoordinate()->SetCoordinateSystemToNormalizedDisplay();
-    scalarBar->GetPositionCoordinate()->SetValue(0.01,0.015, 0.0);
-    scalarBar->SetLabelFormat("%.1e");
-    scalarBar->GetLabelTextProperty()->BoldOff();
-    scalarBar->GetLabelTextProperty()->ItalicOff();
-    scalarBar->GetLabelTextProperty()->ShadowOff();
-    scalarBar->GetLabelTextProperty()->SetColor(0.1,0.1,0.1);
 
 */
 }
@@ -107,6 +126,17 @@ void VTKVisualization::SynchronizeTopology()
     visualized_values_grid->SetNumberOfValues(gx*gy);
     pts_colors->SetNumberOfValues(gx*gy*3);
 
+
+    // rectangle
+    rectanglePoints->SetNumberOfPoints(4);
+    rectanglePoints->SetPoint(0, 0.5*h, 0.5*h,-2.0);
+    rectanglePoints->SetPoint(1, (gx-1.5)*h, 0.5*h , -2.0);
+    rectanglePoints->SetPoint(2, (gx-1.5)*h, (gy-1.5)*h , -2.0);
+    rectanglePoints->SetPoint(3, 0.5*h, (gy-1.5)*h , -2.0);
+
+    vtkIdType pointIds[5] = {0, 1, 2, 3, 0};
+    rectangleLines->Reset();
+    rectangleLines->InsertNextCell(5, pointIds);
 
     /*
     model->accessing_point_data.lock();
@@ -156,26 +186,28 @@ void VTKVisualization::SynchronizeTopology()
 
 void VTKVisualization::SynchronizeValues()
 {
-    if(!frameData.dataLoaded) return;
     std::vector<uint8_t> &gb = frameData.grid_status_buffer;
+    if(!frameData.dataLoaded || gb.size()==0) return;
+
     const int gx = frameData.prms.GridXTotal;
     const int gy = frameData.prms.GridY;
+    const double range = std::pow(10,ranges[VisualizingVariable]); // visualization scale
+
+    const Eigen::Vector3f land_color(0.35, 0.15, 0.15);
+    const Eigen::Vector3f water_color(0x11/255., 0x18/255., 0x20/255.);
 
     if(VisualizingVariable == VisOpt::none)
     {
         scalarBar->VisibilityOff();
-        if(gb.size() > 0)
-        {
-            for(int idx_y=0; idx_y<gy; idx_y++)
-                for(int idx_x=0; idx_x<gx; idx_x++)
-                {
-                    int idx_visual = idx_x + idx_y*gx;
-                    int idx_storage = idx_y + idx_x*gy;
-                    int value = gb[idx_storage];
-                    visualized_values_grid->SetValue(idx_visual, value);
-                }
-            visualized_values_grid->Modified();
-        }
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int value = gb[idx_storage];
+                visualized_values_grid->SetValue(idx_visual, value);
+            }
+        visualized_values_grid->Modified();
 
         mapper_grid_main->SetLookupTable(hueLut_count);
         mapper_grid_main->SetColorModeToMapScalars();
@@ -186,19 +218,16 @@ void VTKVisualization::SynchronizeValues()
     else if(VisualizingVariable == VisOpt::count)
     {
         scalarBar->VisibilityOff();
-        if(gb.size() > 0)
-        {
-            for(int idx_y=0; idx_y<gy; idx_y++)
-                for(int idx_x=0; idx_x<gx; idx_x++)
-                {
-                    int idx_visual = idx_x + idx_y*gx;
-                    int idx_storage = idx_y + idx_x*gy;
-                    int value = gb[idx_storage];
-                    if(value == 0 && frameData.count[idx_storage]>0) value = 1 + frameData.count[idx_storage];
-                    visualized_values_grid->SetValue(idx_visual, value);
-                }
-            visualized_values_grid->Modified();
-        }
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int value = gb[idx_storage];
+                if(value == 0 && frameData.count[idx_storage]>0) value = 1 + frameData.count[idx_storage];
+                visualized_values_grid->SetValue(idx_visual, value);
+            }
+        visualized_values_grid->Modified();
 
         mapper_grid_main->SetLookupTable(hueLut_count);
         mapper_grid_main->SetColorModeToMapScalars();
@@ -210,49 +239,296 @@ void VTKVisualization::SynchronizeValues()
     else if(VisualizingVariable == VisOpt::colors)
     {
         scalarBar->VisibilityOff();
-        if(gb.size() > 0)
-        {
-            for(int idx_y=0; idx_y<gy; idx_y++)
-                for(int idx_x=0; idx_x<gx; idx_x++)
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int land = gb[idx_storage];
+                int count = frameData.count[idx_storage];
+                float r = frameData.vis_r[idx_storage];
+                float g = frameData.vis_g[idx_storage];
+                float b = frameData.vis_b[idx_storage];
+                float a = frameData.vis_alpha[idx_storage];
+
+                float coeff = 0;
+                if(!land) coeff = std::min(count/3.,1.);
+
+                if(land)
                 {
-                    int idx_visual = idx_x + idx_y*gx;
-                    int idx_storage = idx_y + idx_x*gy;
-                    int land = gb[idx_storage];
-                    int count = frameData.count[idx_storage];
-                    float r = frameData.vis_r[idx_storage];
-                    float g = frameData.vis_g[idx_storage];
-                    float b = frameData.vis_b[idx_storage];
-                    float a = frameData.vis_alpha[idx_storage];
-
-                    float coeff = 0;
-                    if(!land) coeff = std::min(count/3.,1.);
-
-                    if(land)
-                    {
-                        pts_colors->SetValue((vtkIdType)(idx_visual*3+0), 0.35*255);
-                        pts_colors->SetValue((vtkIdType)(idx_visual*3+1), 0.15*255);
-                        pts_colors->SetValue((vtkIdType)(idx_visual*3+2), 0.15*255);
-                    }
-                    else
-                    {
-                        unsigned char ur = (unsigned char)((1-coeff)*0x11 + coeff*255*r);
-                        unsigned char ug = (unsigned char)((1-coeff)*0x18 + coeff*255*g);
-                        unsigned char ub = (unsigned char)((1-coeff)*0x20 + coeff*255*b);
-                        pts_colors->SetValue((vtkIdType)(idx_visual*3+0), ur);
-                        pts_colors->SetValue((vtkIdType)(idx_visual*3+1), ug);
-                        pts_colors->SetValue((vtkIdType)(idx_visual*3+2), ub);
-                    }
+                    pts_colors->SetValue((vtkIdType)(idx_visual*3+0), 0.35*255);
+                    pts_colors->SetValue((vtkIdType)(idx_visual*3+1), 0.15*255);
+                    pts_colors->SetValue((vtkIdType)(idx_visual*3+2), 0.15*255);
                 }
-            visualized_values_grid->Modified();
-            structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
-            mapper_grid_main->SetColorModeToDirectScalars();
-
-        }
-
-        mapper_grid_main->SetLookupTable(hueLut_count);
+                else
+                {
+                    unsigned char ur = (unsigned char)((1-coeff)*0x11 + coeff*255*r);
+                    unsigned char ug = (unsigned char)((1-coeff)*0x18 + coeff*255*g);
+                    unsigned char ub = (unsigned char)((1-coeff)*0x20 + coeff*255*b);
+                    pts_colors->SetValue((vtkIdType)(idx_visual*3+0), ur);
+                    pts_colors->SetValue((vtkIdType)(idx_visual*3+1), ug);
+                    pts_colors->SetValue((vtkIdType)(idx_visual*3+2), ub);
+                }
+            }
+        visualized_values_grid->Modified();
+        structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
+        mapper_grid_main->SetColorModeToDirectScalars();
     }
 
+    /*
+    else if(VisualizingVariable == VisOpt::Jp_inv)
+    {
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int land = gb[idx_storage];
+                int count = frameData.count[idx_storage];
+                float r = frameData.vis_r[idx_storage];
+                float g = frameData.vis_g[idx_storage];
+                float b = frameData.vis_b[idx_storage];
+                //float a = frameData.vis_alpha[idx_storage];
+                float Jp_inv = frameData.vis_Jpinv[idx_storage];
 
+
+                const Eigen::Vector3f land_color(0.35, 0.15, 0.15);
+                const Eigen::Vector3f water_color(0x11/255., 0x18/255., 0x20/255.);
+                const Eigen::Vector3f ice_cover_color(r,g,b);
+                Eigen::Vector3f paint_color(0,0,0);
+
+
+
+                if(land)
+                {
+                    paint_color = land_color;
+                }
+                else
+                {
+                    float coeff1 = std::min(count/3.,1.); // how much water surface is obscured
+                    paint_color = (1-coeff1)*water_color + coeff1*ice_cover_color;
+
+                    if(!std::isnan(Jp_inv))
+                    {
+                        float coeff2 = 0.05+std::abs(Jp_inv-1)/range;
+                        coeff2 = std::clamp(coeff2, 0.25f, 1.0f);
+                        Eigen::Vector3f Jpinv_color = interpolateColor(naturalRidges, 7, 0.5+(Jp_inv-1)/range);
+                        paint_color = (1-coeff2)*paint_color + coeff2*Jpinv_color;
+                    }
+
+
+                }
+
+                for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(idx_visual*3+k), (unsigned char)(255*paint_color[k]));
+            }
+        visualized_values_grid->Modified();
+        structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
+        mapper_grid_main->SetColorModeToDirectScalars();
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut_Jpinv);
+        scalarBar->SetLabelFormat("%.1f");
+
+        hueLut_Jpinv->SetTableRange(1-range, 1+range);
+    }
+    */
+
+    else if(VisualizingVariable == VisOpt::Jp_inv)
+    {
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int land = gb[idx_storage];
+                int count = frameData.count[idx_storage];
+                float r = frameData.vis_r[idx_storage];
+                float g = frameData.vis_g[idx_storage];
+                float b = frameData.vis_b[idx_storage];
+                //float a = frameData.vis_alpha[idx_storage];
+                float Jp_inv = frameData.vis_Jpinv[idx_storage];
+
+
+                const Eigen::Vector3f land_color(0.35, 0.15, 0.15);
+                const Eigen::Vector3f water_color(0x11/255., 0x18/255., 0x20/255.);
+                const Eigen::Vector3f ice_cover_color(r,g,b);
+                Eigen::Vector3f paint_color(0,0,0);
+
+
+
+                if(land)
+                {
+                    paint_color = land_color;
+                }
+                else
+                {
+                    float coeff1 = std::min(count/3.,1.); // how much water surface is obscured
+                    paint_color = (1-coeff1)*water_color + coeff1*ice_cover_color;
+
+                    if(!std::isnan(Jp_inv))
+                    {
+                        float coeff2 = 0.05+std::abs(Jp_inv-1)/range;
+                        coeff2 = std::clamp(coeff2, 0.25f, 1.0f);
+                        Eigen::Vector3f Jpinv_color = interpolateColor(lutSpecialJ, 5, 0.5+(Jp_inv-1)/range);
+                        paint_color = (1-coeff2)*paint_color + coeff2*Jpinv_color;
+                    }
+
+
+                }
+
+                for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(idx_visual*3+k), (unsigned char)(255*paint_color[k]));
+            }
+        visualized_values_grid->Modified();
+        structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
+        mapper_grid_main->SetColorModeToDirectScalars();
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut_J);
+        scalarBar->SetLabelFormat("%.1f");
+        hueLut_J->SetTableRange(1-range, 1+range);
+    }
+
+/*
+    else if(VisualizingVariable == VisOpt::P)
+    {
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int land = gb[idx_storage];
+                int count = frameData.count[idx_storage];
+                float r = frameData.vis_r[idx_storage];
+                float g = frameData.vis_g[idx_storage];
+                float b = frameData.vis_b[idx_storage];
+                float P = frameData.vis_P[idx_storage];
+
+                const Eigen::Vector3f ice_cover_color(r,g,b);
+                Eigen::Vector3f paint_color(0,0,0);
+
+                if(land)
+                {
+                    paint_color = land_color;
+                }
+                else
+                {
+                    float coeff1 = std::min(count/3.,1.); // how much water surface is obscured
+                    paint_color = (1-coeff1)*water_color + coeff1*ice_cover_color;
+
+                    if(!std::isnan(P))
+                    {
+                        float coeff2 = 0.05+std::abs(P)/range;
+                        coeff2 = std::clamp(coeff2, 0.25f, 1.0f);
+                        Eigen::Vector3f P_color = interpolateColor(lutSpecialP, 11, 0.5+(P)/range);
+                        paint_color = (1-coeff2)*paint_color + coeff2*P_color;
+                    }
+                }
+                for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(idx_visual*3+k), (unsigned char)(255*paint_color[k]));
+            }
+        visualized_values_grid->Modified();
+        structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
+        mapper_grid_main->SetColorModeToDirectScalars();
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut_pressure);
+        scalarBar->SetLabelFormat("%.1e");
+
+        hueLut_pressure->SetTableRange(-range, range);
+    }
+*/
+    else if(VisualizingVariable == VisOpt::P)
+    {
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int land = gb[idx_storage];
+                int count = frameData.count[idx_storage];
+                float r = frameData.vis_r[idx_storage];
+                float g = frameData.vis_g[idx_storage];
+                float b = frameData.vis_b[idx_storage];
+                float P = frameData.vis_P[idx_storage];
+
+                const Eigen::Vector3f ice_cover_color(r,g,b);
+                Eigen::Vector3f paint_color(0,0,0);
+
+                if(land)
+                {
+                    paint_color = land_color;
+                }
+                else
+                {
+                    float coeff1 = std::min((double)count/3.,1.); // how much water surface is obscured
+                    paint_color = (1-coeff1)*water_color + coeff1*ice_cover_color;
+
+                    if(!std::isnan(P))
+                    {
+                        //float coeff2 = 0.00+std::abs(P)/range;
+                        float coeff2 = 0.00+P*P/(range*range*3);
+                        coeff2 = std::clamp(coeff2, 0.f, 1.0f);
+                        Eigen::Vector3f P_color = interpolateColor(naturalRidges, 7, 0.5+(P)/range);
+                        paint_color = (1-coeff2)*paint_color + coeff2*P_color;
+                    }
+                }
+                for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(idx_visual*3+k), (unsigned char)(255*paint_color[k]));
+            }
+        visualized_values_grid->Modified();
+        structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
+        mapper_grid_main->SetColorModeToDirectScalars();
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut_Jpinv);
+        scalarBar->SetLabelFormat("%.1e");
+        hueLut_Jpinv->SetTableRange(-range, range);
+    }
+
+    else if(VisualizingVariable == VisOpt::Q)
+    {
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+                int idx_storage = idx_y + idx_x*gy;
+                int land = gb[idx_storage];
+                int count = frameData.count[idx_storage];
+                float r = frameData.vis_r[idx_storage];
+                float g = frameData.vis_g[idx_storage];
+                float b = frameData.vis_b[idx_storage];
+                float Q = frameData.vis_Q[idx_storage];
+
+                const Eigen::Vector3f ice_cover_color(r,g,b);
+                Eigen::Vector3f paint_color(0,0,0);
+
+                if(land)
+                {
+                    paint_color = land_color;
+                }
+                else
+                {
+                    float coeff1 = std::min((double)count/3.,1.); // how much water surface is obscured
+                    paint_color = (1-coeff1)*water_color + coeff1*ice_cover_color;
+
+                    if(!std::isnan(Q))
+                    {
+                        //float coeff2 = 0.00+std::abs(P)/range;
+                        float coeff2 = 0.00+Q*Q/(range*range*3);
+                        coeff2 = std::clamp(coeff2, 0.f, 1.0f);
+                        Eigen::Vector3f Q_color = interpolateColor(lutSpecialQ, 9, Q/range);
+                        paint_color = (1-coeff2)*paint_color + coeff2*Q_color;
+                    }
+                }
+                for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(idx_visual*3+k), (unsigned char)(255*paint_color[k]));
+            }
+        visualized_values_grid->Modified();
+        structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
+        mapper_grid_main->SetColorModeToDirectScalars();
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut_Q);
+        scalarBar->SetLabelFormat("%.1e");
+        hueLut_Q->SetTableRange(0, range);
+    }
 
 
     /*
@@ -629,9 +905,11 @@ void VTKVisualization::interpolateLut(const float lutArray[][3], const int size,
 }
 
 
-void VTKVisualization::interpolateColor(const float colorArray[][3],
-                                                 int nColors, float value, float& r_out, float& g_out, float& b_out) {
-    if (nColors < 2) {
+Eigen::Vector3f VTKVisualization::interpolateColor(const float colorArray[][3], int nColors, float value)
+{
+    if (nColors < 2)
+    {
+        spdlog::error("Color array must have at least two colors for interpolation.");
         throw std::invalid_argument("Color array must have at least two colors for interpolation.");
     }
 
@@ -649,7 +927,8 @@ void VTKVisualization::interpolateColor(const float colorArray[][3],
     // Interpolate between the two colors
     const float* color1 = colorArray[segmentIndex];
     const float* color2 = colorArray[segmentIndex + 1];
-    r_out = (1 - localT) * color1[0] + localT * color2[0];
-    g_out = (1 - localT) * color1[1] + localT * color2[1];
-    b_out = (1 - localT) * color1[2] + localT * color2[2];
+    float r_out = (1 - localT) * color1[0] + localT * color2[0];
+    float g_out = (1 - localT) * color1[1] + localT * color2[1];
+    float b_out = (1 - localT) * color1[2] + localT * color2[2];
+    return Eigen::Vector3f(r_out,g_out,b_out);
 }

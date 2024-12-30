@@ -52,6 +52,8 @@ PPMainWindow::PPMainWindow(QWidget *parent)
 // anything that includes the Model
     renderer->AddActor(representation.actor_grid_main);
     renderer->AddActor(representation.actor_text);
+    renderer->AddActor(representation.scalarBar);
+    renderer->AddActor(representation.rectangleActor);
 
     // populate combobox
     QMetaEnum qme = QMetaEnum::fromType<VTKVisualization::VisOpt>();
@@ -196,9 +198,9 @@ void PPMainWindow::closeEvent(QCloseEvent* event)
 
 void PPMainWindow::limits_changed(double val_)
 {
-//    int idx = (int)representation.VisualizingVariable;
-//    representation.ranges[idx] = val_;
-//    representation.SynchronizeValues();
+    int idx = (int)representation.VisualizingVariable;
+    representation.ranges[idx] = val_;
+    representation.SynchronizeValues();
     renderWindow->Render();
 }
 

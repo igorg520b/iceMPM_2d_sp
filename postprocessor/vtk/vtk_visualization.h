@@ -34,6 +34,8 @@
 #include <vtkFloatArray.h>
 #include <vtkIntArray.h>
 
+#include <Eigen/Core>
+
 #include "framedata.h"
 
 class VTKVisualization : public QObject
@@ -47,7 +49,7 @@ public:
 
     double wind_visualization_time;
 
-    enum VisOpt { none, count, colors, Jp_inv, velocity, P, Q, special, wind_u, wind_v, wind_norm};
+    enum VisOpt { none, count, colors, Jp_inv, P, Q, wind_u, wind_v, wind_norm};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};
@@ -56,21 +58,28 @@ public:
     void SynchronizeTopology();
     void ChangeVisualizationOption(int option);  // invoked from GUI/main thread
 
-    vtkNew<vtkLookupTable> hueLut, lutMPM;
     vtkNew<vtkActor> actor_grid_main;
     vtkNew<vtkActor> actor_grid_lat_lon;
     vtkNew<vtkScalarBarActor> scalarBar;
     vtkNew<vtkTextActor> actor_text;
+    vtkNew<vtkActor> rectangleActor;
 
 private:
-    vtkNew<vtkLookupTable> hueLut_count;
-    vtkNew<vtkLookupTable> hueLut_pressure;
+    vtkNew<vtkLookupTable> hueLut_count, hueLut_J, hueLut_Jpinv, hueLut_Q;
 
     // main grid
     vtkNew<vtkStructuredGrid> structuredGrid_main;
     vtkNew<vtkDataSetMapper> mapper_grid_main;
     vtkNew<vtkPoints> grid_main_points;
     vtkNew<vtkUnsignedCharArray> pts_colors;
+
+    // frame around the grid
+    vtkNew<vtkPolyLine> polyline;
+    vtkNew<vtkPolyData> rectanglePolyData;
+    vtkNew<vtkPoints> rectanglePoints;
+    vtkNew<vtkCellArray> rectangleLines;
+    vtkNew<vtkPolyDataMapper> rectangleMapper;
+
 
     // lat/lon grid
     vtkNew<vtkStructuredGrid> structuredGrid_lat_lon;
@@ -83,20 +92,15 @@ private:
 
 
 
-static constexpr float lutSpecialP[10][3] = {
-//    {1.,1.,1.},
-    {0xb7/255.,0x24/255.,0x30/255.},
-    {0xc2/255.,0x66/255.,0x6e/255.},             // -2
-    {0xdf/255.,0xa7/255.,0xac/255.},             // -1
+static constexpr float lutSpecialJ[5][3] = {
+        {0.342992, 0.650614, 0.772702},//10
+        {0.688376, 0.931066, 0.963615},//7
 
-    {0xc4/255.,0xdb/255.,0xf2/255.},     // 0
-    {0xc4/255.,0xdb/255.,0xf2/255.},     // 0
+        {0.836049, 0.882901, 0.85903},//5
 
-    {0x80/255.,0xac/255.,0xd9/255.},    //1
-    {0x4c/255.,0x83/255.,0xbc/255.},    //2
-    {0x27/255.,0x5d/255.,0x96/255.},    //3
-    {0x0e/255.,0x41/255.,0x77/255.},    //4
-    {0x03/255.,0x36/255.,0xb3/255.}
+        {0xee/255.,0x6e/255.,0xba/255.},
+
+        {0x94/255.,0x00/255.,0x58/255.}
 };
 
 
@@ -117,8 +121,32 @@ static constexpr float lutSpecialCount[13][3] = {
 };
 
 
-static void interpolateColor(const float colorArray[][3],
-                                                 int nColors, float value, float& r_out, float& g_out, float& b_out);
+static constexpr float naturalRidges[7][3] = {
+    {0x03/255.,0x36/255.,0xb3/255.},
+    {0x27/255.,0x5d/255.,0x96/255.},    //3
+    {0x80/255.,0xac/255.,0xd9/255.},    //1
+
+    {0x77/255.,0x9a/255.,0xae/255.},  // crushed 9
+
+    {0xdf/255.,0xa7/255.,0xac/255.},             // -1
+    {0xc2/255.,0x66/255.,0x6e/255.},             // -2
+    {0xb7/255.,0x24/255.,0x30/255.}
+
+};
+
+static constexpr float lutSpecialQ[9][3] = {
+    {1., 0.997467, 0.914244},
+    {0.89379, 0.887433, 0.810234},
+    {0.788048, 0.780999, 0.707756},
+    {0.685244, 0.687897, 0.609009},
+    {0.58726, 0.614242, 0.515383},
+    {0.495398, 0.562531, 0.427457},
+    {0.416896, 0.521963, 0.367477},
+    {0.360777, 0.485681, 0.367074},
+    {0.323764, 0.451244, 0.413069}
+};
+
+static Eigen::Vector3f interpolateColor(const float colorArray[][3], int nColors, float value);
 
 };
 #endif

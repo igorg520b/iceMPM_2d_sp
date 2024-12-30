@@ -294,6 +294,11 @@ void MainWindow::open_snapshot_triggered()
 
 void MainWindow::OpenSnapshot(QString fileName)
 {
+    model.snapshot.ReadSnapshot(fileName.toStdString());
+    representation.SynchronizeTopology();
+    pbrowser->setActiveObject(params);
+
+    updateGUI();
 }
 
 

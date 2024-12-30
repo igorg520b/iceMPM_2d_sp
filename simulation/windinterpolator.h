@@ -42,6 +42,7 @@ public:
     bool isInitialized = false;
 
     void SaveToOwnHDF5(H5::H5File &file);
+    void ReadFromOwnHDF5(H5::H5File &file);
 private:
     int64_t simulation_start_date;  // set once upon data load
 
