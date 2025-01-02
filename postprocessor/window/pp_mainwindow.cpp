@@ -331,6 +331,10 @@ void PPMainWindow::render_all_triggered()
 
     std::string outputDirectory = "render";
     if(representation.VisualizingVariable == VTKVisualization::VisOpt::P) outputDirectory = "render/P";
+    if(representation.VisualizingVariable == VTKVisualization::VisOpt::Q) outputDirectory = "render/Q";
+    if(representation.VisualizingVariable == VTKVisualization::VisOpt::colors) outputDirectory = "render/colors";
+    if(representation.VisualizingVariable == VTKVisualization::VisOpt::Jp_inv) outputDirectory = "render/Jp_inv";
+
     std::filesystem::path directory_path(outputDirectory);
     if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
 

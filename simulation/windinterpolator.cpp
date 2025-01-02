@@ -329,6 +329,7 @@ void WindInterpolator::SaveToOwnHDF5(H5::H5File &file)
 
 void WindInterpolator::ReadFromOwnHDF5(H5::H5File &file)
 {
+    spdlog::info("WindInterpolator::ReadFromOwnHDF5");
     H5::DataSet uDataset = file.openDataSet("u_data");
 
     uDataset.openAttribute("extentLat").read(H5::PredType::NATIVE_INT, &extentLat);
@@ -358,6 +359,18 @@ void WindInterpolator::ReadFromOwnHDF5(H5::H5File &file)
     v_data.resize(nTimeIntervals*extentLat*extentLon);
     uDataset.read(u_data.data(),H5::PredType::NATIVE_FLOAT);
     file.openDataSet("v_data").read(v_data.data(),H5::PredType::NATIVE_FLOAT);
+
+    isInitialized = true;
+    currentInterval = -1;
+
+    spdlog::info("extentLat x extentLon: {} x {}", extentLat, extentLon);
+    spdlog::info("nTimeIntervals {}", nTimeIntervals);
+    spdlog::info("LatMin - LatMax: [{}; {}]", LatMin, LatMax);
+    spdlog::info("LonMin - LonMax: [{}; {}]", LonMin, LonMax);
+    spdlog::info("valid_time_front {}", valid_time_front);
+    spdlog::info("simulation_start_date {}", simulation_start_date);
+    spdlog::info("gridLatMin; gridLonMin [{},{}]",gridLatMin, gridLonMin);
+    spdlog::info("WindInterpolator::ReadFromOwnHDF5 done");
 }
 
 

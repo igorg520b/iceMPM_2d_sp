@@ -1,4 +1,4 @@
-#ifndef WINDINTERPOLATOR_H
+ #ifndef WINDINTERPOLATOR_H
 #define WINDINTERPOLATOR_H
 
 #include <string_view>
