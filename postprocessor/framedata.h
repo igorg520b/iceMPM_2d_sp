@@ -1,7 +1,9 @@
 #ifndef FRAMEDATA_H
 #define FRAMEDATA_H
 
-#include <string.h>
+#include <string>
+#include <vector>
+
 #include <H5Cpp.h>
 #include <spdlog/spdlog.h>
 #include <Eigen/Core>
@@ -13,10 +15,12 @@ class FrameData
 public:
     bool dataLoaded = false;
     SimParams prms;
+    std::string frameDirectory;
+    std::vector<bool> availableFrames;
 
     FrameData();
     void LoadHDF5Frame(std::string frameFileName);
-
+    void ScanDirectory(std::string frameFileName);
 
     std::vector<uint8_t> grid_status_buffer;
     std::vector<uint8_t> count;
@@ -24,6 +28,7 @@ public:
 
 private:
     void LoadWindData(std::string initialGridAndWindFileName);
+
 };
 
 #endif // FRAMEDATA_H

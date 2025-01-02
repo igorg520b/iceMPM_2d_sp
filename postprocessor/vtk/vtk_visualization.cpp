@@ -21,7 +21,6 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     txtprop->SetFontSize(14);
     txtprop->ShadowOff();
     txtprop->SetColor(0,0,0);
-    actor_text->SetDisplayPosition(500, 30);
 
     // main grid
     mapper_grid_main->SetInputData(structuredGrid_main);
@@ -57,7 +56,6 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     scalarBar->GetLabelTextProperty()->ShadowOff();
     scalarBar->GetLabelTextProperty()->SetColor(0.1,0.1,0.1);
     scalarBar->GetLabelTextProperty()->SetFontFamilyToTimes();
-
     scalarBar->SetUnconstrainedFontSize(true);
     scalarBar->GetLabelTextProperty()->SetFontSize(40);
 
@@ -71,29 +69,44 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     rectanglePolyData->SetPoints(rectanglePoints);
     rectanglePolyData->SetLines(rectangleLines);
 
+    rectangleMapper_copy1->SetInputData(rectanglePolyData);
+
+    // copies for offscreen renderer
+    mapper_grid_main_copy1->SetInputData(structuredGrid_main);
+    actor_grid_main_copy1->SetMapper(mapper_grid_main_copy1);
+    actor_grid_main_copy1->GetProperty()->SetEdgeVisibility(false);
+    actor_grid_main_copy1->GetProperty()->LightingOff();
+    actor_grid_main_copy1->GetProperty()->ShadingOff();
+    actor_grid_main_copy1->PickableOff();
+
+    vtkTextProperty* txtprop1 = actor_text_copy1->GetTextProperty();
+    txtprop1->SetFontFamilyToArial();
+    txtprop1->BoldOff();
+    txtprop1->SetFontSize(14);
+    txtprop1->ShadowOff();
+    txtprop1->SetColor(0,0,0);
+    actor_text_copy1->SetDisplayPosition(600, 10);
+    actor_text->SetDisplayPosition(600, 10);
 
 
- /*
-//    grid_mapper->SetLookupTable(hueLut);
+    scalarBar_copy1->SetLookupTable(hueLut_count);
+    scalarBar_copy1->SetMaximumWidthInPixels(180);
+    scalarBar_copy1->SetBarRatio(0.1);
+    scalarBar_copy1->SetMaximumHeightInPixels(250);
+    scalarBar_copy1->GetPositionCoordinate()->SetCoordinateSystemToNormalizedDisplay();
+    scalarBar_copy1->GetPositionCoordinate()->SetValue(0.01,0.015, 0.0);
+    scalarBar_copy1->SetLabelFormat("%.1e");
+    scalarBar_copy1->GetLabelTextProperty()->BoldOff();
+    scalarBar_copy1->GetLabelTextProperty()->ItalicOff();
+    scalarBar_copy1->GetLabelTextProperty()->ShadowOff();
+    scalarBar_copy1->GetLabelTextProperty()->SetColor(0.1,0.1,0.1);
+    scalarBar_copy1->GetLabelTextProperty()->SetFontFamilyToTimes();
+    scalarBar_copy1->SetUnconstrainedFontSize(true);
+    scalarBar_copy1->GetLabelTextProperty()->SetFontSize(40);
 
-    actor_grid->GetProperty()->SetEdgeColor(0.2,0.2,0.2);
-    actor_grid->GetProperty()->SetColor(0.1,0.1,0.1);
-    actor_grid->GetProperty()->SetRepresentationToWireframe();
-
-    // grid2
-    points_mapper->UseLookupTableScalarRangeOn();
-
-
-    actor_grid2->SetMapper(grid_mapper2);
-    actor_grid2->GetProperty()->SetEdgeVisibility(false);
-    actor_grid2->GetProperty()->LightingOff();
-    actor_grid2->GetProperty()->ShadingOff();
-    actor_grid2->GetProperty()->SetInterpolationToFlat();
-    actor_grid2->PickableOff();
-    actor_grid2->GetProperty()->SetColor(0.98,0.98,0.98);
-
-
-*/
+    rectangleActor_copy1->SetMapper(rectangleMapper_copy1);
+    rectangleActor_copy1->GetProperty()->SetColor(0.0, 0.0, 0.0); // Red color
+    rectangleActor_copy1->GetProperty()->SetLineWidth(2.0);       // Line thickness
 }
 
 
@@ -199,6 +212,7 @@ void VTKVisualization::SynchronizeValues()
     if(VisualizingVariable == VisOpt::none)
     {
         scalarBar->VisibilityOff();
+        scalarBar_copy1->VisibilityOff();
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
             {
@@ -218,6 +232,7 @@ void VTKVisualization::SynchronizeValues()
     else if(VisualizingVariable == VisOpt::count)
     {
         scalarBar->VisibilityOff();
+        scalarBar_copy1->VisibilityOff();
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
             {
@@ -239,6 +254,7 @@ void VTKVisualization::SynchronizeValues()
     else if(VisualizingVariable == VisOpt::colors)
     {
         scalarBar->VisibilityOff();
+        scalarBar_copy1->VisibilityOff();
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
             {
@@ -249,7 +265,6 @@ void VTKVisualization::SynchronizeValues()
                 float r = frameData.vis_r[idx_storage];
                 float g = frameData.vis_g[idx_storage];
                 float b = frameData.vis_b[idx_storage];
-                float a = frameData.vis_alpha[idx_storage];
 
                 float coeff = 0;
                 if(!land) coeff = std::min(count/3.,1.);
@@ -274,65 +289,6 @@ void VTKVisualization::SynchronizeValues()
         structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
         mapper_grid_main->SetColorModeToDirectScalars();
     }
-
-    /*
-    else if(VisualizingVariable == VisOpt::Jp_inv)
-    {
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-                int idx_storage = idx_y + idx_x*gy;
-                int land = gb[idx_storage];
-                int count = frameData.count[idx_storage];
-                float r = frameData.vis_r[idx_storage];
-                float g = frameData.vis_g[idx_storage];
-                float b = frameData.vis_b[idx_storage];
-                //float a = frameData.vis_alpha[idx_storage];
-                float Jp_inv = frameData.vis_Jpinv[idx_storage];
-
-
-                const Eigen::Vector3f land_color(0.35, 0.15, 0.15);
-                const Eigen::Vector3f water_color(0x11/255., 0x18/255., 0x20/255.);
-                const Eigen::Vector3f ice_cover_color(r,g,b);
-                Eigen::Vector3f paint_color(0,0,0);
-
-
-
-                if(land)
-                {
-                    paint_color = land_color;
-                }
-                else
-                {
-                    float coeff1 = std::min(count/3.,1.); // how much water surface is obscured
-                    paint_color = (1-coeff1)*water_color + coeff1*ice_cover_color;
-
-                    if(!std::isnan(Jp_inv))
-                    {
-                        float coeff2 = 0.05+std::abs(Jp_inv-1)/range;
-                        coeff2 = std::clamp(coeff2, 0.25f, 1.0f);
-                        Eigen::Vector3f Jpinv_color = interpolateColor(naturalRidges, 7, 0.5+(Jp_inv-1)/range);
-                        paint_color = (1-coeff2)*paint_color + coeff2*Jpinv_color;
-                    }
-
-
-                }
-
-                for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(idx_visual*3+k), (unsigned char)(255*paint_color[k]));
-            }
-        visualized_values_grid->Modified();
-        structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
-        mapper_grid_main->SetColorModeToDirectScalars();
-
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut_Jpinv);
-        scalarBar->SetLabelFormat("%.1f");
-
-        hueLut_Jpinv->SetTableRange(1-range, 1+range);
-    }
-    */
-
     else if(VisualizingVariable == VisOpt::Jp_inv)
     {
         for(int idx_y=0; idx_y<gy; idx_y++)
@@ -385,57 +341,11 @@ void VTKVisualization::SynchronizeValues()
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_J);
         scalarBar->SetLabelFormat("%.1f");
+        scalarBar_copy1->VisibilityOn();
+        scalarBar_copy1->SetLookupTable(hueLut_J);
+        scalarBar_copy1->SetLabelFormat("%.1f");
         hueLut_J->SetTableRange(1-range, 1+range);
     }
-
-/*
-    else if(VisualizingVariable == VisOpt::P)
-    {
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-                int idx_storage = idx_y + idx_x*gy;
-                int land = gb[idx_storage];
-                int count = frameData.count[idx_storage];
-                float r = frameData.vis_r[idx_storage];
-                float g = frameData.vis_g[idx_storage];
-                float b = frameData.vis_b[idx_storage];
-                float P = frameData.vis_P[idx_storage];
-
-                const Eigen::Vector3f ice_cover_color(r,g,b);
-                Eigen::Vector3f paint_color(0,0,0);
-
-                if(land)
-                {
-                    paint_color = land_color;
-                }
-                else
-                {
-                    float coeff1 = std::min(count/3.,1.); // how much water surface is obscured
-                    paint_color = (1-coeff1)*water_color + coeff1*ice_cover_color;
-
-                    if(!std::isnan(P))
-                    {
-                        float coeff2 = 0.05+std::abs(P)/range;
-                        coeff2 = std::clamp(coeff2, 0.25f, 1.0f);
-                        Eigen::Vector3f P_color = interpolateColor(lutSpecialP, 11, 0.5+(P)/range);
-                        paint_color = (1-coeff2)*paint_color + coeff2*P_color;
-                    }
-                }
-                for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(idx_visual*3+k), (unsigned char)(255*paint_color[k]));
-            }
-        visualized_values_grid->Modified();
-        structuredGrid_main->GetCellData()->SetActiveScalars("pts_colors");
-        mapper_grid_main->SetColorModeToDirectScalars();
-
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut_pressure);
-        scalarBar->SetLabelFormat("%.1e");
-
-        hueLut_pressure->SetTableRange(-range, range);
-    }
-*/
     else if(VisualizingVariable == VisOpt::P)
     {
         for(int idx_y=0; idx_y<gy; idx_y++)
@@ -480,6 +390,9 @@ void VTKVisualization::SynchronizeValues()
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_Jpinv);
         scalarBar->SetLabelFormat("%.1e");
+        scalarBar_copy1->VisibilityOn();
+        scalarBar_copy1->SetLookupTable(hueLut_Jpinv);
+        scalarBar_copy1->SetLabelFormat("%.1e");
         hueLut_Jpinv->SetTableRange(-range, range);
     }
 
@@ -527,6 +440,9 @@ void VTKVisualization::SynchronizeValues()
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_Q);
         scalarBar->SetLabelFormat("%.1e");
+        scalarBar_copy1->VisibilityOn();
+        scalarBar_copy1->SetLookupTable(hueLut_Q);
+        scalarBar_copy1->SetLabelFormat("%.1e");
         hueLut_Q->SetTableRange(0, range);
     }
 
@@ -860,6 +776,8 @@ void VTKVisualization::SynchronizeValues()
 
     model->accessing_point_data.unlock();
 */
+
+//    mapper_grid_main_copy1->Update();
 }
 
 

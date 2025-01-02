@@ -26,7 +26,6 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     , ui(new Ui::PPMainWindow), representation(frameData)
 {
     ui->setupUi(this);
-//    representation.frameData = this->frameData;
 
     // VTK
     qt_vtk_widget = new QVTKOpenGLNativeWidget();
@@ -49,11 +48,7 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     qdsbValRange->setSingleStep(0.25);
     ui->toolBar->addWidget(qdsbValRange);
 
-// anything that includes the Model
-    renderer->AddActor(representation.actor_grid_main);
-    renderer->AddActor(representation.actor_text);
-    renderer->AddActor(representation.scalarBar);
-    renderer->AddActor(representation.rectangleActor);
+
 
     // populate combobox
     QMetaEnum qme = QMetaEnum::fromType<VTKVisualization::VisOpt>();
@@ -115,17 +110,42 @@ PPMainWindow::PPMainWindow(QWidget *parent)
         cameraReset_triggered();
     }
 
+    connect(ui->actionOpen_Frame, &QAction::triggered, this, &PPMainWindow::open_frame_triggered);
+    connect(ui->action_camera_reset, &QAction::triggered, this, &PPMainWindow::cameraReset_triggered);
+    connect(ui->actionRender_Frame, &QAction::triggered, this, &PPMainWindow::render_frame_triggered);
+    connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
 
-    windowToImageFilter->SetInput(renderWindow);
+    connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PPMainWindow::limits_changed);
+
+
+    // off-screen rendering
+    // Copy the renderers from the current render window
+
+    // Set the target resolution for the off-screen render window
+    offscreenRenderWindow->SetSize(1920, 1080);
+    offscreenRenderWindow->DoubleBufferOff();
+    offscreenRenderWindow->SetOffScreenRendering(true);
+    offscreenRenderWindow->AddRenderer(offscreenRenderer);
+
+    offscreenRenderer->SetBackground(1.0,1.0,1.0);
+
+
+    // anything that includes the Model
+    renderer->AddActor(representation.actor_grid_main);
+    renderer->AddActor(representation.actor_text);
+    renderer->AddActor(representation.scalarBar);
+    renderer->AddActor(representation.rectangleActor);
+
+    offscreenRenderer->AddActor(representation.actor_grid_main_copy1);
+    offscreenRenderer->AddActor(representation.actor_text_copy1);
+    offscreenRenderer->AddActor(representation.scalarBar_copy1);
+    offscreenRenderer->AddActor(representation.rectangleActor_copy1);
+
+    windowToImageFilter->SetInput(offscreenRenderWindow);
     windowToImageFilter->SetScale(1); // image quality
     windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
     windowToImageFilter->ReadFrontBufferOn(); // read from the back buffer
     writerPNG->SetInputConnection(windowToImageFilter->GetOutputPort());
-
-    connect(ui->actionOpen_Frame, &QAction::triggered, this, &PPMainWindow::open_frame_triggered);
-    connect(ui->action_camera_reset, &QAction::triggered, this, &PPMainWindow::cameraReset_triggered);
-
-    connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PPMainWindow::limits_changed);
 
     qDebug() << "PPMainWindow constructor done";
     updateGUI();
@@ -133,6 +153,14 @@ PPMainWindow::PPMainWindow(QWidget *parent)
 
 void PPMainWindow::updateGUI()
 {
+    int64_t display_date = (int64_t)frameData.prms.SimulationTime + frameData.prms.SimulationStartUnixTime;
+    std::time_t unix_time = display_date;
+    std::tm* tm_time = std::gmtime(&unix_time);
+    // Format the time
+    char buffer[100];
+    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
+    representation.actor_text->SetInput(buffer);
+    representation.actor_text_copy1->SetInput(buffer);
     renderWindow->Render();
 }
 
@@ -155,9 +183,17 @@ void PPMainWindow::open_frame_triggered()
         );
 
     if(qFileName.isNull())return;
+    frameData.ScanDirectory(qFileName.toStdString());
+
     frameData.LoadHDF5Frame(qFileName.toStdString());
     representation.SynchronizeTopology();
-    renderWindow->Render();
+
+
+
+    updateGUI();
+//    renderWindow->Render();
+
+    offscreen_camera_reset();
 }
 
 
@@ -230,30 +266,6 @@ void PPMainWindow::cameraReset_triggered()
 
 
 
-void PPMainWindow::screenshot()
-{
-    /*
-    if(model.prms.SimulationStep % model.prms.UpdateEveryNthStep) return;
-    QString outputPath = QDir::currentPath()+ "/" + screenshot_directory.c_str() + "/" +
-                         QString::number(model.prms.AnimationFrameNumber()).rightJustified(5, '0') + ".png";
-
-    QDir pngDir(QDir::currentPath()+ "/"+ screenshot_directory.c_str());
-    if(!pngDir.exists()) pngDir.mkdir(QDir::currentPath()+ "/"+ screenshot_directory.c_str());
-
-    renderWindow->DoubleBufferOff();
-    renderWindow->Render();
-    windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
-    renderWindow->WaitForCompletion();
-
-    windowToImageFilter->Update();
-    windowToImageFilter->Modified();
-
-    writerPNG->Modified();
-    writerPNG->SetFileName(outputPath.toUtf8().constData());
-    writerPNG->Write();
-    renderWindow->DoubleBufferOn();
-*/
-}
 
 
 void PPMainWindow::sliderValueChanged(int val)
@@ -268,7 +280,6 @@ void PPMainWindow::sliderValueChanged(int val)
     renderWindow->Render();
 
     int64_t display_date = (int64_t)set_val + model.prms.SimulationStartUnixTime;
-
     std::time_t unix_time = display_date;
     std::tm* tm_time = std::gmtime(&unix_time);
     // Format the time
@@ -278,3 +289,66 @@ void PPMainWindow::sliderValueChanged(int val)
 */
 }
 
+
+
+void PPMainWindow::render_frame_triggered()
+{
+    qDebug() << "PPMainWindow::render_frame_triggered()";
+    offscreenRenderWindow->Render();
+
+//    windowToImageFilter->SetInput(offscreenRenderWindow);
+    windowToImageFilter->Update();
+
+    // Save the image using a writer (e.g., PNG)
+    writerPNG->SetFileName("test.png");
+    writerPNG->Write();
+}
+
+void PPMainWindow::offscreen_camera_reset()
+{
+    vtkCamera* camera = offscreenRenderer->GetActiveCamera();
+    offscreenRenderer->ResetCamera();
+    camera->ParallelProjectionOn();
+    camera->SetClippingRange(1e-1,1e3);
+
+    const double dx = frameData.prms.DimensionHorizontal/2;
+    const double dy = frameData.prms.DimensionVertical/2;
+
+    qDebug() << "dx " << dx << "\ndy " << dy;
+
+    camera->SetPosition(dx, dy, 50.);
+    camera->SetFocalPoint(dx, dy, 0.);
+    camera->SetViewUp(0.0, 1.0, 0.0);
+    camera->SetParallelScale(std::min(dx,dy)*1.1);
+
+    camera->Modified();
+}
+
+
+void PPMainWindow::render_all_triggered()
+{
+    qDebug() << "PPMainWindow::render_all_triggered()";
+
+    std::string outputDirectory = "render";
+    if(representation.VisualizingVariable == VTKVisualization::VisOpt::P) outputDirectory = "render/P";
+    std::filesystem::path directory_path(outputDirectory);
+    if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
+
+
+    for(int frame=0; frame<frameData.availableFrames.size(); frame++)
+    {
+        if(!frameData.availableFrames[frame]) continue;
+        qDebug() << "rendering frame " << frame;
+        std::string fileName = fmt::format("{}/frame_{:05d}.h5", frameData.frameDirectory, frame);
+        frameData.LoadHDF5Frame(fileName);
+        representation.SynchronizeValues();
+        updateGUI();
+
+        offscreenRenderWindow->Render();
+        windowToImageFilter->Modified(); // this is extra important !!!!!!!!!
+
+        std::string renderFileName = fmt::format("{}/{:05d}.png", outputDirectory, frame);
+        writerPNG->SetFileName(renderFileName.c_str());
+        writerPNG->Write();
+    }
+}

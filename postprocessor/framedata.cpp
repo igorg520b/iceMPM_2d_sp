@@ -1,7 +1,46 @@
 #include <filesystem>
+#include <regex>
 #include "framedata.h"
 
 FrameData::FrameData() {}
+
+
+void FrameData::ScanDirectory(std::string frameFileName)
+{
+    std::filesystem::path framePath(frameFileName);
+
+    // Navigate to the target file by appending the relative path
+    std::filesystem::path gridAndWindPath = framePath.parent_path();
+    frameDirectory = gridAndWindPath.string();
+
+
+    // Read the contents of the directory
+    for (const auto& entry : std::filesystem::directory_iterator(frameDirectory)) {
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
+
+            // Check if the filename matches the pattern "frame_XXXXX.h5"
+            std::regex pattern(R"(frame_(\d{5})\.h5)");
+            std::smatch match;
+            if (std::regex_match(filename, match, pattern)) {
+                // Extract the five-digit integer from the filename
+                int frameIndex = std::stoi(match[1].str());
+
+                // Ensure the availableFrames vector is large enough
+                if (frameIndex >= availableFrames.size()) {
+                    availableFrames.resize(frameIndex + 1, false);
+                }
+
+                // Set the corresponding element to true
+                availableFrames[frameIndex] = true;
+            }
+        }
+    }
+
+    spdlog::info("availableFrames size {}",availableFrames.size());
+    spdlog::info("frameDirectory {}", frameDirectory);
+}
+
 
 
 void FrameData::LoadHDF5Frame(std::string frameFileName)
@@ -61,6 +100,9 @@ void FrameData::LoadHDF5Frame(std::string frameFileName)
 
     H5::H5File file(frameFileName, H5F_ACC_RDONLY);
     H5::DataSet ds_count = file.openDataSet("count");
+
+    ds_count.openAttribute("SimulationStep").read(H5::PredType::NATIVE_INT, &prms.SimulationStep);
+    ds_count.openAttribute("SimulationTime").read(H5::PredType::NATIVE_DOUBLE, &prms.SimulationTime);
 
     hsize_t dims[2];
     ds_count.getSpace().getSimpleExtentDims(dims, nullptr);

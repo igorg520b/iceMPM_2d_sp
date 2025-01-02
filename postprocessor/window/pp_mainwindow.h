@@ -66,6 +66,8 @@ private Q_SLOTS:
     void sliderValueChanged(int val);
 
     void open_frame_triggered();
+    void render_frame_triggered();
+    void render_all_triggered();
 
 private:
     FrameData frameData;
@@ -87,9 +89,12 @@ private:
     // other
     vtkNew<vtkInteractorStyleRubberBand2D> interactor;
 
-    // screenshots
+    // off-screen rendering
+    vtkNew<vtkRenderWindow> offscreenRenderWindow;
     vtkNew<vtkWindowToImageFilter> windowToImageFilter;
     vtkNew<vtkPNGWriter> writerPNG;
-    void screenshot();
+    vtkNew<vtkRenderer> offscreenRenderer;
+    void offscreen_camera_reset();
+
 };
 #endif

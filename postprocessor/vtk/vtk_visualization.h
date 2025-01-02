@@ -58,11 +58,17 @@ public:
     void SynchronizeTopology();
     void ChangeVisualizationOption(int option);  // invoked from GUI/main thread
 
-    vtkNew<vtkActor> actor_grid_main;
     vtkNew<vtkActor> actor_grid_lat_lon;
+
+    vtkNew<vtkActor> actor_grid_main;
     vtkNew<vtkScalarBarActor> scalarBar;
     vtkNew<vtkTextActor> actor_text;
     vtkNew<vtkActor> rectangleActor;
+
+    vtkNew<vtkActor> actor_grid_main_copy1;
+    vtkNew<vtkScalarBarActor> scalarBar_copy1;
+    vtkNew<vtkTextActor> actor_text_copy1;
+    vtkNew<vtkActor> rectangleActor_copy1;
 
 private:
     vtkNew<vtkLookupTable> hueLut_count, hueLut_J, hueLut_Jpinv, hueLut_Q;
@@ -90,6 +96,9 @@ private:
     void populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
     void interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
 
+    // offscreen rendering
+    vtkNew<vtkDataSetMapper> mapper_grid_main_copy1;
+    vtkNew<vtkPolyDataMapper> rectangleMapper_copy1;
 
 
 static constexpr float lutSpecialJ[5][3] = {

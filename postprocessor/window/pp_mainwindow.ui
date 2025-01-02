@@ -35,6 +35,8 @@
      <string>Tools</string>
     </property>
     <addaction name="action_camera_reset"/>
+    <addaction name="actionRender_Frame"/>
+    <addaction name="actionRender_All"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuTools_2"/>
@@ -84,6 +86,22 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionRender_Frame">
+   <property name="text">
+    <string>Render Frame</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+F</string>
+   </property>
+  </action>
+  <action name="actionRender_All">
+   <property name="text">
+    <string>Render All</string>
+   </property>
+   <property name="shortcut">
+    <string>F5</string>
    </property>
   </action>
  </widget>
