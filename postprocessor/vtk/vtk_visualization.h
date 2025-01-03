@@ -49,7 +49,7 @@ public:
 
     double wind_visualization_time;
 
-    enum VisOpt { none, count, colors, Jp_inv, P, Q, wind_u, wind_v, wind_norm};
+    enum VisOpt { none, count, colors, Jp_inv, P, Q, wind_u, wind_v, wind_norm, divergence, phi, wind_from_phi};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};
@@ -73,7 +73,7 @@ public:
     vtkNew<vtkTextActor> actor_text_title_copy1;
 
 private:
-    vtkNew<vtkLookupTable> hueLut_count, hueLut_J, hueLut_Jpinv, hueLut_Q;
+    vtkNew<vtkLookupTable> hueLut_count, hueLut_J, hueLut_Jpinv, hueLut_Q, hueLut;
 
     // main grid
     vtkNew<vtkStructuredGrid> structuredGrid_main;

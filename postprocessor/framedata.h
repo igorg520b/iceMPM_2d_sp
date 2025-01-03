@@ -8,6 +8,7 @@
 #include <spdlog/spdlog.h>
 #include <Eigen/Core>
 #include "simulation/parameters_sim.h"
+#include "simulation/windinterpolator.h"
 
 
 class FrameData
@@ -15,6 +16,7 @@ class FrameData
 public:
     bool dataLoaded = false;
     SimParams prms;
+    WindInterpolator windInterpolator;
     std::string frameDirectory;
     std::vector<bool> availableFrames;
 

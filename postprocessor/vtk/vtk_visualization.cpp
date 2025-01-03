@@ -170,48 +170,6 @@ void VTKVisualization::SynchronizeTopology()
     rectangleLines->Reset();
     rectangleLines->InsertNextCell(5, pointIds);
 
-    /*
-    model->accessing_point_data.lock();
-
-
-    const int nPts = model->gpu.hssoa.size;
-    points->SetNumberOfPoints(nPts);
-    visualized_values->SetNumberOfValues(nPts);
-    pts_colors->SetNumberOfValues(nPts*3);
-
-    int gx = model->prms.GridXTotal;
-    int gy = model->prms.GridY;
-    const double h = model->prms.cellsize;
-
-    // GRID1 now shows the parallels and meridians
-    int nGridLat = model->wind_interpolator.extentLat;
-    int nGridLon = model->wind_interpolator.extentLon;
-
-    double lami = model->wind_interpolator.LatMin;
-    double lamx = model->wind_interpolator.LatMax;
-    double lomi = model->wind_interpolator.LonMin;
-    double lomx = model->wind_interpolator.LonMax;
-    auto latToGrid = [&](float lat) { return h*gy*(lat-lami)/(lamx-lami); };
-    auto lonToGrid = [&](float lon) { return h*gx*(lon-lomi)/(lomx-lomi); };
-
-    if(model->wind_interpolator.isInitialized)
-    {
-        structuredGrid->SetDimensions(nGridLon, nGridLat, 1);
-        grid_points->SetNumberOfPoints(nGridLon*nGridLat);
-        for(int idx_y=0; idx_y<nGridLat; idx_y++)
-            for(int idx_x=0; idx_x<nGridLon; idx_x++)
-            {
-                float lon = model->wind_interpolator.gridLonMin + idx_x*WindInterpolator::gridCellSize;
-                float lat = model->wind_interpolator.gridLatMin + idx_y*WindInterpolator::gridCellSize;
-                double x = lonToGrid(lon);
-                double y = latToGrid(lat);
-                double pt_pos[3] {x, y, -0.5};
-                grid_points->SetPoint((vtkIdType)(idx_x+idx_y*nGridLon), pt_pos);
-            }
-        structuredGrid->SetPoints(grid_points);
-    }
-*/
-
     SynchronizeValues();
 }
 
@@ -266,7 +224,6 @@ void VTKVisualization::SynchronizeValues()
         mapper_grid_main->SetLookupTable(hueLut_count);
         mapper_grid_main->SetColorModeToMapScalars();
         structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
-
 
         visualized_values_grid->Modified();
     }
@@ -464,6 +421,129 @@ void VTKVisualization::SynchronizeValues()
         scalarBar_copy1->SetLabelFormat("%.1e");
         hueLut_Q->SetTableRange(0, range);
     }
+    else if(VisualizingVariable == VisOpt::wind_norm)
+    {
+        //frameData.windInterpolator.setTime(frameData.prms.SimulationTime);
+        //float tb = frameData.windInterpolator.interpolationCoeffFromTime(frameData.prms.SimulationTime);
+
+        frameData.windInterpolator.prepareVisualizationData(frameData.prms.SimulationTime);
+
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+
+                float lat = frameData.prms.LatMin + (frameData.prms.LatMax-frameData.prms.LatMin)*(float)idx_y/(float)gy;
+                float lon = frameData.prms.LonMin + (frameData.prms.LonMax-frameData.prms.LonMin)*(float)idx_x/(float)gx;
+
+                //Eigen::Vector2f wv = frameData.windInterpolator.interpolationResult(lat, lon, tb);
+
+                Eigen::Vector2f wv = frameData.windInterpolator.vis_interp(lat, lon);
+                visualized_values_grid->SetValue(idx_visual, wv.norm());
+            }
+        mapper_grid_main->SetLookupTable(hueLut);
+        mapper_grid_main->SetColorModeToMapScalars();
+        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut);
+        scalarBar->SetLabelFormat("%.1f");
+        scalarBar_copy1->VisibilityOn();
+        scalarBar_copy1->SetLookupTable(hueLut);
+        scalarBar_copy1->SetLabelFormat("%.1f");
+        hueLut->SetTableRange(0, range);
+    }
+    else if(VisualizingVariable == VisOpt::divergence)
+    {
+        frameData.windInterpolator.prepareVisualizationData(frameData.prms.SimulationTime);
+        frameData.windInterpolator.computePotentialApproximation();
+
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+
+                float lat = frameData.prms.LatMin + (frameData.prms.LatMax-frameData.prms.LatMin)*(float)idx_y/(float)gy;
+                float lon = frameData.prms.LonMin + (frameData.prms.LonMax-frameData.prms.LonMin)*(float)idx_x/(float)gx;
+
+                float val = frameData.windInterpolator.vis_interp_divergence(lat, lon);
+                visualized_values_grid->SetValue(idx_visual, val);
+            }
+        mapper_grid_main->SetLookupTable(hueLut);
+        mapper_grid_main->SetColorModeToMapScalars();
+        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut);
+        scalarBar->SetLabelFormat("%.1f");
+        scalarBar_copy1->VisibilityOn();
+        scalarBar_copy1->SetLookupTable(hueLut);
+        scalarBar_copy1->SetLabelFormat("%.1f");
+        hueLut->SetTableRange(0, range);
+    }
+    else if(VisualizingVariable == VisOpt::phi)
+    {
+        frameData.windInterpolator.prepareVisualizationData(frameData.prms.SimulationTime);
+        frameData.windInterpolator.computePotentialApproximation();
+
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+
+                float lat = frameData.prms.LatMin + (frameData.prms.LatMax-frameData.prms.LatMin)*(float)idx_y/(float)gy;
+                float lon = frameData.prms.LonMin + (frameData.prms.LonMax-frameData.prms.LonMin)*(float)idx_x/(float)gx;
+
+                float val = frameData.windInterpolator.vis_interp_phi(lat, lon);
+                visualized_values_grid->SetValue(idx_visual, val);
+            }
+        mapper_grid_main->SetLookupTable(hueLut);
+        mapper_grid_main->SetColorModeToMapScalars();
+        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut);
+        scalarBar->SetLabelFormat("%.1f");
+        scalarBar_copy1->VisibilityOn();
+        scalarBar_copy1->SetLookupTable(hueLut);
+        scalarBar_copy1->SetLabelFormat("%.1f");
+        hueLut->SetTableRange(0, range);
+    }
+    else if(VisualizingVariable == VisOpt::wind_from_phi)
+    {
+        frameData.windInterpolator.prepareVisualizationData(frameData.prms.SimulationTime);
+        frameData.windInterpolator.computePotentialApproximation();
+
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+
+                float lat = frameData.prms.LatMin + (frameData.prms.LatMax-frameData.prms.LatMin)*(float)idx_y/(float)gy;
+                float lon = frameData.prms.LonMin + (frameData.prms.LonMax-frameData.prms.LonMin)*(float)idx_x/(float)gx;
+
+                Eigen::Vector2f wv = frameData.windInterpolator.vis_interp_potential(lat, lon);
+                visualized_values_grid->SetValue(idx_visual, wv.norm());
+            }
+        mapper_grid_main->SetLookupTable(hueLut);
+        mapper_grid_main->SetColorModeToMapScalars();
+        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(hueLut);
+        scalarBar->SetLabelFormat("%.1f");
+        scalarBar_copy1->VisibilityOn();
+        scalarBar_copy1->SetLookupTable(hueLut);
+        scalarBar_copy1->SetLabelFormat("%.1f");
+        hueLut->SetTableRange(0, range);
+    }
+
+
+
+
+
+
+
 
     int64_t display_date = (int64_t)frameData.prms.SimulationTime + frameData.prms.SimulationStartUnixTime;
     std::time_t unix_time = display_date;
@@ -493,20 +573,20 @@ void VTKVisualization::ChangeVisualizationOption(int option)
     }
     else if(option == VisOpt::Jp_inv)
     {
-        actor_text_title_copy1->SetInput("Volume change");
-        actor_text_title->SetInput("Volume change");
+        actor_text_title_copy1->SetInput("Surf. density");
+        actor_text_title->SetInput("Surf. density");
     }
-    else if(option == VisOpt::colors)
+    else if(option == VisOpt::wind_norm)
+    {
+        actor_text_title_copy1->SetInput("Wind speed");
+        actor_text_title->SetInput("Wind speed");
+    }
+    else
     {
         actor_text_title_copy1->SetInput("-");
         actor_text_title->SetInput("-");
     }
 
-
-
-    //representation.
-
-//    SynchronizeTopology();
     SynchronizeValues();
 }
 

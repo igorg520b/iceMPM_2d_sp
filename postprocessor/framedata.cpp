@@ -85,6 +85,8 @@ void FrameData::LoadHDF5Frame(std::string frameFileName, bool loadGridAndWind)
 
         // Read the dataset into the vector
         gridDataset.read(grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
+
+        windInterpolator.ReadFromOwnHDF5(file);
     }
 
     size_t gridSize = prms.GridXTotal*prms.GridY;
