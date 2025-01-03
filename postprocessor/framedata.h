@@ -19,7 +19,7 @@ public:
     std::vector<bool> availableFrames;
 
     FrameData();
-    void LoadHDF5Frame(std::string frameFileName);
+    void LoadHDF5Frame(std::string frameFileName, bool loadGridAndWind = true);
     void ScanDirectory(std::string frameFileName);
 
     std::vector<uint8_t> grid_status_buffer;

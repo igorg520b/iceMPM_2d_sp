@@ -15,10 +15,11 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     interpolateLut(lutSpecialQ, (sizeof(lutSpecialQ)/(sizeof(lutSpecialQ[0]))), hueLut_Q);
 
     // text
+    constexpr int fontSize = 20;
     vtkTextProperty* txtprop = actor_text->GetTextProperty();
     txtprop->SetFontFamilyToArial();
     txtprop->BoldOff();
-    txtprop->SetFontSize(14);
+    txtprop->SetFontSize(fontSize);
     txtprop->ShadowOff();
     txtprop->SetColor(0,0,0);
 
@@ -82,11 +83,29 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     vtkTextProperty* txtprop1 = actor_text_copy1->GetTextProperty();
     txtprop1->SetFontFamilyToArial();
     txtprop1->BoldOff();
-    txtprop1->SetFontSize(14);
     txtprop1->ShadowOff();
     txtprop1->SetColor(0,0,0);
+    txtprop1->SetFontSize(fontSize);
     actor_text_copy1->SetDisplayPosition(600, 10);
     actor_text->SetDisplayPosition(600, 10);
+
+    txtprop1 = actor_text_title->GetTextProperty();
+    txtprop1->SetFontFamilyToArial();
+    txtprop1->BoldOff();
+    txtprop1->ShadowOff();
+    txtprop1->SetColor(0,0,0);
+    txtprop1->SetFontSize(fontSize);
+
+    txtprop1 = actor_text_title_copy1->GetTextProperty();
+    txtprop1->SetFontFamilyToArial();
+    txtprop1->BoldOff();
+    txtprop1->ShadowOff();
+    txtprop1->SetColor(0,0,0);
+    txtprop1->SetFontSize(fontSize);
+
+    actor_text_title->SetDisplayPosition(10, 500);
+    actor_text_title_copy1->SetDisplayPosition(10, 500);
+
 
 
     scalarBar_copy1->SetLookupTable(hueLut_count);
@@ -446,345 +465,49 @@ void VTKVisualization::SynchronizeValues()
         hueLut_Q->SetTableRange(0, range);
     }
 
-
-    /*
-    model->accessing_point_data.lock();
-
-    double sim_time = model->prms.SimulationTime;
-
-    const int nPts = model->gpu.hssoa.size;
-    for(int i=0;i<nPts;i++)
-    {
-        SOAIterator s = model->gpu.hssoa.begin()+i;
-        PointVector2r pos = s->getPos(model->prms.cellsize);
-        points->SetPoint((vtkIdType)i, pos[0], pos[1], -1.0);
-    }
-    points->Modified();
-    actor_points->GetProperty()->SetPointSize(model->prms.ParticleViewSize);
-    double range = std::pow(10,ranges[VisualizingVariable]);
-    double centerVal = 0;
-
-    actor_points->VisibilityOn();
+    int64_t display_date = (int64_t)frameData.prms.SimulationTime + frameData.prms.SimulationStartUnixTime;
+    std::time_t unix_time = display_date;
+    std::tm* tm_time = std::gmtime(&unix_time);
+    // Format the time
+    char buffer[100];
+    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
+    actor_text->SetInput(buffer);
+    actor_text_copy1->SetInput(buffer);
 
 
-    if(VisualizingVariable == VisOpt::status)
-    {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_four);
-        scalarBar->SetLookupTable(hueLut_four);
-        for(int i=0;i<nPts;i++)
-        {
-            float value = 1;
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            if(s->getDisabledStatus()) value = 3;
-            else if(s->getCrushedStatus()) value = 0;
-            else if(s->getWeakenedStatus()) value = 2;
-            visualized_values->SetValue((vtkIdType)i, (float)value);
-        }
-        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-        visualized_values->Modified();
-        grid_mapper2->SetLookupTable(hueLut_four);
-    }
-
-    else if(VisualizingVariable == VisOpt::wind_u)
-    {
-        int gx = model->prms.GridXTotal;
-        int gy = model->prms.GridY;
-        actor_points->VisibilityOff();
-
-        model->wind_interpolator.setTime(wind_visualization_time);
-        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-
-                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
-
-                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
-                float value = wv.x();
-                visualized_values_grid->SetValue(idx_visual, value);
-            }
-
-        grid_mapper2->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(-range, range);
-
-        visualized_values_grid->Modified();
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut_pressure);
-    }
-    else if(VisualizingVariable == VisOpt::wind_v)
-    {
-        int gx = model->prms.GridXTotal;
-        int gy = model->prms.GridY;
-        actor_points->VisibilityOff();
-        model->wind_interpolator.setTime(wind_visualization_time);
-        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-
-                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
-
-                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
-                float value = wv.y();
-                visualized_values_grid->SetValue(idx_visual, value);
-            }
-
-        grid_mapper2->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(-range, range);
-
-        visualized_values_grid->Modified();
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut_pressure);
-    }
-    else if(VisualizingVariable == VisOpt::wind_norm)
-    {
-        int gx = model->prms.GridXTotal;
-        int gy = model->prms.GridY;
-        actor_points->VisibilityOff();
-
-        model->wind_interpolator.setTime(wind_visualization_time);
-        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-
-                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
-
-                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
-                float value = wv.norm();
-                visualized_values_grid->SetValue(idx_visual, value);
-            }
-
-        grid_mapper2->SetLookupTable(hueLut_Southwest);
-        hueLut_Southwest->SetTableRange(0, range);
-
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut_Southwest);
-
-        visualized_values_grid->Modified();
-    }
-    else if(VisualizingVariable == VisOpt::color)
-    {
-        scalarBar->VisibilityOff();
-        points_mapper->ScalarVisibilityOn();
-
-        points_mapper->SetColorModeToDirectScalars();
-//        points_mapper->UseLookupTableScalarRangeOff();
-        points_mapper->Modified();
-
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
-            uint32_t rgb = model->gpu.hssoa.point_colors_rgb[pt_idx];
-            uint8_t r = (rgb >> 16) & 0xff;
-            uint8_t g = (rgb >> 8) & 0xff;
-            uint8_t b = rgb & 0xff;
-            pts_colors->SetValue((vtkIdType)(i*3+0), r);
-            pts_colors->SetValue((vtkIdType)(i*3+1), g);
-            pts_colors->SetValue((vtkIdType)(i*3+2), b);
-        }
-        points_polydata->GetPointData()->SetActiveScalars("pts_colors");
-        pts_colors->Modified();
-
-        points_polydata->Modified();
-        points_filter->Update();
-        grid_mapper2->SetLookupTable(hueLut_four);
-    }
-    else if(VisualizingVariable == VisOpt::special)
-    {
-        scalarBar->VisibilityOff();
-        points_mapper->ScalarVisibilityOn();
-
-        points_mapper->SetColorModeToDirectScalars();
-        points_mapper->Modified();
-
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
-            uint32_t rgb = model->gpu.hssoa.point_colors_rgb[pt_idx];
-            uint8_t _r = (rgb >> 16) & 0xff;
-            uint8_t _g = (rgb >> 8) & 0xff;
-            uint8_t _b = rgb & 0xff;
-
-            float r = _r/255.;
-            float g = _g/255.;
-            float b = _b/255.;
-
-            if(s->getCrushedStatus())
-            {
-                double value = s->getValue(SimParams::idx_Jp_inv)-1;
-                interpolateColor(naturalRidges, 7, (value)*5+0.5, r, g, b);
-            }
-
-            pts_colors->SetValue((vtkIdType)(i*3+0), (unsigned char)(r*255));
-            pts_colors->SetValue((vtkIdType)(i*3+1), (unsigned char)(g*255));
-            pts_colors->SetValue((vtkIdType)(i*3+2), (unsigned char)(b*255));
-        }
-        points_polydata->GetPointData()->SetActiveScalars("pts_colors");
-        pts_colors->Modified();
-
-        points_polydata->Modified();
-        points_filter->Update();
-        grid_mapper2->SetLookupTable(hueLut_four);
-    }
-    else if(VisualizingVariable == VisOpt::Jp_inv)
-    {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_pressure);
-        scalarBar->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            double value = s->getValue(SimParams::idx_Jp_inv)-1;
-//            if(s->getDisabledStatus()) value = 0;
-//            else if(!s->getCrushedStatus()) value = -10;
-            visualized_values->SetValue((vtkIdType)i, (float)value);
-        }
-        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-        visualized_values->Modified();
-        grid_mapper2->SetLookupTable(hueLut_four);
-    }
-    else if(VisualizingVariable == VisOpt::P)
-    {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_pressure);
-        scalarBar->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            float value = s->getValue(SimParams::idx_P);
-            if(s->getDisabledStatus()) value = -2*range;
-            // else if(s->getCrushedStatus()) value = 2*range;
-            visualized_values->SetValue((vtkIdType)i, value);
-        }
-        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-        visualized_values->Modified();
-    }
-    else if(VisualizingVariable == VisOpt::Q)
-    {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_pressure);
-        scalarBar->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            float value = s->getValue(SimParams::idx_Q);
-            if(s->getDisabledStatus()) value = -2*range;
-            //else if(s->getCrushedStatus()) value = 2*range;
-            visualized_values->SetValue((vtkIdType)i, value);
-        }
-        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-        visualized_values->Modified();
-    }
-    else if(VisualizingVariable == VisOpt::qp)
-    {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_Southwest);
-        scalarBar->SetLookupTable(hueLut_Southwest);
-        hueLut_Southwest->SetTableRange(centerVal-range, centerVal+range);
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            float value = s->getValue(SimParams::idx_Qp)-1;
-            if(s->getDisabledStatus()) value = -2*range;
-            else if(s->getCrushedStatus()) value = 2*range;
-            visualized_values->SetValue((vtkIdType)i, value);
-        }
-        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-        visualized_values->Modified();
-    }
-    else if(VisualizingVariable == VisOpt::grains)
-    {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_pastel);
-        scalarBar->SetLookupTable(hueLut_pastel);
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            uint16_t grain = s->getGrain()%40;
-            bool isCrushed = s->getCrushedStatus();
-            if(s->getDisabledStatus()) grain = 41;
-            if(isCrushed) grain = 41;
-            visualized_values->SetValue((vtkIdType)i, (float)grain);
-        }
-        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-        visualized_values->Modified();
-    }
-    else if(VisualizingVariable == VisOpt::velocity)
-    {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_Southwest);
-        scalarBar->SetLookupTable(hueLut_Southwest);
-//        hueLut_temperature->SetTableRange(0, 7.0);
-        hueLut_Southwest->SetRange(0, 2.0);
-
-        //points_mapper->SetScalarRange(11,-1);
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            PointVector2r vel = s->getVelocity();
-            float value = (float)vel.norm();
-            if(s->getDisabledStatus()) value = 1.9;
-            if(value>=1.9) value=1.9;
-            visualized_values->SetValue((vtkIdType)i, (float)value);
-        }
-        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-        visualized_values->Modified();
-    }
-    else
-    {
-        points_mapper->ScalarVisibilityOff();
-        scalarBar->VisibilityOff();
-    }
-    points_filter->Update();
-
-    model->accessing_point_data.unlock();
-*/
-
-//    mapper_grid_main_copy1->Update();
 }
 
 
 void VTKVisualization::ChangeVisualizationOption(int option)
 {
     VisualizingVariable = (VisOpt)option;
-    SynchronizeTopology();
+    if(option == VisOpt::P)
+    {
+        actor_text_title_copy1->SetInput("Hydrostatic pressure");
+        actor_text_title->SetInput("Hydrostatic pressure");
+    }
+    else if(option == VisOpt::Q)
+    {
+        actor_text_title_copy1->SetInput("Deviatoric stress");
+        actor_text_title->SetInput("Deviatoric stress");
+    }
+    else if(option == VisOpt::Jp_inv)
+    {
+        actor_text_title_copy1->SetInput("Volume change");
+        actor_text_title->SetInput("Volume change");
+    }
+    else if(option == VisOpt::colors)
+    {
+        actor_text_title_copy1->SetInput("-");
+        actor_text_title->SetInput("-");
+    }
+
+
+
+    //representation.
+
+//    SynchronizeTopology();
+    SynchronizeValues();
 }
 
 void VTKVisualization::populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)

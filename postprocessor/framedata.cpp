@@ -43,8 +43,10 @@ void FrameData::ScanDirectory(std::string frameFileName)
 
 
 
-void FrameData::LoadHDF5Frame(std::string frameFileName)
+void FrameData::LoadHDF5Frame(std::string frameFileName, bool loadGridAndWind)
 {
+    spdlog::info("LoadHDF5Frame: {}; {}",frameFileName, loadGridAndWind);
+    if(loadGridAndWind)
     {
         // Convert to std::filesystem::path for manipulation
         std::filesystem::path framePath(frameFileName);
@@ -59,6 +61,7 @@ void FrameData::LoadHDF5Frame(std::string frameFileName)
         std::string resultPath = gridAndWindPath.string();
 
         // open the initial data file
+        spdlog::info("LoadHDF5Frame resultPath = {}", resultPath);
         H5::H5File file(resultPath, H5F_ACC_RDONLY);
 
         H5::DataSet gridDataset = file.openDataSet("grid");

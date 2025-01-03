@@ -63,12 +63,14 @@ public:
     vtkNew<vtkActor> actor_grid_main;
     vtkNew<vtkScalarBarActor> scalarBar;
     vtkNew<vtkTextActor> actor_text;
+    vtkNew<vtkTextActor> actor_text_title;
     vtkNew<vtkActor> rectangleActor;
 
     vtkNew<vtkActor> actor_grid_main_copy1;
     vtkNew<vtkScalarBarActor> scalarBar_copy1;
     vtkNew<vtkTextActor> actor_text_copy1;
     vtkNew<vtkActor> rectangleActor_copy1;
+    vtkNew<vtkTextActor> actor_text_title_copy1;
 
 private:
     vtkNew<vtkLookupTable> hueLut_count, hueLut_J, hueLut_Jpinv, hueLut_Q;

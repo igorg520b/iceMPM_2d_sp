@@ -135,11 +135,13 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     renderer->AddActor(representation.actor_text);
     renderer->AddActor(representation.scalarBar);
     renderer->AddActor(representation.rectangleActor);
+    renderer->AddActor(representation.actor_text_title);
 
     offscreenRenderer->AddActor(representation.actor_grid_main_copy1);
     offscreenRenderer->AddActor(representation.actor_text_copy1);
     offscreenRenderer->AddActor(representation.scalarBar_copy1);
     offscreenRenderer->AddActor(representation.rectangleActor_copy1);
+    offscreenRenderer->AddActor(representation.actor_text_title_copy1);
 
     windowToImageFilter->SetInput(offscreenRenderWindow);
     windowToImageFilter->SetScale(1); // image quality
@@ -153,14 +155,7 @@ PPMainWindow::PPMainWindow(QWidget *parent)
 
 void PPMainWindow::updateGUI()
 {
-    int64_t display_date = (int64_t)frameData.prms.SimulationTime + frameData.prms.SimulationStartUnixTime;
-    std::time_t unix_time = display_date;
-    std::tm* tm_time = std::gmtime(&unix_time);
-    // Format the time
-    char buffer[100];
-    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
-    representation.actor_text->SetInput(buffer);
-    representation.actor_text_copy1->SetInput(buffer);
+
     renderWindow->Render();
 }
 
@@ -269,25 +264,7 @@ void PPMainWindow::cameraReset_triggered()
 
 
 void PPMainWindow::sliderValueChanged(int val)
-{
-/*
-    float b_val = (float)val/1000.;
-    float max_val = 11.0*24*3600;
-    float set_val = b_val*max_val;
-
-    representation.wind_visualization_time = b_val*max_val;
-    representation.SynchronizeValues();
-    renderWindow->Render();
-
-    int64_t display_date = (int64_t)set_val + model.prms.SimulationStartUnixTime;
-    std::time_t unix_time = display_date;
-    std::tm* tm_time = std::gmtime(&unix_time);
-    // Format the time
-    char buffer[100];
-    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
-    representation.actorText->SetInput(buffer);
-*/
-}
+{}
 
 
 
@@ -329,30 +306,56 @@ void PPMainWindow::render_all_triggered()
 {
     qDebug() << "PPMainWindow::render_all_triggered()";
 
-    std::string outputDirectory = "render";
-    if(representation.VisualizingVariable == VTKVisualization::VisOpt::P) outputDirectory = "render/P";
-    if(representation.VisualizingVariable == VTKVisualization::VisOpt::Q) outputDirectory = "render/Q";
-    if(representation.VisualizingVariable == VTKVisualization::VisOpt::colors) outputDirectory = "render/colors";
-    if(representation.VisualizingVariable == VTKVisualization::VisOpt::Jp_inv) outputDirectory = "render/Jp_inv";
+    std::string outputDirectoryP = "render/P";
+    std::string outputDirectoryQ = "render/Q";
+    std::string outputDirectoryColors = "render/colors";
+    std::string outputDirectoryJpinv = "render/Jp_inv";
 
-    std::filesystem::path directory_path(outputDirectory);
-    if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
+    std::filesystem::path directory_path1(outputDirectoryP);
+    if (!std::filesystem::exists(directory_path1)) std::filesystem::create_directories(directory_path1);
+    std::filesystem::path directory_path2(outputDirectoryQ);
+    if (!std::filesystem::exists(directory_path2)) std::filesystem::create_directories(directory_path2);
+    std::filesystem::path directory_path3(outputDirectoryColors);
+    if (!std::filesystem::exists(directory_path3)) std::filesystem::create_directories(directory_path3);
+    std::filesystem::path directory_path4(outputDirectoryJpinv);
+    if (!std::filesystem::exists(directory_path4)) std::filesystem::create_directories(directory_path4);
 
 
     for(int frame=0; frame<frameData.availableFrames.size(); frame++)
+//        for(int frame=0; frame<20; frame++)
     {
         if(!frameData.availableFrames[frame]) continue;
         qDebug() << "rendering frame " << frame;
         std::string fileName = fmt::format("{}/frame_{:05d}.h5", frameData.frameDirectory, frame);
-        frameData.LoadHDF5Frame(fileName);
-        representation.SynchronizeValues();
-        updateGUI();
+        frameData.LoadHDF5Frame(fileName, false);
 
+        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::P);
         offscreenRenderWindow->Render();
-        windowToImageFilter->Modified(); // this is extra important !!!!!!!!!
-
-        std::string renderFileName = fmt::format("{}/{:05d}.png", outputDirectory, frame);
+        windowToImageFilter->Modified(); // this is extra important
+        std::string renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryP, frame);
         writerPNG->SetFileName(renderFileName.c_str());
         writerPNG->Write();
+
+        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::Q);
+        offscreenRenderWindow->Render();
+        windowToImageFilter->Modified(); // this is extra important
+        renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryQ, frame);
+        writerPNG->SetFileName(renderFileName.c_str());
+        writerPNG->Write();
+
+        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::Jp_inv);
+        offscreenRenderWindow->Render();
+        windowToImageFilter->Modified(); // this is extra important
+        renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryJpinv, frame);
+        writerPNG->SetFileName(renderFileName.c_str());
+        writerPNG->Write();
+
+        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::colors);
+        offscreenRenderWindow->Render();
+        windowToImageFilter->Modified(); // this is extra important
+        renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryColors, frame);
+        writerPNG->SetFileName(renderFileName.c_str());
+        writerPNG->Write();
+
     }
 }
