@@ -68,6 +68,7 @@ private Q_SLOTS:
     void open_frame_triggered();
     void render_frame_triggered();
     void render_all_triggered();
+    void generate_script_triggered();
 
 private:
     FrameData frameData;
@@ -79,6 +80,7 @@ private:
     QString settingsFileName;       // includes current dir
     QComboBox *comboBox_visualizations;
     QDoubleSpinBox *qdsbValRange;   // high and low limits for value scale
+    QSpinBox *qsbFrameFrom, *qsbFrameTo;
     QSlider *slider1;
 
     // VTK

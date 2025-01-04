@@ -37,6 +37,7 @@
     <addaction name="action_camera_reset"/>
     <addaction name="actionRender_Frame"/>
     <addaction name="actionRender_All"/>
+    <addaction name="actionGenerate_Script"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuTools_2"/>
@@ -102,6 +103,11 @@
    </property>
    <property name="shortcut">
     <string>F5</string>
+   </property>
+  </action>
+  <action name="actionGenerate_Script">
+   <property name="text">
+    <string>Generate Script</string>
    </property>
   </action>
  </widget>

@@ -49,6 +49,10 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     ui->toolBar->addWidget(qdsbValRange);
 
 
+    qsbFrameFrom = new QSpinBox();
+    qsbFrameTo = new QSpinBox();
+    ui->toolBar->addWidget(qsbFrameFrom);
+    ui->toolBar->addWidget(qsbFrameTo);
 
     // populate combobox
     QMetaEnum qme = QMetaEnum::fromType<VTKVisualization::VisOpt>();
@@ -114,6 +118,7 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     connect(ui->action_camera_reset, &QAction::triggered, this, &PPMainWindow::cameraReset_triggered);
     connect(ui->actionRender_Frame, &QAction::triggered, this, &PPMainWindow::render_frame_triggered);
     connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
+    connect(ui->actionGenerate_Script, &QAction::triggered, this, &PPMainWindow::generate_script_triggered);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PPMainWindow::limits_changed);
 
@@ -182,6 +187,13 @@ void PPMainWindow::open_frame_triggered()
 
     frameData.LoadHDF5Frame(qFileName.toStdString());
     representation.SynchronizeTopology();
+
+
+
+    qsbFrameFrom->setRange(0, frameData.availableFrames.size()-1);
+    qsbFrameFrom->setValue(0);
+    qsbFrameTo->setRange(0, frameData.availableFrames.size()-1);
+    qsbFrameTo->setValue(frameData.availableFrames.size()-1);
 
 
 
@@ -321,8 +333,10 @@ void PPMainWindow::render_all_triggered()
     if (!std::filesystem::exists(directory_path4)) std::filesystem::create_directories(directory_path4);
 
 
-    for(int frame=0; frame<frameData.availableFrames.size(); frame++)
-//        for(int frame=0; frame<20; frame++)
+    const int frameFrom = qsbFrameFrom->value();
+    const int frameTo = qsbFrameTo->value();
+
+    for(int frame=frameFrom; frame<=frameTo; frame++)
     {
         if(!frameData.availableFrames[frame]) continue;
         qDebug() << "rendering frame " << frame;
@@ -357,5 +371,28 @@ void PPMainWindow::render_all_triggered()
         writerPNG->SetFileName(renderFileName.c_str());
         writerPNG->Write();
 
+    }
+}
+
+
+void PPMainWindow::generate_script_triggered()
+{
+    std::string filename = "render/genvideo.sh";
+    std::ofstream scriptFile(filename);
+
+    std::string cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"P\\%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"P.mp4\"", frameData.availableFrames.size()-1);
+    scriptFile << cmd << '\n';
+    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Q\\%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Q.mp4\"", frameData.availableFrames.size()-1);
+    scriptFile << cmd << '\n';
+    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Jp_inv\\%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Jp_inv.mp4\"", frameData.availableFrames.size()-1);
+    scriptFile << cmd << '\n';
+    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"colors\\%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"colors.mp4\"", frameData.availableFrames.size()-1);
+    scriptFile << cmd;
+
+    scriptFile.close();
+
+    // Set the script as executable
+    if (std::system(("chmod +x " + filename).c_str()) != 0) {
+        std::cerr << "Error: Failed to set executable permission\n";
     }
 }
