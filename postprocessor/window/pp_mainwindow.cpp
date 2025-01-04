@@ -380,13 +380,13 @@ void PPMainWindow::generate_script_triggered()
     std::string filename = "render/genvideo.sh";
     std::ofstream scriptFile(filename);
 
-    std::string cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"P\\%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"P.mp4\"", frameData.availableFrames.size()-1);
+    std::string cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"P/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"P.mp4\"", frameData.availableFrames.size()-1);
     scriptFile << cmd << '\n';
-    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Q\\%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Q.mp4\"", frameData.availableFrames.size()-1);
+    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Q/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Q.mp4\"", frameData.availableFrames.size()-1);
     scriptFile << cmd << '\n';
-    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Jp_inv\\%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Jp_inv.mp4\"", frameData.availableFrames.size()-1);
+    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Jp_inv/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Jp_inv.mp4\"", frameData.availableFrames.size()-1);
     scriptFile << cmd << '\n';
-    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"colors\\%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"colors.mp4\"", frameData.availableFrames.size()-1);
+    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"colors/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"colors.mp4\"", frameData.availableFrames.size()-1);
     scriptFile << cmd;
 
     scriptFile.close();
