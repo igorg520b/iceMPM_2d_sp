@@ -33,6 +33,9 @@
 #include <vtkDoubleArray.h>
 #include <vtkFloatArray.h>
 #include <vtkIntArray.h>
+#include <vtkArrowSource.h>
+#include <vtkGlyph2D.h>
+
 
 #include <Eigen/Core>
 
@@ -49,7 +52,7 @@ public:
 
     double wind_visualization_time;
 
-    enum VisOpt { none, count, colors, Jp_inv, P, Q, wind_u, wind_v, wind_norm, divergence, phi, wind_from_phi};
+    enum VisOpt { none, count, colors, Jp_inv, P, Q, wind_u, wind_v, wind_norm};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};
@@ -65,12 +68,7 @@ public:
     vtkNew<vtkTextActor> actor_text;
     vtkNew<vtkTextActor> actor_text_title;
     vtkNew<vtkActor> rectangleActor;
-
-    vtkNew<vtkActor> actor_grid_main_copy1;
-    vtkNew<vtkScalarBarActor> scalarBar_copy1;
-    vtkNew<vtkTextActor> actor_text_copy1;
-    vtkNew<vtkActor> rectangleActor_copy1;
-    vtkNew<vtkTextActor> actor_text_title_copy1;
+    vtkNew<vtkActor> actor_wind;
 
 private:
     vtkNew<vtkLookupTable> hueLut_count, hueLut_J, hueLut_Jpinv, hueLut_Q, hueLut;
@@ -88,7 +86,6 @@ private:
     vtkNew<vtkCellArray> rectangleLines;
     vtkNew<vtkPolyDataMapper> rectangleMapper;
 
-
     // lat/lon grid
     vtkNew<vtkStructuredGrid> structuredGrid_lat_lon;
     vtkNew<vtkDataSetMapper> mapper_grid_lat_lon;
@@ -98,10 +95,16 @@ private:
     void populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
     void interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
 
-    // offscreen rendering
-    vtkNew<vtkDataSetMapper> mapper_grid_main_copy1;
-    vtkNew<vtkPolyDataMapper> rectangleMapper_copy1;
+    // wind visualization
+    vtkNew<vtkPoints> points_wind_vector;
+    vtkNew<vtkDoubleArray> vectors_values;
+    vtkNew<vtkPolyData> polyData_wind;
+    vtkNew<vtkArrowSource> arrowSource;
+    vtkNew<vtkGlyph2D> glyphFilter;
+    vtkNew<vtkPolyDataMapper> vectorMapper_wind;
 
+    static constexpr int numwRows = 4;
+    static constexpr int numwCols = 5;
 
 static constexpr float lutSpecialJ[5][3] = {
         {0.342992, 0.650614, 0.772702},//10

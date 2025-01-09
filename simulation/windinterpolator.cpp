@@ -259,10 +259,6 @@ Eigen::Vector2f WindInterpolator::interpolationResult(float lat, float lon, floa
     float ub = localLon / gridCellSize;
     float vb = localLat / gridCellSize;
 
-//    spdlog::info("input values: lat {}; lon {}", lat, lon);
-//    spdlog::info("cell index {}, {}", lat_cell, lon_cell);
-//    spdlog::info("local coords v, u: {}, {}; tb {}", vb, ub, tb);
-
     Eigen::Vector2f cell_values0[2][2], cell_values1[2][2];
     for(int i=0;i<2;i++)
         for(int j=0;j<2;j++)
@@ -381,7 +377,6 @@ void WindInterpolator::prepareVisualizationData(const double simulation_time)
 
             vis_coarse_grid[idxLat][idxLon] = (1-t)*s1 + t*s2;
         }
-
 }
 
 Eigen::Vector2f WindInterpolator::vis_interp(float lat, float lon)
@@ -406,142 +401,3 @@ Eigen::Vector2f WindInterpolator::vis_interp(float lat, float lon)
     return res;
 }
 
-
-Eigen::Vector2f WindInterpolator::vis_interp_potential(float lat, float lon)
-{
-    // space
-    int lat_cell = (int)((lat-gridLatMin)/gridCellSize);
-    int lon_cell = (int)((lon-gridLonMin)/gridCellSize);
-
-    // Compute local coordinates within the cell
-    float localLon = lon - (gridLonMin + lon_cell * gridCellSize);
-    float localLat = lat - (gridLatMin + lat_cell * gridCellSize);
-
-    // Compute barycentric coordinates
-    float ub = localLon / gridCellSize;
-    float vb = localLat / gridCellSize;
-
-    Eigen::Vector2f res =
-        (1 - ub) * (1 - vb) * potential_grid[lat_cell+0][lon_cell+0] +
-        ub * (1 - vb) * potential_grid[lat_cell+0][lon_cell+1] +
-        (1 - ub) * vb * potential_grid[lat_cell+1][lon_cell+0] +
-        ub * vb * potential_grid[lat_cell+1][lon_cell+1];
-    return res;
-}
-
-float WindInterpolator::vis_interp_divergence(float lat, float lon)
-{
-    // space
-    int lat_cell = (int)((lat-gridLatMin)/gridCellSize);
-    int lon_cell = (int)((lon-gridLonMin)/gridCellSize);
-
-    // Compute local coordinates within the cell
-    float localLon = lon - (gridLonMin + lon_cell * gridCellSize);
-    float localLat = lat - (gridLatMin + lat_cell * gridCellSize);
-
-    // Compute barycentric coordinates
-    float ub = localLon / gridCellSize;
-    float vb = localLat / gridCellSize;
-
-    float res =
-        (1 - ub) * (1 - vb) * divergence[lat_cell+0][lon_cell+0] +
-        ub * (1 - vb) * divergence[lat_cell+0][lon_cell+1] +
-        (1 - ub) * vb * divergence[lat_cell+1][lon_cell+0] +
-        ub * vb * divergence[lat_cell+1][lon_cell+1];
-    return res;
-}
-
-
-float WindInterpolator::vis_interp_phi(float lat, float lon)
-{
-    // space
-    int lat_cell = (int)((lat-gridLatMin)/gridCellSize);
-    int lon_cell = (int)((lon-gridLonMin)/gridCellSize);
-
-    // Compute local coordinates within the cell
-    float localLon = lon - (gridLonMin + lon_cell * gridCellSize);
-    float localLat = lat - (gridLatMin + lat_cell * gridCellSize);
-
-    // Compute barycentric coordinates
-    float ub = localLon / gridCellSize;
-    float vb = localLat / gridCellSize;
-
-    float res =
-        (1 - ub) * (1 - vb) * phi[lat_cell+0][lon_cell+0] +
-        ub * (1 - vb) * phi[lat_cell+0][lon_cell+1] +
-        (1 - ub) * vb * phi[lat_cell+1][lon_cell+0] +
-        ub * vb * phi[lat_cell+1][lon_cell+1];
-    return res;
-}
-
-
-void WindInterpolator::computePotentialApproximation()
-{
-    size_t sz = sizeof(float)*allocatedLatExtent*allocatedLonExtent;
-    memset(phi, 0, sz);
-    memset(divergence, 0, sz);
-    memset(residual, 0, sz);
-
-    const int maxIterations = 10000; // Maximum iterations for Poisson solver
-    const float tolerance = 1e-6;    // Convergence tolerance
-    const float dx = 1.0;            // Grid spacing in x
-    const float dy = 1.0;            // Grid spacing in y
-
-    // Step 1: Compute divergence of the velocity field
-    for (int i = 1; i < extentLat - 1; ++i) {
-        for (int j = 1; j < extentLon - 1; ++j) {
-            float dVx_dx = (vis_coarse_grid[i + 1][j].x() - vis_coarse_grid[i - 1][j].x()) / (2 * dx);
-            float dVy_dy = (vis_coarse_grid[i][j + 1].y() - vis_coarse_grid[i][j - 1].y()) / (2 * dy);
-            divergence[i][j] = dVx_dx + dVy_dy;
-        }
-    }
-
-
-    // Step 2: Solve Poisson's equation for phi using Jacobi iteration
-    for (int iter = 0; iter < maxIterations; ++iter) {
-        float maxResidual = 0.0f;
-
-        // Temporary array to store updated phi values
-        float phi_new[allocatedLatExtent][allocatedLonExtent] = {0};
-
-        for (int i = 1; i < extentLat - 1; ++i) {
-            for (int j = 1; j < extentLon - 1; ++j) {
-                phi_new[i][j] = 0.25f * (phi[i + 1][j] + phi[i - 1][j] + phi[i][j + 1] + phi[i][j - 1]
-                                         - dx * dx * divergence[i][j]);
-
-                // Calculate residual to check for convergence
-                residual[i][j] = std::fabs(phi_new[i][j] - phi[i][j]);
-                maxResidual = std::max(maxResidual, residual[i][j]);
-            }
-        }
-
-        // Check if convergence is achieved
-        if (maxResidual < tolerance) {
-            break;
-        }
-
-        // Update phi with the new values
-        std::copy(&phi_new[0][0], &phi_new[0][0] + allocatedLatExtent * allocatedLonExtent, &phi[0][0]);
-    }
-
-    // Step 3: Compute potential velocity field
-    for (int i = 1; i < extentLat - 1; ++i) {
-        for (int j = 1; j < extentLon - 1; ++j) {
-            float dPhi_dx = (phi[i + 1][j] - phi[i - 1][j]) / (2 * dx);
-            float dPhi_dy = (phi[i][j + 1] - phi[i][j - 1]) / (2 * dy);
-            potential_grid[i][j] = Eigen::Vector2f(dPhi_dx, dPhi_dy);
-        }
-    }
-/*
-    // Step 4: Optionally, compute the residual error between the original and potential fields
-    float error_magnitude[allocatedLatExtent][allocatedLonExtent] = {0};
-
-    for (int i = 0; i < extentLat; ++i) {
-        for (int j = 0; j < extentLon; ++j) {
-            Eigen::Vector2f diff = vis_coarse_grid[i][j] - potential_grid[i][j];
-            error_magnitude[i][j] = diff.norm(); // Compute the magnitude of the difference
-        }
-    }
-*/
-
-}

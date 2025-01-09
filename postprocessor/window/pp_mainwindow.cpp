@@ -119,20 +119,21 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     connect(ui->actionRender_Frame, &QAction::triggered, this, &PPMainWindow::render_frame_triggered);
     connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
     connect(ui->actionGenerate_Script, &QAction::triggered, this, &PPMainWindow::generate_script_triggered);
+    connect(ui->actionShow_Wind, &QAction::triggered, this, &PPMainWindow::toggle_wind_visualization);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PPMainWindow::limits_changed);
-
 
     // off-screen rendering
     // Copy the renderers from the current render window
 
+    ui->actionShow_Wind->setChecked(false);
     // Set the target resolution for the off-screen render window
     offscreenRenderWindow->SetSize(1920, 1080);
     offscreenRenderWindow->DoubleBufferOff();
     offscreenRenderWindow->SetOffScreenRendering(true);
-    offscreenRenderWindow->AddRenderer(offscreenRenderer);
+//    offscreenRenderWindow->AddRenderer(offscreenRenderer);
 
-    offscreenRenderer->SetBackground(1.0,1.0,1.0);
+//    offscreenRenderer->SetBackground(1.0,1.0,1.0);
 
 
     // anything that includes the Model
@@ -141,12 +142,14 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     renderer->AddActor(representation.scalarBar);
     renderer->AddActor(representation.rectangleActor);
     renderer->AddActor(representation.actor_text_title);
+    renderer->AddActor(representation.actor_wind);
 
-    offscreenRenderer->AddActor(representation.actor_grid_main_copy1);
-    offscreenRenderer->AddActor(representation.actor_text_copy1);
-    offscreenRenderer->AddActor(representation.scalarBar_copy1);
-    offscreenRenderer->AddActor(representation.rectangleActor_copy1);
-    offscreenRenderer->AddActor(representation.actor_text_title_copy1);
+//    offscreenRenderer->AddActor(representation.actor_grid_main_copy1);
+//    offscreenRenderer->AddActor(representation.actor_text_copy1);
+//    offscreenRenderer->AddActor(representation.scalarBar_copy1);
+//    offscreenRenderer->AddActor(representation.rectangleActor_copy1);
+//    offscreenRenderer->AddActor(representation.actor_text_title_copy1);
+ //   offscreenRenderer->AddActor(representation.actor_wind_copy1);
 
     windowToImageFilter->SetInput(offscreenRenderWindow);
     windowToImageFilter->SetScale(1); // image quality
@@ -318,6 +321,10 @@ void PPMainWindow::render_all_triggered()
 {
     qDebug() << "PPMainWindow::render_all_triggered()";
 
+
+    renderWindow->RemoveRenderer(renderer);
+    offscreenRenderWindow->AddRenderer(renderer);
+
     std::string outputDirectoryP = "render/P";
     std::string outputDirectoryQ = "render/Q";
     std::string outputDirectoryColors = "render/colors";
@@ -372,6 +379,10 @@ void PPMainWindow::render_all_triggered()
         writerPNG->Write();
 
     }
+
+    offscreenRenderWindow->RemoveRenderer(renderer);
+    renderWindow->AddRenderer(renderer);
+
 }
 
 
@@ -387,12 +398,21 @@ void PPMainWindow::generate_script_triggered()
     cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Jp_inv/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Jp_inv.mp4\"", frameData.availableFrames.size()-1);
     scriptFile << cmd << '\n';
     cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"colors/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"colors.mp4\"", frameData.availableFrames.size()-1);
-    scriptFile << cmd;
+    scriptFile << cmd << '\n';
 
+    std::string concat = R"(ffmpeg -i P.mp4 -i Q.mp4 -i Jp_inv.mp4 -i colors.mp4 -filter_complex "[0:v:0][1:v:0][2:v:0][3:v:0]concat=n=4:v=1[outv]" -map "[outv]" output.mp4)";
+    scriptFile << concat;
     scriptFile.close();
 
     // Set the script as executable
     if (std::system(("chmod +x " + filename).c_str()) != 0) {
         std::cerr << "Error: Failed to set executable permission\n";
     }
+}
+
+
+void PPMainWindow::toggle_wind_visualization(bool checked)
+{
+    representation.actor_wind->SetVisibility(checked);
+    updateGUI();
 }

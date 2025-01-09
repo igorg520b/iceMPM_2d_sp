@@ -70,6 +70,8 @@ private Q_SLOTS:
     void render_all_triggered();
     void generate_script_triggered();
 
+    void toggle_wind_visualization(bool checked);
+
 private:
     FrameData frameData;
     VTKVisualization representation;

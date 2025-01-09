@@ -70,62 +70,35 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     rectanglePolyData->SetPoints(rectanglePoints);
     rectanglePolyData->SetLines(rectangleLines);
 
-    rectangleMapper_copy1->SetInputData(rectanglePolyData);
-
-    // copies for offscreen renderer
-    mapper_grid_main_copy1->SetInputData(structuredGrid_main);
-    actor_grid_main_copy1->SetMapper(mapper_grid_main_copy1);
-    actor_grid_main_copy1->GetProperty()->SetEdgeVisibility(false);
-    actor_grid_main_copy1->GetProperty()->LightingOff();
-    actor_grid_main_copy1->GetProperty()->ShadingOff();
-    actor_grid_main_copy1->PickableOff();
-
-    vtkTextProperty* txtprop1 = actor_text_copy1->GetTextProperty();
-    txtprop1->SetFontFamilyToArial();
-    txtprop1->BoldOff();
-    txtprop1->ShadowOff();
-    txtprop1->SetColor(0,0,0);
-    txtprop1->SetFontSize(fontSize);
-    actor_text_copy1->SetDisplayPosition(600, 10);
     actor_text->SetDisplayPosition(600, 10);
 
-    txtprop1 = actor_text_title->GetTextProperty();
-    txtprop1->SetFontFamilyToArial();
-    txtprop1->BoldOff();
-    txtprop1->ShadowOff();
-    txtprop1->SetColor(0,0,0);
-    txtprop1->SetFontSize(fontSize);
-
-    txtprop1 = actor_text_title_copy1->GetTextProperty();
-    txtprop1->SetFontFamilyToArial();
-    txtprop1->BoldOff();
-    txtprop1->ShadowOff();
-    txtprop1->SetColor(0,0,0);
-    txtprop1->SetFontSize(fontSize);
+    txtprop = actor_text_title->GetTextProperty();
+    txtprop->SetFontFamilyToArial();
+    txtprop->BoldOff();
+    txtprop->ShadowOff();
+    txtprop->SetColor(0,0,0);
+    txtprop->SetFontSize(fontSize);
 
     actor_text_title->SetDisplayPosition(10, 500);
-    actor_text_title_copy1->SetDisplayPosition(10, 500);
 
+    // wind vectors
+    vectors_values->SetNumberOfComponents(3);
+    vectors_values->SetName("vectors_values");
+    polyData_wind->SetPoints(points_wind_vector);
+    polyData_wind->GetPointData()->SetVectors(vectors_values);
 
+    glyphFilter->SetSourceConnection(arrowSource->GetOutputPort());
+    glyphFilter->SetInputData(polyData_wind);
+    glyphFilter->OrientOn();
+    glyphFilter->SetVectorModeToUseVector();
+    glyphFilter->Update();
+    glyphFilter->SetScaleModeToScaleByVector();
+//    glyphFilter->SetScaleModeToScaleByVectorComponents();
 
-    scalarBar_copy1->SetLookupTable(hueLut_count);
-    scalarBar_copy1->SetMaximumWidthInPixels(180);
-    scalarBar_copy1->SetBarRatio(0.1);
-    scalarBar_copy1->SetMaximumHeightInPixels(250);
-    scalarBar_copy1->GetPositionCoordinate()->SetCoordinateSystemToNormalizedDisplay();
-    scalarBar_copy1->GetPositionCoordinate()->SetValue(0.01,0.015, 0.0);
-    scalarBar_copy1->SetLabelFormat("%.1e");
-    scalarBar_copy1->GetLabelTextProperty()->BoldOff();
-    scalarBar_copy1->GetLabelTextProperty()->ItalicOff();
-    scalarBar_copy1->GetLabelTextProperty()->ShadowOff();
-    scalarBar_copy1->GetLabelTextProperty()->SetColor(0.1,0.1,0.1);
-    scalarBar_copy1->GetLabelTextProperty()->SetFontFamilyToTimes();
-    scalarBar_copy1->SetUnconstrainedFontSize(true);
-    scalarBar_copy1->GetLabelTextProperty()->SetFontSize(40);
+    actor_wind->SetMapper(vectorMapper_wind);
+    actor_wind->GetProperty()->SetColor(0.8,0.6,0.1);
 
-    rectangleActor_copy1->SetMapper(rectangleMapper_copy1);
-    rectangleActor_copy1->GetProperty()->SetColor(0.0, 0.0, 0.0); // Red color
-    rectangleActor_copy1->GetProperty()->SetLineWidth(2.0);       // Line thickness
+    vectorMapper_wind->SetInputConnection(glyphFilter->GetOutputPort());
 }
 
 
@@ -170,6 +143,37 @@ void VTKVisualization::SynchronizeTopology()
     rectangleLines->Reset();
     rectangleLines->InsertNextCell(5, pointIds);
 
+
+    // wind vectors
+    points_wind_vector->SetNumberOfPoints(numwCols*numwRows);
+    vectors_values->SetNumberOfValues(3*numwCols*numwRows);
+    const float spacingX = gx*h*0.9/(numwCols-1);
+    const float spacingY = gy*h*0.9/(numwRows-1);
+
+    for (int i = 0; i < numwCols; ++i)
+    {
+        for (int j = 0; j < numwRows; ++j)
+        {
+            int idx = i+j*numwCols;
+            float x = i * spacingX + gx*h*0.05;
+            float y = j * spacingY + gy*h*0.05;
+
+            double pt[3] {x, y, 0};
+            points_wind_vector->SetPoint(idx, pt);
+            vectors_values->SetValue(idx*3+0, gx*h*0.01);
+            vectors_values->SetValue(idx*3+1, gx*h*0.002);
+            vectors_values->SetValue(idx*3+2, 0);
+        }
+    }
+
+//    float scale = gx*h*0.006;
+//    arrowSource->SetShaftRadius(scale*10); // Adjust for desired width
+//    arrowSource->SetTipLength(scale*10);   // Keep tip length constant
+
+    arrowSource->Update();
+    glyphFilter->SetScaleFactor(gx*h*0.007);
+    glyphFilter->Update();
+
     SynchronizeValues();
 }
 
@@ -186,10 +190,39 @@ void VTKVisualization::SynchronizeValues()
     const Eigen::Vector3f land_color(0.35, 0.15, 0.15);
     const Eigen::Vector3f water_color(0x11/255., 0x18/255., 0x20/255.);
 
+
+    const double h = frameData.prms.cellsize;
+    const float spacingX = gx*h*0.9/(numwCols-1);
+    const float spacingY = gy*h*0.9/(numwRows-1);
+    const float wind_scale = gx*h*0.002;
+
+    frameData.windInterpolator.prepareVisualizationData(frameData.prms.SimulationTime);
+    for (int i = 0; i < numwCols; ++i)
+    {
+        for (int j = 0; j < numwRows; ++j)
+        {
+            int idx = i+j*numwCols;
+            float x = i * spacingX + gx*h*0.05;
+            float y = j * spacingY + gy*h*0.05;
+
+            float lat = frameData.prms.LatMin + (frameData.prms.LatMax-frameData.prms.LatMin)*y/(gy*h);
+            float lon = frameData.prms.LonMin + (frameData.prms.LonMax-frameData.prms.LonMin)*x/(gx*h);
+
+            Eigen::Vector2f wv = frameData.windInterpolator.vis_interp(lat, lon);
+            //wv*=wind_scale;
+
+            vectors_values->SetValue(idx*3+0, wv.x());
+            vectors_values->SetValue(idx*3+1, wv.y());
+        }
+    }
+    vectors_values->Modified();
+
+
+
+
     if(VisualizingVariable == VisOpt::none)
     {
         scalarBar->VisibilityOff();
-        scalarBar_copy1->VisibilityOff();
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
             {
@@ -209,7 +242,6 @@ void VTKVisualization::SynchronizeValues()
     else if(VisualizingVariable == VisOpt::count)
     {
         scalarBar->VisibilityOff();
-        scalarBar_copy1->VisibilityOff();
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
             {
@@ -230,7 +262,6 @@ void VTKVisualization::SynchronizeValues()
     else if(VisualizingVariable == VisOpt::colors)
     {
         scalarBar->VisibilityOff();
-        scalarBar_copy1->VisibilityOff();
         for(int idx_y=0; idx_y<gy; idx_y++)
             for(int idx_x=0; idx_x<gx; idx_x++)
             {
@@ -317,9 +348,6 @@ void VTKVisualization::SynchronizeValues()
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_J);
         scalarBar->SetLabelFormat("%.1f");
-        scalarBar_copy1->VisibilityOn();
-        scalarBar_copy1->SetLookupTable(hueLut_J);
-        scalarBar_copy1->SetLabelFormat("%.1f");
         hueLut_J->SetTableRange(1-range, 1+range);
     }
     else if(VisualizingVariable == VisOpt::P)
@@ -366,9 +394,6 @@ void VTKVisualization::SynchronizeValues()
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_Jpinv);
         scalarBar->SetLabelFormat("%.1e");
-        scalarBar_copy1->VisibilityOn();
-        scalarBar_copy1->SetLookupTable(hueLut_Jpinv);
-        scalarBar_copy1->SetLabelFormat("%.1e");
         hueLut_Jpinv->SetTableRange(-range, range);
     }
 
@@ -416,9 +441,6 @@ void VTKVisualization::SynchronizeValues()
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_Q);
         scalarBar->SetLabelFormat("%.1e");
-        scalarBar_copy1->VisibilityOn();
-        scalarBar_copy1->SetLookupTable(hueLut_Q);
-        scalarBar_copy1->SetLabelFormat("%.1e");
         hueLut_Q->SetTableRange(0, range);
     }
     else if(VisualizingVariable == VisOpt::wind_norm)
@@ -448,99 +470,8 @@ void VTKVisualization::SynchronizeValues()
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut);
         scalarBar->SetLabelFormat("%.1f");
-        scalarBar_copy1->VisibilityOn();
-        scalarBar_copy1->SetLookupTable(hueLut);
-        scalarBar_copy1->SetLabelFormat("%.1f");
         hueLut->SetTableRange(0, range);
     }
-    else if(VisualizingVariable == VisOpt::divergence)
-    {
-        frameData.windInterpolator.prepareVisualizationData(frameData.prms.SimulationTime);
-        frameData.windInterpolator.computePotentialApproximation();
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-
-                float lat = frameData.prms.LatMin + (frameData.prms.LatMax-frameData.prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = frameData.prms.LonMin + (frameData.prms.LonMax-frameData.prms.LonMin)*(float)idx_x/(float)gx;
-
-                float val = frameData.windInterpolator.vis_interp_divergence(lat, lon);
-                visualized_values_grid->SetValue(idx_visual, val);
-            }
-        mapper_grid_main->SetLookupTable(hueLut);
-        mapper_grid_main->SetColorModeToMapScalars();
-        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
-
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut);
-        scalarBar->SetLabelFormat("%.1f");
-        scalarBar_copy1->VisibilityOn();
-        scalarBar_copy1->SetLookupTable(hueLut);
-        scalarBar_copy1->SetLabelFormat("%.1f");
-        hueLut->SetTableRange(0, range);
-    }
-    else if(VisualizingVariable == VisOpt::phi)
-    {
-        frameData.windInterpolator.prepareVisualizationData(frameData.prms.SimulationTime);
-        frameData.windInterpolator.computePotentialApproximation();
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-
-                float lat = frameData.prms.LatMin + (frameData.prms.LatMax-frameData.prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = frameData.prms.LonMin + (frameData.prms.LonMax-frameData.prms.LonMin)*(float)idx_x/(float)gx;
-
-                float val = frameData.windInterpolator.vis_interp_phi(lat, lon);
-                visualized_values_grid->SetValue(idx_visual, val);
-            }
-        mapper_grid_main->SetLookupTable(hueLut);
-        mapper_grid_main->SetColorModeToMapScalars();
-        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
-
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut);
-        scalarBar->SetLabelFormat("%.1f");
-        scalarBar_copy1->VisibilityOn();
-        scalarBar_copy1->SetLookupTable(hueLut);
-        scalarBar_copy1->SetLabelFormat("%.1f");
-        hueLut->SetTableRange(0, range);
-    }
-    else if(VisualizingVariable == VisOpt::wind_from_phi)
-    {
-        frameData.windInterpolator.prepareVisualizationData(frameData.prms.SimulationTime);
-        frameData.windInterpolator.computePotentialApproximation();
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-
-                float lat = frameData.prms.LatMin + (frameData.prms.LatMax-frameData.prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = frameData.prms.LonMin + (frameData.prms.LonMax-frameData.prms.LonMin)*(float)idx_x/(float)gx;
-
-                Eigen::Vector2f wv = frameData.windInterpolator.vis_interp_potential(lat, lon);
-                visualized_values_grid->SetValue(idx_visual, wv.norm());
-            }
-        mapper_grid_main->SetLookupTable(hueLut);
-        mapper_grid_main->SetColorModeToMapScalars();
-        structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
-
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut);
-        scalarBar->SetLabelFormat("%.1f");
-        scalarBar_copy1->VisibilityOn();
-        scalarBar_copy1->SetLookupTable(hueLut);
-        scalarBar_copy1->SetLabelFormat("%.1f");
-        hueLut->SetTableRange(0, range);
-    }
-
-
-
-
 
 
 
@@ -552,9 +483,6 @@ void VTKVisualization::SynchronizeValues()
     char buffer[100];
     std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
     actor_text->SetInput(buffer);
-    actor_text_copy1->SetInput(buffer);
-
-
 }
 
 
@@ -563,27 +491,22 @@ void VTKVisualization::ChangeVisualizationOption(int option)
     VisualizingVariable = (VisOpt)option;
     if(option == VisOpt::P)
     {
-        actor_text_title_copy1->SetInput("Hydrostatic pressure");
         actor_text_title->SetInput("Hydrostatic pressure");
     }
     else if(option == VisOpt::Q)
     {
-        actor_text_title_copy1->SetInput("Deviatoric stress");
         actor_text_title->SetInput("Deviatoric stress");
     }
     else if(option == VisOpt::Jp_inv)
     {
-        actor_text_title_copy1->SetInput("Surf. density");
         actor_text_title->SetInput("Surf. density");
     }
     else if(option == VisOpt::wind_norm)
     {
-        actor_text_title_copy1->SetInput("Wind speed");
         actor_text_title->SetInput("Wind speed");
     }
     else
     {
-        actor_text_title_copy1->SetInput("-");
         actor_text_title->SetInput("-");
     }
 

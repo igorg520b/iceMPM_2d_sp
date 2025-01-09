@@ -47,20 +47,8 @@ public:
     // additional functionality for visualization
     void prepareVisualizationData(const double simulation_time);
     Eigen::Vector2f vis_interp(float lat, float lon);
-    float vis_interp_divergence(float lat, float lon);
-    float vis_interp_phi(float lat, float lon);
-    Eigen::Vector2f vis_interp_potential(float lat, float lon);
-    void computePotentialApproximation();
 
     Eigen::Vector2f vis_coarse_grid[allocatedLatExtent][allocatedLonExtent]; // stores wind velocity grid
-
-    // Output potential velocity field
-    Eigen::Vector2f potential_grid[allocatedLatExtent][allocatedLonExtent];
-
-    // Scalar fields: phi and divergence
-    float phi[allocatedLatExtent][allocatedLonExtent];         // Scalar potential
-    float divergence[allocatedLatExtent][allocatedLonExtent];  // Divergence of velocity field
-    float residual[allocatedLatExtent][allocatedLonExtent];    // To track convergence
 
 private:
     int64_t simulation_start_date;  // set once upon data load
