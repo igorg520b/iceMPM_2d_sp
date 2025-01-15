@@ -71,6 +71,9 @@ public:
     std::pair<PointVector2r, PointVector2r> getBlockDimensions();
     void offsetBlock(PointVector2r offset);
     void convertToIntegerCellFormat(t_PointReal h);
+
+    // debugging / testing
+    void PrintOutNearestPoint(double pos_x, double pos_y, double gridSize, int GridY);
 };
 
 #endif // HOSTSIDESOA_H

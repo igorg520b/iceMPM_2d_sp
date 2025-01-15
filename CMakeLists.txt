@@ -212,6 +212,9 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/windinterpolator.cpp
         simulation/windinterpolator.h
 
+        gui/vtk/SpecialSelector2D.cpp
+        gui/vtk/SpecialSelector2D.h
+
     )
     set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
     

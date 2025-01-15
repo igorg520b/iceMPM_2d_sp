@@ -43,7 +43,6 @@ public:
 
     void Prepare();        // invoked once, at simulation start
     bool Step();           // either invoked by Worker or via GUI
-
     void UnlockCycleMutex();
 
     SimParams prms;

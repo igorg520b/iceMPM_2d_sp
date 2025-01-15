@@ -45,6 +45,7 @@
 #include "parameters_wrapper.h"
 #include "backgroundworker.h"
 #include "snapshotmanager.h"
+#include "SpecialSelector2D.h"
 
 #include <fstream>
 #include <iomanip>
@@ -126,5 +127,9 @@ private:
     vtkNew<vtkWindowToImageFilter> windowToImageFilter;
     vtkNew<vtkPNGWriter> writerPNG;
     void screenshot();
+
+    vtkNew<SpecialSelector2D> specialSelector2D;
+    friend class SpecialSelector2D;
+
 };
 #endif // MAINWINDOW_H

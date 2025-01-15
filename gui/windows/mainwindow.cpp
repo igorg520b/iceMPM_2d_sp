@@ -30,7 +30,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     renderer->SetBackground(1.0,1.0,1.0);
     renderWindow->AddRenderer(renderer);
-    renderWindow->GetInteractor()->SetInteractorStyle(interactor);
+//    renderWindow->GetInteractor()->SetInteractorStyle(interactor);
+    renderWindow->GetInteractor()->SetInteractorStyle(specialSelector2D);
+    specialSelector2D->mw = this;
+    renderer->AddActor(specialSelector2D->actor);
 
     // property browser
     pbrowser = new ObjectPropertyBrowser(this);
@@ -287,7 +290,15 @@ void MainWindow::cameraReset_triggered()
 
 void MainWindow::open_snapshot_triggered()
 {
-    QString qFileName = QFileDialog::getOpenFileName(this, "Open Simulation Snapshot", QDir::currentPath(), "HDF5 Files (*.h5)");
+    QString defaultPath = QDir::currentPath() + "/_data/snapshots";
+
+    // Check if the directory exists
+    if (!QDir(defaultPath).exists()) {
+        // Fall back to the current path if the default directory does not exist
+        defaultPath = QDir::currentPath();
+    }
+
+    QString qFileName = QFileDialog::getOpenFileName(this, "Open Simulation Snapshot", defaultPath, "HDF5 Files (*.h5)");
     if(qFileName.isNull())return;
     OpenSnapshot(qFileName);
 }

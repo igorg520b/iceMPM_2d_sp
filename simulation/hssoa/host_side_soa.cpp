@@ -77,6 +77,54 @@ void HostSideSOA::Allocate(int pts_capacity, int gridTotal)
 
 
 
+void HostSideSOA::PrintOutNearestPoint(double x, double y, double gridSize, int GridY)
+{
+    // calculate cell index
+
+    const t_PointReal hinv = 1.0f/gridSize;
+    uint32_t x_idx = (uint32_t)(x*hinv + 0.5);
+    uint32_t y_idx = (uint32_t)(y*hinv + 0.5);
+    int cellIdx = x_idx*GridY + y_idx;
+
+    auto result = std::lower_bound(begin(), end(),cellIdx,
+                     [&](ProxyPoint &p1, int cell)
+                     {return p1.getCellIndex(GridY)<cell;});
+
+    while(result!=end() && (*result).getCellIndex(GridY) == cellIdx)
+    {
+        spdlog::info("Point index {}", (*result).getValueInt(SimParams::integer_point_idx));
+        spdlog::info("P: {}", (*result).getValue(SimParams::idx_P));
+
+        PointMatrix2r Fe;
+        for(int i=0; i<SimParams::dim; i++)
+        for(int j=0; j<SimParams::dim; j++)
+            Fe(i,j) = (*result).getValue(SimParams::Fe00 + i*SimParams::dim + j);
+
+        spdlog::info("Fe: [{},{}],[{},{}]",Fe(0,0), Fe(0,1), Fe(1,0), Fe(1,1));
+
+
+        spdlog::info("\n");
+        ++result;
+    }
+
+
+    /*
+    std::sort(begin(), end(),
+              [&](ProxyPoint &p1, ProxyPoint &p2)
+              {return p1.getCellIndex(GridY)<p2.getCellIndex(GridY);});
+*/
+
+    //    uint32_t cell = (y_idx << 16) | x_idx;
+//    setValueInt(SimParams::integer_cell_idx, cell);
+
+//    x = x*hinv - (t_PointReal)x_idx;
+//    y = y*hinv - (t_PointReal)y_idx;
+
+}
+
+
+
+
 // ==================================================== SOAIterator
 
 SOAIterator::SOAIterator(unsigned pos, t_PointReal *soa_data, unsigned pitch)

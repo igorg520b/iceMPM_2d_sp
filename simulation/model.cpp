@@ -91,22 +91,18 @@ bool icy::Model::Step()
 {
     if(prms.SimulationStep == 0) SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
 
-    float simulation_time = prms.SimulationTime;
     std::cout << '\n';
     spdlog::info("step {} ({}) started; sim_time {:>6.3}; host pts {}; cap {}",
-                 prms.SimulationStep, prms.AnimationFrameNumber(), simulation_time,
-                 gpu.hssoa.size, gpu.hssoa.capacity);
+                 prms.SimulationStep, prms.AnimationFrameNumber(), prms.SimulationTime, gpu.hssoa.size, gpu.hssoa.capacity);
 
     int count_unupdated_steps = 0;
     gpu.reset_timings();
     std::pair<float, float> spd_and_angle;
+    double simulation_time;
     do
     {
-        simulation_time += prms.InitialTimeStep;
-        //spd_and_angle = interpolateWind(simulation_time);
-        //windSpeed = spd_and_angle.first;
-        //windAngle = spd_and_angle.second;
-        const int step = prms.SimulationStep+count_unupdated_steps;
+        const int step = prms.SimulationStep + count_unupdated_steps;
+        simulation_time = prms.InitialTimeStep * step;
 
         gpu.reset_grid();
         gpu.p2g();

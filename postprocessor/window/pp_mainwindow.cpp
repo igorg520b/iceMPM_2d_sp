@@ -131,10 +131,6 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     offscreenRenderWindow->SetSize(1920, 1080);
     offscreenRenderWindow->DoubleBufferOff();
     offscreenRenderWindow->SetOffScreenRendering(true);
-//    offscreenRenderWindow->AddRenderer(offscreenRenderer);
-
-//    offscreenRenderer->SetBackground(1.0,1.0,1.0);
-
 
     // anything that includes the Model
     renderer->AddActor(representation.actor_grid_main);
@@ -143,13 +139,6 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     renderer->AddActor(representation.rectangleActor);
     renderer->AddActor(representation.actor_text_title);
     renderer->AddActor(representation.actor_wind);
-
-//    offscreenRenderer->AddActor(representation.actor_grid_main_copy1);
-//    offscreenRenderer->AddActor(representation.actor_text_copy1);
-//    offscreenRenderer->AddActor(representation.scalarBar_copy1);
-//    offscreenRenderer->AddActor(representation.rectangleActor_copy1);
-//    offscreenRenderer->AddActor(representation.actor_text_title_copy1);
- //   offscreenRenderer->AddActor(representation.actor_wind_copy1);
 
     windowToImageFilter->SetInput(offscreenRenderWindow);
     windowToImageFilter->SetScale(1); // image quality
@@ -191,17 +180,12 @@ void PPMainWindow::open_frame_triggered()
     frameData.LoadHDF5Frame(qFileName.toStdString());
     representation.SynchronizeTopology();
 
-
-
     qsbFrameFrom->setRange(0, frameData.availableFrames.size()-1);
     qsbFrameFrom->setValue(0);
     qsbFrameTo->setRange(0, frameData.availableFrames.size()-1);
     qsbFrameTo->setValue(frameData.availableFrames.size()-1);
 
-
-
     updateGUI();
-//    renderWindow->Render();
 
     offscreen_camera_reset();
 }
@@ -288,7 +272,6 @@ void PPMainWindow::render_frame_triggered()
     qDebug() << "PPMainWindow::render_frame_triggered()";
     offscreenRenderWindow->Render();
 
-//    windowToImageFilter->SetInput(offscreenRenderWindow);
     windowToImageFilter->Update();
 
     // Save the image using a writer (e.g., PNG)

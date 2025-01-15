@@ -99,6 +99,8 @@ void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 
     // GPU
 
+    model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY); // this is actually for SpecialSelector2D
+
     model->gpu.initialize();
     model->gpu.split_hssoa_into_partitions();
     model->gpu.allocate_arrays();
