@@ -119,11 +119,11 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
         {
             val |= 0x10000;     // crushed
             p.setValueInt(SimParams::idx_utility_data, val);
-            p.setValue(SimParams::idx_initial_strength, interpValue*0.3+0.1);
+            p.setValue(SimParams::idx_initial_strength, 1.0);
         }
         else
         {
-            p.setValue(SimParams::idx_initial_strength, 1.f);
+            p.setValue(SimParams::idx_initial_strength, interpValue*0.5+0.5);
         }
 
         p.setValue(SimParams::idx_Jp_inv, 1.f);
@@ -152,11 +152,6 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
             unsigned char r = png_data[idx_png + 0];
             unsigned char g = png_data[idx_png + 1];
             unsigned char b = png_data[idx_png + 2];
-
-
-//            unsigned char r = png_data_modelled_region[idx_png + 3];
-//            unsigned char g = png_data_modelled_region[idx_png + 3];
-//            unsigned char b = png_data_modelled_region[idx_png + 3];
 
             hssoa.grid_colors_rgb[hssoa_grid_idx*3 + 0] = r;
             hssoa.grid_colors_rgb[hssoa_grid_idx*3 + 1] = g;
@@ -668,9 +663,9 @@ std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3
     if(minDist < openWaterThreshold) return {0, 0.f};
 
     // check if crushed
-    float result = projectPointOntoCurve(rgb, colordata_Crushed);
+    float result = projectPointOntoCurve(rgb, colordata_Solid);
 
-    return {1,result};
+    return {2,result};
 }
 
 
@@ -715,7 +710,7 @@ void icy::SnapshotManager::LoadWindData(std::string fileName)
 
 
 // Function to project a point onto the curve
-float icy::SnapshotManager::projectPointOntoCurve(const Eigen::Vector3f& rgb, const std::array<std::array<float, 3>, 8>& curve)
+float icy::SnapshotManager::projectPointOntoCurve(const Eigen::Vector3f& rgb, const std::array<std::array<float, 3>, 3>& curve)
 {
     float minDistance = std::numeric_limits<float>::max();
     float relativePosition = 0.0f;

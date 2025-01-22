@@ -52,15 +52,10 @@ private:
         {0.323, 0.323, 0.323}
     }};
 
-    static constexpr std::array<std::array<float, 3>, 8> colordata_Crushed = {{
-        {0x2f/255.,0x42/255.,0x50/255.}, // 1
-        {0x3f/255.,0x52/255.,0x56/255.}, // 2
-        {0x47/255.,0x5a/255.,0x5e/255.}, // 3
-        {0x77/255.,0x9a/255.,0xae/255.}, // 4
-        {0x89/255.,0x76/255.,0xa3/255.}, // 7
-        {0x81/255.,0xa2/255.,0x99/255.}, // 6
-        {0xc3/255.,0xc8/255.,0xcb/255.}, // 8
-        {0xb8/255.,0xca/255.,0xca/255.}, // 5
+    static constexpr std::array<std::array<float, 3>, 3> colordata_Solid = {{
+        {0xac/255.,0xb0/255.,0xb1/255.},
+        {0xc4/255.,0xc8/255.,0xcb/255.},
+        {0xc8/255.,0xc9/255.,0xca/255.}
     }};
 
     std::pair<int, float> categorizeColor(const Eigen::Vector3f& rgb);
@@ -68,7 +63,7 @@ private:
         return Eigen::Vector3f(arr[0], arr[1], arr[2]);
     }
 
-    static float projectPointOntoCurve(const Eigen::Vector3f& rgb, const std::array<std::array<float, 3>, 8>& curve);
+    static float projectPointOntoCurve(const Eigen::Vector3f& rgb, const std::array<std::array<float, 3>, 3>& curve);
 };
 
 #endif // SNAPSHOTWRITER_H

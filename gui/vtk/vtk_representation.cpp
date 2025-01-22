@@ -538,26 +538,25 @@ void icy::VisualRepresentation::SynchronizeValues()
         // TODO
         actor_points->VisibilityOff();
 
-        /*
-        actor_points->VisibilityOff();
-
-        model->wind_interpolator.setTime(wind_visualization_time);
-        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-
-                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
-
-                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
-                float value = wv.x();
-                visualized_values_grid->SetValue(idx_visual, value);
-            }
-
-*/
+    }
+    else if(VisualizingVariable == VisOpt::strength)
+    {
+        scalarBar->VisibilityOn();
+        points_mapper->ScalarVisibilityOn();
+        points_mapper->SetColorModeToMapScalars();
+        points_mapper->UseLookupTableScalarRangeOn();
+        points_mapper->SetLookupTable(hueLut_pressure);
+        scalarBar->SetLookupTable(hueLut_pressure);
+        hueLut_pressure->SetTableRange(0.5, 1);
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            float value = s->getValue(SimParams::idx_initial_strength);
+            //else if(s->getCrushedStatus()) value = 2*range;
+            visualized_values->SetValue((vtkIdType)i, value);
+        }
+        points_polydata->GetPointData()->SetActiveScalars("visualized_values");
+        visualized_values->Modified();
     }
     else
     {
