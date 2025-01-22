@@ -71,7 +71,7 @@ void HostSideSOA::Allocate(int pts_capacity, int gridTotal)
 
     // grid buffer
     grid_status_buffer.resize(gridTotal);
-    //grid_status_buffer
+    grid_colors_rgb.resize(gridTotal*3);
     spdlog::info("HSSOA allocate capacity {} pt; toal {} Gb", capacity, (double)allocation_size/(1024.*1024.*1024.));
 }
 

@@ -70,6 +70,7 @@ public:
 
     // wind
     double windDragCoeff_airDensity;
+    bool use_GFS_wind;
 
     // material properties
     double SurfaceDensity, PoissonsRatio, YoungsModulus;

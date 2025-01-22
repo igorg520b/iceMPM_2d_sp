@@ -415,17 +415,14 @@ void MainWindow::screenshot()
 
 void MainWindow::LoadParameterFile(QString qFileName)
 {
+    qDebug() << "MainWindow::LoadParameterFile" << qFileName;
     std::map<std::string,std::string> additionalFiles = model.prms.ParseFile(qFileName.toStdString());
 
-    model.snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"]);
+    model.snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"], additionalFiles["ModeledRegion"]);
     this->qLastParameterFile = qFileName;
     this->setWindowTitle(qLastParameterFile);
 
-    if(additionalFiles.count("InputWindData") > 0)
-    {
-        model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
-        model.use_GFS_wind = true;
-    }
+    if(additionalFiles.count("InputWindData")) model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
 
     representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);

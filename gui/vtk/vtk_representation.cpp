@@ -62,14 +62,17 @@ icy::VisualRepresentation::VisualRepresentation()
     actor_grid->GetProperty()->SetRepresentationToWireframe();
 
     // grid2
-    visualized_values_grid->SetName("visualized_values_grid");
-    structuredGrid2->GetCellData()->AddArray(visualized_values_grid);
-    structuredGrid2->GetCellData()->SetActiveScalars("visualized_values_grid");
+
+    grid_colors->SetName("grid_colors");
+    grid_colors->SetNumberOfComponents(3);
+
+    structuredGrid2->GetCellData()->AddArray(grid_colors);
+    structuredGrid2->GetCellData()->SetActiveScalars("grid_colors");
 
     grid_mapper2->SetInputData(structuredGrid2);
-    grid_mapper2->SetLookupTable(hueLut_four);
-    grid_mapper2->UseLookupTableScalarRangeOn();
-    points_mapper->UseLookupTableScalarRangeOn();
+//    grid_mapper2->SetLookupTable(hueLut_four);
+//    grid_mapper2->UseLookupTableScalarRangeOn();
+    grid_mapper2->SetColorModeToDirectScalars();
 
 
     actor_grid2->SetMapper(grid_mapper2);
@@ -165,7 +168,8 @@ void icy::VisualRepresentation::SynchronizeTopology()
         }
     structuredGrid2->SetPoints(grid_points2);
 
-    visualized_values_grid->SetNumberOfValues(gx*gy);
+//    visualized_values_grid->SetNumberOfValues(gx*gy);
+    grid_colors->SetNumberOfValues(gx*gy*3);
     std::vector<uint8_t> &gb = model->gpu.hssoa.grid_status_buffer;
     if(gb.size() > 0)
     {
@@ -175,11 +179,22 @@ void icy::VisualRepresentation::SynchronizeTopology()
             {
                 int idx_visual = idx_x + idx_y*gx;
                 int idx_storage = idx_y + idx_x*gy;
-                int value = gb[idx_storage]+5;
-                visualized_values_grid->SetValue(idx_visual, value);
+
+                //int value = gb[idx_storage]+5;
+                //visualized_values_grid->SetValue(idx_visual, value);
+                uint8_t r = model->gpu.hssoa.grid_colors_rgb[idx_storage*3+0];
+                uint8_t g = model->gpu.hssoa.grid_colors_rgb[idx_storage*3+1];
+                uint8_t b = model->gpu.hssoa.grid_colors_rgb[idx_storage*3+2];
+
+                uint8_t land = model->gpu.hssoa.grid_status_buffer[idx_storage];
+                if(!land) {r = 29; g=41; b=58;}
+
+                grid_colors->SetValue(idx_visual*3+0, r);
+                grid_colors->SetValue(idx_visual*3+1, g);
+                grid_colors->SetValue(idx_visual*3+2, b);
             }
 
-        visualized_values_grid->Modified();
+        grid_colors->Modified();
     }
 
 
@@ -234,6 +249,7 @@ void icy::VisualRepresentation::SynchronizeValues()
 
     else if(VisualizingVariable == VisOpt::wind_u)
     {
+        /*
         int gx = model->prms.GridXTotal;
         int gy = model->prms.GridY;
         actor_points->VisibilityOff();
@@ -260,9 +276,11 @@ void icy::VisualRepresentation::SynchronizeValues()
         visualized_values_grid->Modified();
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_pressure);
+*/
     }
     else if(VisualizingVariable == VisOpt::wind_v)
     {
+        /*
         int gx = model->prms.GridXTotal;
         int gy = model->prms.GridY;
         actor_points->VisibilityOff();
@@ -288,9 +306,11 @@ void icy::VisualRepresentation::SynchronizeValues()
         visualized_values_grid->Modified();
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(hueLut_pressure);
+*/
     }
     else if(VisualizingVariable == VisOpt::wind_norm)
     {
+        /*
         int gx = model->prms.GridXTotal;
         int gy = model->prms.GridY;
         actor_points->VisibilityOff();
@@ -318,6 +338,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         scalarBar->SetLookupTable(hueLut_Southwest);
 
         visualized_values_grid->Modified();
+*/
     }
     else if(VisualizingVariable == VisOpt::color)
     {
@@ -509,6 +530,34 @@ void icy::VisualRepresentation::SynchronizeValues()
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
+    }
+    else if(VisualizingVariable == VisOpt::boundary)
+    {
+        int gx = model->prms.GridXTotal;
+        int gy = model->prms.GridY;
+        // TODO
+        actor_points->VisibilityOff();
+
+        /*
+        actor_points->VisibilityOff();
+
+        model->wind_interpolator.setTime(wind_visualization_time);
+        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
+
+        for(int idx_y=0; idx_y<gy; idx_y++)
+            for(int idx_x=0; idx_x<gx; idx_x++)
+            {
+                int idx_visual = idx_x + idx_y*gx;
+
+                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
+                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
+
+                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
+                float value = wv.x();
+                visualized_values_grid->SetValue(idx_visual, value);
+            }
+
+*/
     }
     else
     {

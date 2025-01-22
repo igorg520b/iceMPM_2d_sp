@@ -4,7 +4,8 @@
 
 void SimParams::Reset()
 {
-    SimulationStartUnixTime = -1;
+    use_GFS_wind = false;
+    SimulationStartUnixTime = 0;
 
     LatMin = 63.2540559;
     LonMin = 19.7794673;
@@ -96,20 +97,27 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 
     std::map<std::string,std::string> result;
 
-    if(!doc.HasMember("InputPNG"))
+    if(!doc.HasMember("InputPNG") || !doc.HasMember("ModeledRegion"))
     {
-        spdlog::critical("InputPNG entry is missing in JSON config file");
+        spdlog::critical("InputPNG and/or ModeledRegion entry is missing in JSON config file");
         throw std::runtime_error("config parameter missing");
     }
-
     result["InputPNG"] = doc["InputPNG"].GetString();
+    result["ModeledRegion"] = doc["ModeledRegion"].GetString();
     spdlog::info("ParseFile; png map data {}", result["InputPNG"]);
+    spdlog::info("ModeledRegion png {}", result["ModeledRegion"]);
 
     if(doc.HasMember("InputWindData"))
     {
         result["InputWindData"] = doc["InputWindData"].GetString();
         spdlog::info("ParseFile; InputWindData file {}", result["InputWindData"]);
+        use_GFS_wind = true;
     }
+    else use_GFS_wind = false;
+
+    if(doc.HasMember("DimensionHorizontal")) DimensionHorizontal = doc["DimensionHorizontal"].GetDouble();
+    else DimensionHorizontal = 0;
+
 
     spdlog::info("SimParams::ParseFile done");
 

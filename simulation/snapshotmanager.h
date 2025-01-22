@@ -19,7 +19,7 @@ class icy::SnapshotManager
 public:
     icy::Model *model;
 
-    void PreparePointsAndSetupGrid(std::string fileName);   // use PNG image file
+    void PreparePointsAndSetupGrid(std::string fileName, std::string fileNameModelledArea);   // use PNG image files
     void LoadWindData(std::string fileName);    // netCDF4 data
     void SaveSnapshot(int SimulationStep, double SimulationTime);
     void SaveFrame(int SimulationStep, double SimulationTime);
@@ -44,13 +44,12 @@ private:
     void load_png(std::string pngFileName, unsigned char* &png_data);
 
 
-    static constexpr std::array<std::array<float, 3>, 6> colordata_OpenWater = {{
+    static constexpr std::array<std::array<float, 3>, 5> colordata_OpenWater = {{
         {0,0,0},
-        {0x0c/255.,0x10/255.,0x0f/255.},
-        {0x0f/255.,0x16/255.,0x1c/255.},
-        {0x11/255.,0x18/255.,0x20/255.},
-        {0x17/255.,0x20/255.,0x29/255.},
-        {0x25/255.,0x39/255.,0x37/255.},
+        {0x1d/255.,0x29/255.,0x3a/255.},
+        {0x28/255.,0x3b/255.,0x52/255.},
+        {0x4a/255.,0x4b/255.,0x4b/255.},
+        {0.323, 0.323, 0.323}
     }};
 
     static constexpr std::array<std::array<float, 3>, 8> colordata_Crushed = {{

@@ -20,6 +20,172 @@
 #include "stb_image.h"
 
 
+void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::string fileNameModelledArea)
+{
+    spdlog::info("icy::SnapshotManager::PreparePointsAndSetupGrid {}",fileName);
+    unsigned char* png_data, *png_data_modelled_region;
+    load_png(fileName, png_data);
+    load_png(fileNameModelledArea, png_data_modelled_region);
+    const int &imgx = model->prms.GridXTotal;
+    const int &imgy = model->prms.GridY;
+
+    // either load or generate points
+    std::vector<std::array<float, 2>> buffer;   // initial buffer for points
+    bool cache_result = attempt_to_fill_from_cache(imgx, imgy, buffer);
+    if(!cache_result) generate_and_save(imgx, imgy, SimParams::MPM_points_per_cells, buffer);
+
+    // function for obtaining index in png_data from the pixel's 2D index (i,j)
+    auto idxInPng = [&](int px, int py) -> int { return 4*((imgy - py - 1) * imgx + px); };
+
+    // convert unscaled point coordinates to (i,j) pair on the grid
+    auto idxPt = [&](std::array<float,2> &pt) -> std::pair<int,int> {
+        return {(int)((double)pt[0]*(imgx-1) + 0.5), (int)((double)pt[1]*(imgx-1) + 0.5)};
+    };
+
+    // now that we have png_data, classify points and count those remaining (not land or open water)
+    model->prms.nPtsInitial = std::count_if(buffer.begin(), buffer.end(),
+                                            [&](std::array<float,2> &pt) {
+                                                auto [i,j] = idxPt(pt);
+                                                if(i<=1 || j<=1 || i>= (imgx-2) || j>= (imgy-2)) return false; // exclude points right at the boundary
+                                                int idx_png = idxInPng(i,j);
+
+                                                if(png_data_modelled_region[idx_png+3]<128) return false; // outside modelled region
+
+                                                unsigned char r = png_data[idx_png + 0];
+                                                unsigned char g = png_data[idx_png + 1];
+                                                unsigned char b = png_data[idx_png + 2];
+                                                Eigen::Vector3f rgb((float)r/255.,(float)g/255.,(float)b/255.);
+
+                                                auto [category, interpValue] = categorizeColor(rgb);
+                                                if(category <= 0) return false; // open water
+                                                else return true; // some sort of ice
+                                            });
+
+    // allocate hssoa + grid
+    model->gpu.hssoa.Allocate(model->prms.nPtsInitial, imgx*imgy);
+    model->gpu.hssoa.size = model->prms.nPtsInitial;
+    spdlog::info("PreparePointsAndSetupGrid: nPoints {}; grid [{} x {}]",
+                 model->prms.nPtsInitial, model->prms.GridXTotal, model->prms.GridY);
+
+    // compute the X-dimension from lat/lon using haversineDistance()
+    double XScale;
+    if(model->prms.DimensionHorizontal == 0)
+    {
+        // TODO: this will be chagned
+        XScale = haversineDistance((model->prms.LatMin + model->prms.LatMax)*0.5, model->prms.LonMin, model->prms.LonMax);
+    }
+    else
+    {
+        XScale = model->prms.DimensionHorizontal;
+    }
+    model->prms.DimensionHorizontal = XScale;
+    model->prms.DimensionVertical = XScale * model->prms.GridY / model->prms.GridXTotal;
+
+    // compute cellsize
+    model->prms.cellsize = XScale / (model->prms.GridXTotal-1);
+    model->prms.cellsize_inv = 1.0/model->prms.cellsize;
+    spdlog::info("assumed horizontal scale: {}; cellsize {}", XScale, model->prms.cellsize);
+
+    // sequentially transfer points from "buffer" to hssoa (only those counted), scale coordinates
+    uint32_t count = 0;
+    HostSideSOA &hssoa = model->gpu.hssoa;
+    for(std::array<float,2> &pt : buffer)
+    {
+        auto [i,j] = idxPt(pt);
+        if(i<=1 || j<=1 || i>= (imgx-2) || j>= (imgy-2)) continue; // exclude points at the boundary
+        int idx_png = idxInPng(i,j);
+        if(png_data_modelled_region[idx_png+3]<128) continue; // outside modelled region
+
+        unsigned char r = png_data[idx_png + 0];
+        unsigned char g = png_data[idx_png + 1];
+        unsigned char b = png_data[idx_png + 2];
+        Eigen::Vector3f rgb((float)r/255.,(float)g/255.,(float)b/255.);
+        auto [category, interpValue] = categorizeColor(rgb);
+        if(category <= 0) continue; // either land or water
+        if(count == model->prms.nPtsInitial) throw std::runtime_error("when transferring from buffer to SOA - index error");
+
+        // write into SOA
+        SOAIterator it = hssoa.begin()+count;
+        ProxyPoint &p = *it;
+        p.setValue(SimParams::posx, pt[0]*XScale);      // set point's x-position in SOA
+        p.setValue(SimParams::posx+1, pt[1]*XScale);    // set point's y-position in SOA
+
+        uint32_t rgba = (static_cast<uint32_t>(r) << 16) |  (static_cast<uint32_t>(g) << 8) |  static_cast<uint32_t>(b);
+        hssoa.point_colors_rgb[count] = rgba;
+        p.setValueInt(SimParams::integer_point_idx, count);
+
+        uint32_t val = 0;
+        if(category == 1)
+        {
+            val |= 0x10000;     // crushed
+            p.setValueInt(SimParams::idx_utility_data, val);
+            p.setValue(SimParams::idx_initial_strength, interpValue*0.3+0.1);
+        }
+        else
+        {
+            p.setValue(SimParams::idx_initial_strength, 1.f);
+        }
+
+        p.setValue(SimParams::idx_Jp_inv, 1.f);
+        p.setValue(SimParams::idx_Qp, 1.f);
+        for(int idx=0; idx<SimParams::dim; idx++)
+            p.setValue(SimParams::Fe00+idx*2+idx, 1.f);
+
+        count++;
+    }
+
+    // convert points to cell-based local coordinates
+    hssoa.convertToIntegerCellFormat(model->prms.cellsize);
+
+    model->prms.ParticleVolume = XScale*XScale * (float)imgy/imgx / buffer.size();
+
+
+    // transfer / set grid land bit
+    for(int i=0;i<imgx;i++)
+        for(int j=0;j<imgy;j++)
+        {
+            int idx_png = idxInPng(i,j);
+            int hssoa_grid_idx = j + i*imgy;
+            bool is_land = (png_data_modelled_region[idx_png+3]<128);
+            hssoa.grid_status_buffer[hssoa_grid_idx] = is_land ? 1 : 0;
+
+            unsigned char r = png_data[idx_png + 0];
+            unsigned char g = png_data[idx_png + 1];
+            unsigned char b = png_data[idx_png + 2];
+
+
+//            unsigned char r = png_data_modelled_region[idx_png + 3];
+//            unsigned char g = png_data_modelled_region[idx_png + 3];
+//            unsigned char b = png_data_modelled_region[idx_png + 3];
+
+            hssoa.grid_colors_rgb[hssoa_grid_idx*3 + 0] = r;
+            hssoa.grid_colors_rgb[hssoa_grid_idx*3 + 1] = g;
+            hssoa.grid_colors_rgb[hssoa_grid_idx*3 + 2] = b;
+        }
+
+    //model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY);
+
+    // particle volume and mass
+    model->prms.ComputeHelperVariables();
+
+    // allocate GPU partitions
+    model->gpu.initialize();
+    model->gpu.split_hssoa_into_partitions();
+    model->gpu.allocate_arrays();
+    model->gpu.transfer_to_device();
+
+    model->Prepare();
+
+    stbi_image_free(png_data);
+    stbi_image_free(png_data_modelled_region);
+
+    spdlog::info("PreparePointsAndSetupGrid done\n");
+}
+
+
+
+
+
 void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 {
     {
@@ -110,9 +276,6 @@ void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 
     spdlog::info("icy::SnapshotManager::ReadSnapshot done");
 }
-
-
-
 
 
 void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
@@ -224,7 +387,6 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
 }
 
 
-
 void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTime)
 {
     //snapshot_path
@@ -309,7 +471,13 @@ void icy::SnapshotManager::load_png(std::string pngFileName, unsigned char* &png
     int channels;
     int imgx, imgy;
     const char* filename = pngFileName.c_str();
-    png_data = stbi_load(filename, &imgx, &imgy, &channels, 3); // request 3 channels - RGB
+    png_data = stbi_load(filename, &imgx, &imgy, &channels, 4); // request 4 channels - RGBA
+
+    if(channels != 4)
+    {
+        spdlog::error("icy::SnapshotManager::load_png; channels has to be 4, not {}", channels);
+        throw std::runtime_error("png not loaded");
+    }
 
     if (!png_data)
     {
@@ -465,9 +633,9 @@ std::string icy::SnapshotManager::prepare_file_name(int gx, int gy)
 
 std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3f& rgb)
 {
-    if(rgb.x() > 0.95 && rgb.y() < 0.05 && rgb.z() < 0.05) return {-1, 0.f}; // land
+//    if(rgb.x() > 0.95 && rgb.y() < 0.05 && rgb.z() < 0.05) return {-1, 0.f}; // land
 //    if(rgb.x() >= 0xca/255. && rgb.y() >= 0xca/255. && rgb.z() >= 0xca/255.) return {2, 0.f}; // intact ice
-    if(rgb.x() >= 0xcd/255. && rgb.y() >= 0xd5/255. && rgb.z() >= 0xd6/255.) return {2, 0.f}; // intact ice
+//    if(rgb.x() >= 0xcd/255. && rgb.y() >= 0xd5/255. && rgb.z() >= 0xd6/255.) return {2, 0.f}; // intact ice
 
 
 
@@ -506,141 +674,6 @@ std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3
 }
 
 
-void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName)
-{
-    spdlog::info("icy::SnapshotManager::PreparePointsAndSetupGrid {}",fileName);
-    unsigned char* png_data;
-    load_png(fileName, png_data);
-    const int &imgx = model->prms.GridXTotal;
-    const int &imgy = model->prms.GridY;
-
-    // either load or generate points
-    std::vector<std::array<float, 2>> buffer;   // initial buffer for points
-    bool cache_result = attempt_to_fill_from_cache(imgx, imgy, buffer);
-    if(!cache_result) generate_and_save(imgx, imgy, SimParams::MPM_points_per_cells, buffer);
-
-    // function for obtaining index in png_data from the pixel's 2D index (i,j)
-    auto idxInPng = [&](int px, int py) -> int { return 3*((imgy - py - 1) * imgx + px); };
-
-    // convert unscaled point coordinates to (i,j) pair on the grid
-    auto idxPt = [&](std::array<float,2> &pt) -> std::pair<int,int> {
-        return {(int)((double)pt[0]*(imgx-1) + 0.5), (int)((double)pt[1]*(imgx-1) + 0.5)};
-    };
-
-    // now that we have png_data, classify points and count those remaining (not land or open water)
-    model->prms.nPtsInitial = std::count_if(buffer.begin(), buffer.end(),
-                                               [&](std::array<float,2> &pt) {
-        auto [i,j] = idxPt(pt);
-        if(i<=1 || j<=1 || i>= (imgx-2) || j>= (imgy-2)) return false; // exclude points right at the boundary
-        int idx_png = idxInPng(i,j);
-        unsigned char r = png_data[idx_png + 0];
-        unsigned char g = png_data[idx_png + 1];
-        unsigned char b = png_data[idx_png + 2];
-        if(r > 250 && g < 5 && b < 5) return false;
-        Eigen::Vector3f rgb((float)r/255.,(float)g/255.,(float)b/255.);
-        auto [category, interpValue] = categorizeColor(rgb);
-        if(category <= 0) return false; // either land or water
-        else return true; // some sort of ice
-    });
-
-    // allocate hssoa + grid
-    model->gpu.hssoa.Allocate(model->prms.nPtsInitial, imgx*imgy);
-    model->gpu.hssoa.size = model->prms.nPtsInitial;
-    spdlog::info("PreparePointsAndSetupGrid: nPoints {}; grid [{} x {}]",
-                 model->prms.nPtsInitial, model->prms.GridXTotal, model->prms.GridY);
-
-    // compute the X-dimension from lat/lon using haversineDistance()
-    double XScale = haversineDistance((model->prms.LatMin + model->prms.LatMax)*0.5, model->prms.LonMin, model->prms.LonMax);
-    model->prms.DimensionHorizontal = XScale;
-    model->prms.DimensionVertical = XScale * model->prms.GridY / model->prms.GridXTotal;
-
-    // compute cellsize
-    model->prms.cellsize = XScale / (model->prms.GridXTotal-1);
-    model->prms.cellsize_inv = 1.0/model->prms.cellsize;
-    spdlog::info("assumed horizontal scale: {}; cellsize {}", XScale, model->prms.cellsize);
-
-    // sequentially transfer points from "buffer" to hssoa (only those counted), scale coordinates
-    uint32_t count = 0;
-    HostSideSOA &hssoa = model->gpu.hssoa;
-    for(std::array<float,2> &pt : buffer)
-    {
-        auto [i,j] = idxPt(pt);
-        if(i<=1 || j<=1 || i>= (imgx-2) || j>= (imgy-2)) continue; // exclude points at the boundary
-        int idx_png = idxInPng(i,j);
-        unsigned char r = png_data[idx_png + 0];
-        unsigned char g = png_data[idx_png + 1];
-        unsigned char b = png_data[idx_png + 2];
-        Eigen::Vector3f rgb((float)r/255.,(float)g/255.,(float)b/255.);
-        auto [category, interpValue] = categorizeColor(rgb);
-        if(category <= 0) continue; // either land or water
-        if(count == model->prms.nPtsInitial) throw std::runtime_error("when transferring from buffer to SOA - index error");
-
-        // write into SOA
-        SOAIterator it = hssoa.begin()+count;
-        ProxyPoint &p = *it;
-        p.setValue(SimParams::posx, pt[0]*XScale);      // set point's x-position in SOA
-        p.setValue(SimParams::posx+1, pt[1]*XScale);    // set point's y-position in SOA
-
-        uint32_t rgba = (static_cast<uint32_t>(r) << 16) |  (static_cast<uint32_t>(g) << 8) |  static_cast<uint32_t>(b);
-        hssoa.point_colors_rgb[count] = rgba;
-        p.setValueInt(SimParams::integer_point_idx, count);
-
-        uint32_t val = 0;
-        if(category == 1)
-        {
-            val |= 0x10000;     // crushed
-            p.setValueInt(SimParams::idx_utility_data, val);
-            p.setValue(SimParams::idx_initial_strength, interpValue*0.3+0.1);
-        }
-        else
-        {
-            p.setValue(SimParams::idx_initial_strength, 1.f);
-        }
-
-        p.setValue(SimParams::idx_Jp_inv, 1.f);
-        p.setValue(SimParams::idx_Qp, 1.f);
-        for(int idx=0; idx<SimParams::dim; idx++)
-            p.setValue(SimParams::Fe00+idx*2+idx, 1.f);
-
-        count++;
-    }
-
-    // convert points to cell-based local coordinates
-    hssoa.convertToIntegerCellFormat(model->prms.cellsize);
-
-    model->prms.ParticleVolume = XScale*XScale * (float)imgy/imgx / buffer.size();
-
-
-    // transfer / set grid land bit
-    for(int i=0;i<imgx;i++)
-        for(int j=0;j<imgy;j++)
-        {
-            int idx_png = idxInPng(i,j);
-            unsigned char r = png_data[idx_png + 0];
-            unsigned char g = png_data[idx_png + 1];
-            unsigned char b = png_data[idx_png + 2];
-
-            bool is_land = (r > 250 && g < 5 & b < 5);
-            hssoa.grid_status_buffer[j + i*imgy] = is_land ? 1 : 0;
-        }
-
-    //model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY);
-
-    // particle volume and mass
-    model->prms.ComputeHelperVariables();
-
-    // allocate GPU partitions
-    model->gpu.initialize();
-    model->gpu.split_hssoa_into_partitions();
-    model->gpu.allocate_arrays();
-    model->gpu.transfer_to_device();
-
-    model->Prepare();
-
-    stbi_image_free(png_data);
-    spdlog::info("PreparePointsAndSetupGrid done\n");
-}
-
 
 
 // Haversine formula implementation
@@ -671,7 +704,7 @@ double icy::SnapshotManager::haversineDistance(double lat, double lon1, double l
 void icy::SnapshotManager::LoadWindData(std::string fileName)
 {
     spdlog::info("icy::SnapshotManager::LoadWindData - {}", fileName);
-    model->use_GFS_wind = true;
+    model->prms.use_GFS_wind = true;
     model->wind_interpolator.LoadWindData(fileName,
                                           model->prms.LatMin,model->prms.LatMax,model->prms.LonMin,model->prms.LonMax,
                                           model->prms.SimulationStartUnixTime);
