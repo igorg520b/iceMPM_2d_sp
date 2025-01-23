@@ -67,6 +67,7 @@ public:
     int AnimationFramesRequested; // run N steps without update
     int SimulationStep;
     double SimulationTime;
+    bool SaveSnapshots;
 
     // wind
     double windDragCoeff_airDensity;

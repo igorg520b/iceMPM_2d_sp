@@ -45,7 +45,8 @@ __device__ void Wolper_Drucker_Prager(const t_PointReal &initial_strength,
                                       PointMatrix2r &Fe, t_PointReal &Jp_inv);
 
 __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const uint16_t &grain,
-                                                   const t_PointReal &p, const t_PointReal &q);
+                                                   const t_PointReal &p, const t_PointReal &q,
+                                                    const t_PointReal &strength);
 
 __device__ void ComputeSVD(const PointMatrix2r &Fe, PointMatrix2r &U, PointVector2r &vSigma, PointMatrix2r &V,
                            PointVector2r &vSigmaSquared, PointVector2r &v_s_hat_tr,

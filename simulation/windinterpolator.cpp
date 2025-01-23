@@ -287,6 +287,7 @@ Eigen::Vector2f WindInterpolator::interpolationResult(float lat, float lon, floa
 
 void WindInterpolator::SaveToOwnHDF5(H5::H5File &file)
 {
+    if(!isInitialized) return;
     hsize_t dims_wind[3] = {(hsize_t)nTimeIntervals,(hsize_t)extentLat, (hsize_t)extentLon};
     H5::DataSpace dataspace_wind(3, dims_wind);
 

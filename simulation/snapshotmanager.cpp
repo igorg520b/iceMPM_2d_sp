@@ -146,13 +146,18 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
         {
             int idx_png = idxInPng(i,j);
             int hssoa_grid_idx = j + i*imgy;
-            bool is_land = (png_data_modelled_region[idx_png+3]<128);
-            hssoa.grid_status_buffer[hssoa_grid_idx] = is_land ? 1 : 0;
+
+            uint8_t _r = png_data_modelled_region[idx_png+0];
+            uint8_t _b = png_data_modelled_region[idx_png+2];
+            uint8_t _a = png_data_modelled_region[idx_png+3];
+
+            bool is_land = (_a<128);
+            hssoa.grid_status_buffer[hssoa_grid_idx] = is_land ? 0 : std::max((uint8_t)1,_r);
+
 
             unsigned char r = png_data[idx_png + 0];
             unsigned char g = png_data[idx_png + 1];
             unsigned char b = png_data[idx_png + 2];
-
             hssoa.grid_colors_rgb[hssoa_grid_idx*3 + 0] = r;
             hssoa.grid_colors_rgb[hssoa_grid_idx*3 + 1] = g;
             hssoa.grid_colors_rgb[hssoa_grid_idx*3 + 2] = b;
@@ -452,6 +457,7 @@ void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTim
     dataset_pts.createAttribute("HSSOA_size", H5::PredType::NATIVE_UINT, att_dspace).write(H5::PredType::NATIVE_UINT, &model->gpu.hssoa.size);
     int nPtsArrays = SimParams::nPtsArrays;
     dataset_pts.createAttribute("nPtsArrays", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &nPtsArrays);
+
 }
 
 

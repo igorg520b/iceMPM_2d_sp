@@ -6,6 +6,8 @@ void SimParams::Reset()
 {
     use_GFS_wind = false;
     SimulationStartUnixTime = 0;
+    DimensionHorizontal = 0;
+    SaveSnapshots = false;
 
     LatMin = 63.2540559;
     LonMin = 19.7794673;

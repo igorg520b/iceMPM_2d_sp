@@ -186,8 +186,8 @@ void icy::VisualRepresentation::SynchronizeTopology()
                 uint8_t g = model->gpu.hssoa.grid_colors_rgb[idx_storage*3+1];
                 uint8_t b = model->gpu.hssoa.grid_colors_rgb[idx_storage*3+2];
 
-                uint8_t land = model->gpu.hssoa.grid_status_buffer[idx_storage];
-                if(!land) {r = 29; g=41; b=58;}
+                uint8_t water = model->gpu.hssoa.grid_status_buffer[idx_storage];
+                if(water) {r = 29; g=41; b=58;}
 
                 grid_colors->SetValue(idx_visual*3+0, r);
                 grid_colors->SetValue(idx_visual*3+1, g);

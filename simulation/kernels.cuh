@@ -118,8 +118,9 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     velocity /= mass;
 //    velocity[1] -= gprms.dt_Gravity;
 
-    uint8_t is_land = grid_status[idx];
-    if(is_land)
+    uint8_t is_modeled_area = grid_status[idx];
+    t_GridReal intensity = (t_GridReal)is_modeled_area/255.f;
+    if(!is_modeled_area)
     {
         velocity.setZero();
     }
@@ -133,7 +134,14 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         float lat = gprms.LatMin + (gprms.LatMax-gprms.LatMin)*(float)gi.y()/(float)gprms.GridY;
         float lon = gprms.LonMin + (gprms.LonMax-gprms.LonMin)*(float)gi.x()/(float)gprms.GridXTotal;
 
-        vWind = get_wind_vector(lat, lon, interpolation_coeff);
+        if(gprms.use_GFS_wind)
+        {
+            vWind = get_wind_vector(lat, lon, interpolation_coeff);
+        }
+        else
+        {
+            vWind *= intensity;
+        }
 //        velocity = (1-air_coeff-water_coeff)*velocity + vWind*air_coeff + waterVelVector*water_coeff;
 
 
@@ -196,6 +204,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
             Fe(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)];
         }
     }
+    t_PointReal initial_strength = buffer_pts[pt_idx + pitch_pts*SimParams::idx_initial_strength];
     t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
     t_PointReal qp = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Qp];
     uint16_t grain = (uint16_t) (utility_data & 0xffff);
@@ -257,10 +266,9 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     PointVector2r vSigma, vSigmaSquared, v_s_hat_tr;
     ComputeSVD(Fe, U, vSigma, V, vSigmaSquared, v_s_hat_tr, kappa, mu, Je_tr);
 
-    if(!(utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(utility_data, grain, p_tr, q_tr);
+    if(!(utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(utility_data, grain, p_tr, q_tr, initial_strength);
     if(utility_data & status_crushed)
     {
-        t_PointReal initial_strength = buffer_pts[pt_idx + pitch_pts*SimParams::idx_initial_strength];
 
         Wolper_Drucker_Prager(initial_strength, p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
     }
@@ -341,10 +349,11 @@ __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_
 
 
 __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const uint16_t &grain,
-                            const t_PointReal &p, const t_PointReal &q)
+                            const t_PointReal &p, const t_PointReal &q, const t_PointReal &strength)
 {
     t_PointReal beta, M_sq, pmin, pmax, qmax, pmin2;
     GetParametersForGrain(grain, pmin, pmax, qmax, beta, M_sq, pmin2);
+    qmax *= strength;
 
     if(p<0)
     {
@@ -385,9 +394,10 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
     const double &qmax = gprms.IceShearStrength;
 
     DP_threshold_p *= Jp_inv;
-    t_PointReal tan_phi = tan(gprms.DP_phi*initial_strength*SimParams::pi/180);
+//    t_PointReal tan_phi = tan(gprms.DP_phi*initial_strength*SimParams::pi/180);
+    t_PointReal tan_phi = tan(gprms.DP_phi*SimParams::pi/180);
 
-    if(p_tr < DP_threshold_p*initial_strength)
+    if(p_tr < DP_threshold_p)
     {
         if(Jp_inv < 0.1)
         {
