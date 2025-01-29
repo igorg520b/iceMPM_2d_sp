@@ -105,7 +105,7 @@ MainWindow::MainWindow(QWidget *parent)
     // slider
     slider1 = new QSlider(Qt::Horizontal);
     ui->toolBar->addWidget(slider1);
-    slider1->setTracking(true);
+    slider1->setTracking(false);
     slider1->setMinimum(0);
     slider1->setMaximum(1000);
     connect(slider1, SIGNAL(valueChanged(int)), this, SLOT(sliderValueChanged(int)));
@@ -150,20 +150,6 @@ MainWindow::MainWindow(QWidget *parent)
             ui->actionTake_Screenshots->setChecked(b);
         }
 
-/*
-        var = settings.value("lastParameterFile");
-        if(!var.isNull())
-        {
-            qLastParameterFile = var.toString();
-            QFile paramFile(qLastParameterFile);
-            if(paramFile.exists())
-            {
-                this->outputDirectory = model.prms.ParseFile(qLastParameterFile.toStdString());
-                this->setWindowTitle(qLastParameterFile);
-                model.Reset();
-            }
-        }
-*/
         comboBox_visualizations->setCurrentIndex(settings.value("vis_option").toInt());
 
         var = settings.value("splitter_size_0");
@@ -198,6 +184,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::open_snapshot_triggered);
     connect(ui->actionStart_Pause, &QAction::triggered, this, &MainWindow::simulation_start_pause);
     connect(ui->actionLoad_Parameters, &QAction::triggered, this, &MainWindow::load_parameter_triggered);
+    connect(ui->actionLoad_FLUENT_Result, &QAction::triggered, this, &MainWindow::read_fluent_data_triggered);
+
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MainWindow::limits_changed);
     connect(qsbIntentionalSlowdown,QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::spinbox_slowdown_value_changed);
@@ -429,9 +417,45 @@ void MainWindow::LoadParameterFile(QString qFileName)
     updateGUI();
 }
 
+
+void MainWindow::spinbox_slowdown_value_changed(int val)
+{
+    model.intentionalSlowdown = val;
+}
+
+
+void MainWindow::read_fluent_data_triggered()
+{
+    qDebug() << "MainWindow::read_fluent_data_triggered()";
+
+    model.fluent_interpolatror.TestLoad();
+    renderer->AddActor(model.fluent_interpolatror.actor);
+    renderWindow->Render();
+
+
+
+    /*
+    QString defaultPath = QDir::currentPath() + "/_fluent";
+
+    // Fall back to the current path if the default directory does not exist
+    if (!QDir(defaultPath).exists()) defaultPath = QDir::currentPath();
+
+    QString qFileName = QFileDialog::getOpenFileName(this, "Open FLUENT data", defaultPath, "FLUENT Files (*.cas.h5)");
+    if(qFileName.isNull())return;
+    model.fluent_interpolatror.ScanDirectory(qFileName.toStdString());
+
+    slider1->setMinimum(0);
+    slider1->setMaximum(model.fluent_interpolatror.file_count-1);
+
+*/
+}
+
+
 void MainWindow::sliderValueChanged(int val)
 {
+    model.fluent_interpolatror.LoadDataFrame(val);
 
+ /*
     float b_val = (float)val/1000.;
     float max_val = 11.0*24*3600;
     float set_val = b_val*max_val;
@@ -448,9 +472,5 @@ void MainWindow::sliderValueChanged(int val)
     char buffer[100];
     std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
     representation.actorText->SetInput(buffer);
-}
-
-void MainWindow::spinbox_slowdown_value_changed(int val)
-{
-    model.intentionalSlowdown = val;
+*/
 }

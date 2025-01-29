@@ -30,6 +30,7 @@
     </property>
     <addaction name="actionOpen"/>
     <addaction name="actionLoad_Parameters"/>
+    <addaction name="actionLoad_FLUENT_Result"/>
     <addaction name="separator"/>
     <addaction name="separator"/>
     <addaction name="action_quit"/>
@@ -140,6 +141,14 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+L</string>
+   </property>
+  </action>
+  <action name="actionLoad_FLUENT_Result">
+   <property name="text">
+    <string>Load FLUENT Result...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+F</string>
    </property>
   </action>
  </widget>

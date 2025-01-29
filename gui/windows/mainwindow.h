@@ -82,6 +82,7 @@ private Q_SLOTS:
     void cameraReset_triggered();
     void open_snapshot_triggered();
     void load_parameter_triggered();
+    void read_fluent_data_triggered();
 
     void comboboxIndexChanged_visualizations(int index);
     void limits_changed(double val);

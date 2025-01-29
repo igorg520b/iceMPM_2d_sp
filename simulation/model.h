@@ -21,6 +21,7 @@
 #include "point.h"
 #include "gpu_implementation5.h"
 #include "windinterpolator.h"
+#include "fluentinterpolator.h"
 #include "snapshotmanager.h"
 
 #include <Eigen/Core>
@@ -47,7 +48,9 @@ public:
 
     SimParams prms;
     WindInterpolator wind_interpolator;
+    FluentInterpolator fluent_interpolatror;
     icy::SnapshotManager snapshot;
+
     std::vector<std::array<float,3>> wind_data;
     float windSpeed, windAngle;
     GPU_Implementation5 gpu;

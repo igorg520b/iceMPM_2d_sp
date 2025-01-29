@@ -7,8 +7,8 @@
 #include <H5Cpp.h>
 #include <spdlog/spdlog.h>
 #include <Eigen/Core>
-#include "simulation/parameters_sim.h"
-#include "simulation/windinterpolator.h"
+#include "parameters_sim.h"
+#include "windinterpolator.h"
 
 
 class FrameData

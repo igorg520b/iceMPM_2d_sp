@@ -24,7 +24,7 @@ find_package(spdlog REQUIRED)
 
 
 if(BUILD_POSTPROCESSOR)
-    find_package(VTK 9.1 REQUIRED COMPONENTS
+    find_package(VTK 9.4 HINTS "~/Projects-libraries/build-vtk/lib/cmake/vtk-9.4" REQUIRED COMPONENTS
       CommonColor
       CommonCore
       FiltersSources
@@ -58,14 +58,17 @@ if(BUILD_POSTPROCESSOR)
         simulation/parameters_sim.h
         simulation/parameters_sim.cpp
 
-        simulation/windinterpolator.cpp
-        simulation/windinterpolator.h
-
         postprocessor/framedata.h
         postprocessor/framedata.cpp
+
+        simulation/data_manager/windinterpolator.cpp
+        simulation/data_manager/windinterpolator.h
+        simulation/data_manager/fluentinterpolator.h
+        simulation/data_manager/fluentinterpolator.cpp
     )
 
-    target_include_directories(pp PRIVATE postprocessor postprocessor/window postprocessor/vtk simulation simulation/hssoa)
+    target_include_directories(pp PRIVATE postprocessor postprocessor/window postprocessor/vtk)
+    target_include_directories(pp PRIVATE simulation simulation/hssoa simulation/data_manager)
     target_link_libraries(pp PRIVATE Qt5::Widgets Qt5::Core)
 
     # Eigen
@@ -146,7 +149,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(PBrowser)
 
 
-    find_package(VTK 9.1 REQUIRED COMPONENTS
+#    find_package(VTK 9.4 HINTS "~/Projects-libraries/build-vtk/lib/cmake/vtk-9.4" REQUIRED COMPONENTS
+        find_package(VTK 9.1 REQUIRED COMPONENTS
       CommonColor
       CommonCore
       FiltersSources
@@ -162,6 +166,7 @@ FetchContent_MakeAvailable(PBrowser)
       RenderingLabel
       IOImage
       ViewsQt
+#      IOFLUENTCFF
     )
     find_package(Qt5 COMPONENTS Widgets REQUIRED)
     add_compile_definitions(QT_NO_KEYWORDS)
@@ -195,8 +200,6 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/gpu_implementation5.h
         simulation/gpu_implementation5.cpp
 
-        simulation/snapshotmanager.h
-        simulation/snapshotmanager.cpp
 
         simulation/hssoa/host_side_soa.h
         simulation/hssoa/host_side_soa.cpp
@@ -207,10 +210,17 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/gpu_partition.cpp
         simulation/kernels.cuh
 
-        simulation/poisson_disk_sampling.h
         
-        simulation/windinterpolator.cpp
-        simulation/windinterpolator.h
+        simulation/data_manager/snapshotmanager.h
+        simulation/data_manager/snapshotmanager.cpp
+        simulation/data_manager/windinterpolator.cpp
+        simulation/data_manager/windinterpolator.h
+        simulation/data_manager/fluentinterpolator.h
+        simulation/data_manager/fluentinterpolator.cpp
+        simulation/data_manager/poisson_disk_sampling.h
+
+        simulation/data_manager/vtkFLUENTCFFCustomReader.cxx
+        simulation/data_manager/vtkFLUENTCFFCustomReader.h
 
         gui/vtk/SpecialSelector2D.cpp
         gui/vtk/SpecialSelector2D.h
@@ -226,7 +236,7 @@ FetchContent_MakeAvailable(PBrowser)
     set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
     set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
-    target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa External)
+    target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa simulation/data_manager External)
     target_link_libraries(gm2 PRIVATE Qt5::Widgets Qt5::Core)
 
     # Eigen

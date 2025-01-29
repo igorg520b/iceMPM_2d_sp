@@ -17,9 +17,8 @@ bool icy::Model::Step()
     const float pp = 1000;
     const double st = prms.SimulationTime;
     std::pair<float, float> spd_and_angle = {
-                                             30+(10+st/pp)*abs(sin(SimParams::pi * st/pp)),
-
-                                             370+60*sin(SimParams::pi * st/(20*60.))};
+                                             10+(30+st/pp)*sin(SimParams::pi * st/pp),
+                                             370+10*sin(SimParams::pi * st/(10*60.))};
     double simulation_time;
     do
     {
