@@ -430,6 +430,7 @@ void MainWindow::read_fluent_data_triggered()
 
     model.fluent_interpolatror.TestLoad();
     renderer->AddActor(model.fluent_interpolatror.actor);
+    renderer->AddActor(model.fluent_interpolatror.actor_original);
     renderWindow->Render();
 
 

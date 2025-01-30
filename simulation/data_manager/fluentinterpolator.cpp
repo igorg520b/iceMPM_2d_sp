@@ -17,51 +17,82 @@ namespace fs = std::filesystem;
 
 void FluentInterpolator::TestLoad()
 {
-    std::string fileName = R"(/home/s2/Documents/vm_shared/fluent4/data2/FFF.1-3.cas.h5)";
-    fluentReader->SetFileName(fileName.c_str());  // Set the mesh file (.cas.h5)
-
     std::string dataFileName = R"(/home/s2/Documents/vm_shared/fluent4/data2/FFF.1-3-01100.dat.h5)";
     fluentReader->SetDataFileName(dataFileName.c_str());  // Set the mesh file (.cas.h5)
 
+    std::string fileName = R"(/home/s2/Documents/vm_shared/fluent4/data2/FFF.1-3.cas.h5)";
+    fluentReader->SetFileName(fileName.c_str());  // Set the mesh file (.cas.h5)
     fluentReader->Update(); // Update the reader
 
-    vtkMultiBlockDataSet* set = fluentReader->GetOutput();
-    spdlog::info("FluentInterpolator::LoadDataFrame; dataFile {}, blocks {}; cells {}; points {}", fileName,
-                 set->GetNumberOfBlocks(), set->GetNumberOfCells(), set->GetNumberOfPoints());
-
-
     vtkUnstructuredGrid* extractedGrid = vtkUnstructuredGrid::SafeDownCast(fluentReader->GetOutput()->GetBlock(0));
-
-
-
-    vtkCellData* cellData = extractedGrid->GetCellData();
-    if (!cellData || cellData->GetNumberOfArrays() == 0) {
-        std::cerr << "Error: No per-cell scalar data found!" << std::endl;
-        throw std::runtime_error("celldata");
-    }
-    spdlog::info("celldata arrays {}", cellData->GetNumberOfArrays());
-
-    mapper->SetScalarModeToUseCellData();  // Use cell data for coloring
-//    mapper->SelectColorArray("SV_U");
-    mapper->ScalarVisibilityOn();
-    mapper->SetLookupTable(lut);
-    lut->SetTableRange(-0.1, 0.1);
+    double bounds[6];
+    extractedGrid->GetBounds(bounds);
+    spdlog::info("bounds x [{}, {}]; y[{}, {}]", bounds[0], bounds[1], bounds[2], bounds[3]);
+    double width = bounds[1]-bounds[0];
+    double height = bounds[3]-bounds[2];
 
     extractedGrid->GetCellData()->SetActiveScalars("SV_U");
 
-    //points_polydata->GetPointData()->SetActiveScalars("visualized_values");
-    mapper->UseLookupTableScalarRangeOn();
+    filter_cd2pd->SetInputData(extractedGrid);
+    filter_cd2pd->Update();
 
-//    grid->ShallowCopy(extractedGrid);
-
-
-//    mapper->SetInputData(grid);
-    mapper->SetInputData(extractedGrid);
-    //    grid_mapper->SetLookupTable(hueLut);
-
-    actor->SetMapper(mapper);
+    mapper->SetInputConnection(filter_cd2pd->GetOutputPort());
+//    mapper->ScalarVisibilityOn();
+    mapper->ScalarVisibilityOff();
+    mapper->SetLookupTable(lut);
+    mapper->SetScalarRange(-0.1, 0.1);
 
 
+    // transfer to imageData via probeFilter
+    const int gx = 1000;
+    const int gy = (int)(gx*height/width);
+    const double spacing = width/(gx-1);
+
+    imageData->SetDimensions(gx, gy, 1);
+    imageData->SetSpacing(spacing, spacing, 1.0); // Adjust spacing as needed
+    imageData->SetOrigin(bounds[0], bounds[2], 0.0); // Adjust origin as needed
+
+    probeFilter->SetInputData(imageData); // Set the 2D structured grid as input
+    probeFilter->SetSourceData(filter_cd2pd->GetOutput()); // Set the unstructured grid as source
+    probeFilter->Update();
+
+    vtkImageData* probedData = vtkImageData::SafeDownCast(probeFilter->GetOutput());
+
+    // transfer the image into array
+
+    vtkDoubleArray* dataArray = vtkDoubleArray::SafeDownCast(probedData->GetPointData()->GetScalars("SV_U"));
+    if (!dataArray) {
+        spdlog::error("Failed to extract SV_U from probedData");
+        throw std::runtime_error("Failed to extract SV_U from probedData");
+    }
+
+    flatData_U.resize(gx*gy);
+    for (int idx = 0; idx < gx * gy; ++idx) flatData_U[idx] = dataArray->GetValue(idx);
+
+    flatData_V.resize(gx*gy);
+    dataArray = vtkDoubleArray::SafeDownCast(probedData->GetPointData()->GetScalars("SV_V"));
+    if (!dataArray) {
+        spdlog::error("Failed to extract SV_V from probedData");
+        throw std::runtime_error("Failed to extract SV_V from probedData");
+    }
+    for (int idx = 0; idx < gx * gy; ++idx) flatData_V[idx] = dataArray->GetValue(idx);
+
+
+    imageData->AllocateScalars(VTK_FLOAT,1);
+    float* data = static_cast<float*>(imageData->GetScalarPointer());
+    for (int idx = 0; idx < gx * gy; ++idx) data[idx] = flatData_V[idx];
+    imageData->Modified();
+
+//    probeMapper->SetInputData(probedData);
+    probeMapper->SetInputData(imageData);
+    probeMapper->SetScalarRange(-0.1, 0.1);
+    probeMapper->ScalarVisibilityOn();
+    probeMapper->SetLookupTable(lut);
+
+    actor->SetMapper(probeMapper);
+
+
+//    actor->SetMapper(mapper);
     actor->GetProperty()->SetEdgeVisibility(true);
     actor->GetProperty()->SetEdgeColor(0.2,0.2,0.2);
     actor->GetProperty()->LightingOff();
@@ -69,6 +100,22 @@ void FluentInterpolator::TestLoad()
     actor->GetProperty()->SetColor(0.1,0.1,0.1);
 
 
+    actor_original->SetMapper(mapper);
+    actor_original->GetProperty()->SetRepresentationToWireframe();
+    actor_original->GetProperty()->LightingOff();
+    actor_original->PickableOff();
+    actor_original->GetProperty()->SetColor(0.1,0.1,0.1);
+
+    //    vtkMultiBlockDataSet* set = fluentReader->GetOutput();
+    //    spdlog::info("FluentInterpolator::LoadDataFrame; dataFile {}, blocks {}; cells {}; points {}", fileName,
+    //                 set->GetNumberOfBlocks(), set->GetNumberOfCells(), set->GetNumberOfPoints());
+
+    //    vtkCellData* cellData = extractedGrid->GetCellData();
+    //    if (!cellData || cellData->GetNumberOfArrays() == 0) {
+    //        std::cerr << "Error: No per-cell scalar data found!" << std::endl;
+    //        throw std::runtime_error("celldata");
+    //    }
+    //   spdlog::info("celldata arrays {}", cellData->GetNumberOfArrays());
 
 }
 
