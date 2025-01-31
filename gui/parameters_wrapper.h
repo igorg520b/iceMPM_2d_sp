@@ -62,7 +62,7 @@ class ParamsWrapper : public QObject
     int getPointCountActual() {return prms->nPtsInitial;}
 
     Q_PROPERTY(QString b_Grid READ getGridDimensions NOTIFY propertyChanged)
-    QString getGridDimensions() {return QString("%1 x %2").arg(prms->GridXTotal).arg(prms->GridY);}
+    QString getGridDimensions() {return QString("%1 x %2").arg(prms->GridXTotal).arg(prms->GridYTotal);}
 
     // Drucker-Prager
     Q_PROPERTY(double DP_threshold_p READ getDP_threshold_p WRITE setDP_threshold_p NOTIFY propertyChanged)
@@ -93,12 +93,12 @@ class ParamsWrapper : public QObject
     int get_tpb_G2P() {return prms->tpb_G2P;}
     void set_tpb_G2P(int val) { prms->tpb_G2P = val; }
 
-    Q_PROPERTY(double grainVariability READ getGrainVariability NOTIFY propertyChanged)
-    double getGrainVariability() {return prms->GrainVariability;}
 
     Q_PROPERTY(QString span READ getSpan NOTIFY propertyChanged)
     QString getSpan() {
-        return QString("%1 x %2 km").arg(prms->DimensionHorizontal/1000, 0, 'f', 1).arg(prms->DimensionVertical/1000, 0, 'f', 1);
+        double x = prms->cellsize*prms->InitializationImageSizeX*1e-3;
+        double y = prms->cellsize*prms->InitializationImageSizeY*1e-3;
+        return QString("%1 x %2 km").arg(x, 0, 'f', 1).arg(y, 0, 'f', 1);
     }
 
 public:

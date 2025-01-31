@@ -1,26 +1,23 @@
 #include "parameters_sim.h"
 #include <spdlog/spdlog.h>
 
+#include <string>
+#include <filesystem>
 
 void SimParams::Reset()
 {
-    use_GFS_wind = false;
+    UseWindData = false;
+    UseCurrentData = false;
     SimulationStartUnixTime = 0;
     DimensionHorizontal = 0;
     SaveSnapshots = false;
 
-    LatMin = 63.2540559;
-    LonMin = 19.7794673;
-    LatMax = 63.881440;
-    LonMax = 21.877357;
-
     nPtsInitial = 0;
     windDragCoeff_airDensity = 0.0025 * 1.2;
+    currentDragCoeff_waterDensity = 0.0025 * 1025;
 
     InitialTimeStep = 3.e-5;
     YoungsModulus = 5.e8;
-    GridXTotal = 128;
-    GridY = 55;
     ParticleViewSize = 2.5f;
 
     SimulationEndTime = 12;
@@ -38,13 +35,11 @@ void SimParams::Reset()
     IceTensileStrength2 = 10e6;
 
     DP_phi = 62;
-    DP_threshold_p = 0;
+    DP_threshold_p = 1e4;
 
     tpb_P2G = 256;
     tpb_Upd = 512;
     tpb_G2P = 128;
-
-    GrainVariability = 0.50;
 
     ComputeLame();
     ComputeHelperVariables();
@@ -70,11 +65,6 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 
     if(doc.HasMember("SimulationStartUnixTime")) SimulationStartUnixTime = doc["SimulationStartUnixTime"].GetInt64();
 
-    if(doc.HasMember("LatMin")) LatMin = doc["LatMin"].GetDouble();
-    if(doc.HasMember("LonMin")) LonMin = doc["LonMin"].GetDouble();
-    if(doc.HasMember("LatMax")) LatMax = doc["LatMax"].GetDouble();
-    if(doc.HasMember("LonMax")) LonMax = doc["LonMax"].GetDouble();
-
     if(doc.HasMember("InitialTimeStep")) InitialTimeStep = doc["InitialTimeStep"].GetDouble();
     if(doc.HasMember("AnimationFramesRequested")) AnimationFramesRequested = doc["AnimationFramesRequested"].GetInt();
 
@@ -91,7 +81,6 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 
     if(doc.HasMember("DP_phi")) DP_phi = doc["DP_phi"].GetDouble();
     if(doc.HasMember("DP_threshold_p")) DP_threshold_p = doc["DP_threshold_p"].GetDouble();
-    if(doc.HasMember("GrainVariability")) GrainVariability = doc["GrainVariability"].GetDouble();
 
     if(doc.HasMember("tpb_P2G")) tpb_P2G = doc["tpb_P2G"].GetInt();
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();
@@ -109,20 +98,35 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     spdlog::info("ParseFile; png map data {}", result["InputPNG"]);
     spdlog::info("ModeledRegion png {}", result["ModeledRegion"]);
 
-    if(doc.HasMember("InputWindData"))
+    UseWindData = doc.HasMember("InputWindData");
+    if(UseWindData)
     {
-        result["InputWindData"] = doc["InputWindData"].GetString();
-        spdlog::info("ParseFile; InputWindData file {}", result["InputWindData"]);
-        use_GFS_wind = true;
+        std::string strFileName = doc["InputWindData"].GetString();
+        result["InputWindData"] = strFileName;
+
+        if (!std::filesystem::exists(strFileName))
+        {
+            spdlog::critical("file does not exist: {}", strFileName);
+            throw std::runtime_error("file does not exist");
+        }
     }
-    else use_GFS_wind = false;
+
+    UseCurrentData = doc.HasMember("InputCurrentData");
+    if(UseCurrentData)
+    {
+        std::string strFileName = doc["InputCurrentData"].GetString();
+        result["InputCurrentData"] = strFileName;
+        if (!std::filesystem::exists(strFileName))
+        {
+            spdlog::critical("file does not exist: {}", strFileName);
+            throw std::runtime_error("file does not exist");
+        }
+    }
 
     if(doc.HasMember("DimensionHorizontal")) DimensionHorizontal = doc["DimensionHorizontal"].GetDouble();
     else DimensionHorizontal = 0;
 
-
     spdlog::info("SimParams::ParseFile done");
-
     return result;
 }
 
@@ -150,71 +154,68 @@ void SimParams::ComputeHelperVariables()
 
 
 
-void SimParams::SaveParametersAsHDF5Attributes(H5::DataSet &dataset) {
+void SimParams::SaveParametersAsHDF5Attributes(H5::DataSet &dataset)
+{
     // Create a scalar dataspace for the attributes
     H5::DataSpace att_dspace(H5S_SCALAR);
 
     // Save each member as an attribute
+
+    // integration, time, initial
     dataset.createAttribute("nPtsInitial", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &nPtsInitial);
     dataset.createAttribute("SimulationStartUnixTime", H5::PredType::NATIVE_INT64, att_dspace).write(H5::PredType::NATIVE_INT64, &SimulationStartUnixTime);
-    dataset.createAttribute("GridXTotal", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &GridXTotal);
-    dataset.createAttribute("GridY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &GridY);
-
-    dataset.createAttribute("LatMin", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &LatMin);
-    dataset.createAttribute("LatMax", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &LatMax);
-    dataset.createAttribute("LonMin", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &LonMin);
-    dataset.createAttribute("LonMax", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &LonMax);
-
-    dataset.createAttribute("gridLatMin", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &gridLatMin);
-    dataset.createAttribute("gridLonMin", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &gridLonMin);
-    dataset.createAttribute("DimensionHorizontal", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &DimensionHorizontal);
-    dataset.createAttribute("DimensionVertical", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &DimensionVertical);
     dataset.createAttribute("InitialTimeStep", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &InitialTimeStep);
     dataset.createAttribute("SimulationEndTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationEndTime);
-
     dataset.createAttribute("AnimationFramesRequested", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &AnimationFramesRequested);
-    dataset.createAttribute("windDragCoeff_airDensity", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &windDragCoeff_airDensity);
-    dataset.createAttribute("SurfaceDensity", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SurfaceDensity);
+    dataset.createAttribute("ParticleViewSize", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &ParticleViewSize);
 
+    dataset.createAttribute("UseWindData", H5::PredType::NATIVE_HBOOL, att_dspace).write(H5::PredType::NATIVE_HBOOL, &UseWindData);
+    dataset.createAttribute("UseCurrentData", H5::PredType::NATIVE_HBOOL, att_dspace).write(H5::PredType::NATIVE_HBOOL, &UseCurrentData);
+
+    // parameters
+    dataset.createAttribute("windDragCoeff_airDensity", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &windDragCoeff_airDensity);
+    dataset.createAttribute("currentDragCoeff_waterDensity", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &currentDragCoeff_waterDensity);
+    dataset.createAttribute("SurfaceDensity", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SurfaceDensity);
     dataset.createAttribute("PoissonsRatio", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &PoissonsRatio);
     dataset.createAttribute("YoungsModulus", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &YoungsModulus);
-
     dataset.createAttribute("IceCompressiveStrength", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &IceCompressiveStrength);
-
     dataset.createAttribute("IceTensileStrength", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &IceTensileStrength);
     dataset.createAttribute("IceShearStrength", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &IceShearStrength);
     dataset.createAttribute("IceTensileStrength2", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &IceTensileStrength2);
     dataset.createAttribute("DP_phi", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &DP_phi);
     dataset.createAttribute("DP_threshold_p", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &DP_threshold_p);
+    dataset.createAttribute("ParticleVolume", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &ParticleVolume);
+
+    // grid
     dataset.createAttribute("cellsize", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &cellsize);
 
-    dataset.createAttribute("ParticleVolume", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &ParticleVolume);
-    dataset.createAttribute("ParticleViewSize", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &ParticleViewSize);
-    dataset.createAttribute("GrainVariability", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &GrainVariability);
+    dataset.createAttribute("GridXTotal", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &GridXTotal);
+    dataset.createAttribute("GridYTotal", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &GridYTotal);
+    dataset.createAttribute("ModeledRegionOffsetX", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &ModeledRegionOffsetX);
+    dataset.createAttribute("ModeledRegionOffsetY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &ModeledRegionOffsetY);
+    dataset.createAttribute("InitializationImageSizeX", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &InitializationImageSizeX);
+    dataset.createAttribute("InitializationImageSizeY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &InitializationImageSizeY);
 }
 
-void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset) {
+void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset)
+{
     // Read each attribute and assign it to the corresponding member variable
+
+    // integration, time, initial
     dataset.openAttribute("nPtsInitial").read(H5::PredType::NATIVE_INT, &nPtsInitial);
     dataset.openAttribute("SimulationStartUnixTime").read(H5::PredType::NATIVE_INT64, &SimulationStartUnixTime);
-    dataset.openAttribute("GridXTotal").read(H5::PredType::NATIVE_INT, &GridXTotal);
-    dataset.openAttribute("GridY").read(H5::PredType::NATIVE_INT, &GridY);
-
-    dataset.openAttribute("LatMin").read(H5::PredType::NATIVE_DOUBLE, &LatMin);
-    dataset.openAttribute("LatMax").read(H5::PredType::NATIVE_DOUBLE, &LatMax);
-    dataset.openAttribute("LonMin").read(H5::PredType::NATIVE_DOUBLE, &LonMin);
-    dataset.openAttribute("LonMax").read(H5::PredType::NATIVE_DOUBLE, &LonMax);
-
-    dataset.openAttribute("gridLatMin").read(H5::PredType::NATIVE_DOUBLE, &gridLatMin);
-    dataset.openAttribute("gridLonMin").read(H5::PredType::NATIVE_DOUBLE, &gridLonMin);
-
-    dataset.openAttribute("DimensionHorizontal").read(H5::PredType::NATIVE_DOUBLE, &DimensionHorizontal);
-    dataset.openAttribute("DimensionVertical").read(H5::PredType::NATIVE_DOUBLE, &DimensionVertical);
     dataset.openAttribute("InitialTimeStep").read(H5::PredType::NATIVE_DOUBLE, &InitialTimeStep);
-
     dataset.openAttribute("SimulationEndTime").read(H5::PredType::NATIVE_DOUBLE, &SimulationEndTime);
     dataset.openAttribute("AnimationFramesRequested").read(H5::PredType::NATIVE_INT, &AnimationFramesRequested);
+    dataset.openAttribute("ParticleViewSize").read(H5::PredType::NATIVE_DOUBLE, &ParticleViewSize);
+
+    dataset.openAttribute("UseWindData").read(H5::PredType::NATIVE_HBOOL, &UseWindData);
+    dataset.openAttribute("UseCurrentData").read(H5::PredType::NATIVE_HBOOL, &UseCurrentData);
+
+    // parameters
     dataset.openAttribute("windDragCoeff_airDensity").read(H5::PredType::NATIVE_DOUBLE, &windDragCoeff_airDensity);
+    dataset.openAttribute("currentDragCoeff_waterDensity").read(H5::PredType::NATIVE_DOUBLE, &currentDragCoeff_waterDensity);
+
     dataset.openAttribute("SurfaceDensity").read(H5::PredType::NATIVE_DOUBLE, &SurfaceDensity);
     dataset.openAttribute("PoissonsRatio").read(H5::PredType::NATIVE_DOUBLE, &PoissonsRatio);
     dataset.openAttribute("YoungsModulus").read(H5::PredType::NATIVE_DOUBLE, &YoungsModulus);
@@ -224,44 +225,62 @@ void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset) {
     dataset.openAttribute("IceTensileStrength2").read(H5::PredType::NATIVE_DOUBLE, &IceTensileStrength2);
     dataset.openAttribute("DP_phi").read(H5::PredType::NATIVE_DOUBLE, &DP_phi);
     dataset.openAttribute("DP_threshold_p").read(H5::PredType::NATIVE_DOUBLE, &DP_threshold_p);
-    dataset.openAttribute("cellsize").read(H5::PredType::NATIVE_DOUBLE, &cellsize);
     dataset.openAttribute("ParticleVolume").read(H5::PredType::NATIVE_DOUBLE, &ParticleVolume);
-    dataset.openAttribute("ParticleViewSize").read(H5::PredType::NATIVE_DOUBLE, &ParticleViewSize);
-    dataset.openAttribute("GrainVariability").read(H5::PredType::NATIVE_DOUBLE, &GrainVariability);
+
+
+    // grid
+    dataset.openAttribute("cellsize").read(H5::PredType::NATIVE_DOUBLE, &cellsize);
+    dataset.openAttribute("GridXTotal").read(H5::PredType::NATIVE_INT, &GridXTotal);
+    dataset.openAttribute("GridYTotal").read(H5::PredType::NATIVE_INT, &GridYTotal);
+
+    dataset.openAttribute("ModeledRegionOffsetX").read(H5::PredType::NATIVE_INT, &ModeledRegionOffsetX);
+    dataset.openAttribute("ModeledRegionOffsetY").read(H5::PredType::NATIVE_INT, &ModeledRegionOffsetY);
+    dataset.openAttribute("InitializationImageSizeX").read(H5::PredType::NATIVE_INT, &InitializationImageSizeX);
+    dataset.openAttribute("InitializationImageSizeY").read(H5::PredType::NATIVE_INT, &InitializationImageSizeY);
 
     tpb_P2G = 256;
     tpb_Upd = 512;
     tpb_G2P = 128;
     ComputeLame();
     ComputeHelperVariables();
-
 }
 
 
 void SimParams::Printout()
 {
     spdlog::info("Simulation Parameters:");
-    spdlog::info("nPtsInitial: {}", nPtsInitial);
     spdlog::info("SimulationStartUnixTime: {}", SimulationStartUnixTime);
-    spdlog::info("Grid {} x {}", GridXTotal, GridY);
-    spdlog::info("LatMin: {}, LatMax: {}, LonMin: {}, LonMax: {}", LatMin, LatMax, LonMin, LonMax);
-    spdlog::info("gridLatMin: {}, gridLonMin: {}", gridLatMin, gridLonMin);
-    spdlog::info("DimensionHorizontal: {}, DimensionVertical: {}", DimensionHorizontal, DimensionVertical);
     spdlog::info("InitialTimeStep: {}, SimulationEndTime: {}", InitialTimeStep, SimulationEndTime);
     spdlog::info("AnimationFramesRequested: {}", AnimationFramesRequested);
     spdlog::info("SimulationStep: {}", SimulationStep);
     spdlog::info("SimulationTime: {}", SimulationTime);
+    spdlog::info("UpdateEveryNthStep: {}", UpdateEveryNthStep);
+    spdlog::info("UseWindData: {}", UseWindData);
+    spdlog::info("UseCurrentData: {}", UseCurrentData);
+
+    // parameters
+    spdlog::info("\n");
+    spdlog::info("Parameters:");
+    spdlog::info("dt_vol_Dpinv: {}, vmax: {}, vmax_squared: {}", dt_vol_Dpinv, vmax, vmax_squared);
     spdlog::info("windDragCoeff_airDensity: {}", windDragCoeff_airDensity);
+    spdlog::info("lambda: {}, mu: {}, kappa: {}", lambda, mu, kappa);
+    spdlog::info("ParticleVolume: {}, ParticleViewSize: {}", ParticleVolume, ParticleViewSize);
+    spdlog::info("ParticleMass: {}", ParticleMass);
+    spdlog::info("DP_phi: {}, DP_threshold_p: {}", DP_phi, DP_threshold_p);
     spdlog::info("SurfaceDensity: {}, PoissonsRatio: {}, YoungsModulus: {}", SurfaceDensity, PoissonsRatio, YoungsModulus);
     spdlog::info("IceCompressiveStrength: {}, IceTensileStrength: {}, IceShearStrength: {}, IceTensileStrength2: {}",
                  IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2);
-    spdlog::info("DP_phi: {}, DP_threshold_p: {}", DP_phi, DP_threshold_p);
-    spdlog::info("cellsize: {}", cellsize);
-    spdlog::info("ParticleVolume: {}, ParticleViewSize: {}", ParticleVolume, ParticleViewSize);
-    spdlog::info("GrainVariability: {}", GrainVariability);
-    spdlog::info("dt_vol_Dpinv: {}, vmax: {}, vmax_squared: {}", dt_vol_Dpinv, vmax, vmax_squared);
-    spdlog::info("lambda: {}, mu: {}, kappa: {}", lambda, mu, kappa);
-    spdlog::info("ParticleMass: {}", ParticleMass);
-    spdlog::info("cellsize_inv: {}, Dp_inv: {}", cellsize_inv, Dp_inv);
-    spdlog::info("UpdateEveryNthStep: {}", UpdateEveryNthStep);
+
+    // points
+    spdlog::info("\n");
+    spdlog::info("Points:");
+    spdlog::info("nPtsInitial: {}", nPtsInitial);
+
+    // grid
+    spdlog::info("\n");
+    spdlog::info("Grid:");
+    spdlog::info("cellsize: {}; cellsize*InitializationImageSizeX", cellsize, cellsize*InitializationImageSizeX);
+    spdlog::info("Sim grid: {} x {}", GridXTotal, GridYTotal);
+    spdlog::info("Original image: {} x {}", InitializationImageSizeX, InitializationImageSizeY);
+    spdlog::info("Offset of the modelled region: [{}, {}]", ModeledRegionOffsetX, ModeledRegionOffsetY);
 }

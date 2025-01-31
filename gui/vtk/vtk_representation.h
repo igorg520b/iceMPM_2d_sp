@@ -33,6 +33,8 @@
 #include <vtkDoubleArray.h>
 #include <vtkFloatArray.h>
 #include <vtkIntArray.h>
+#include <vtkImageData.h>
+#include <vtkUniformGrid.h>
 
 
 namespace icy { class VisualRepresentation; class Model;}
@@ -60,6 +62,7 @@ public:
     vtkNew<vtkActor> actor_points;
     vtkNew<vtkActor> actor_grid;
     vtkNew<vtkActor> actor_grid2;
+    vtkNew<vtkActor> actor_uniformgrid;
     vtkNew<vtkScalarBarActor> scalarBar;
 
     vtkNew<vtkTextActor> actorText;
@@ -76,6 +79,10 @@ private:
     vtkNew<vtkVertexGlyphFilter> points_filter;
     vtkNew<vtkFloatArray> visualized_values;
     vtkNew<vtkUnsignedCharArray> pts_colors;    // for color visualization per point
+
+    // draw background grid as vtkImageData
+    vtkNew<vtkUniformGrid> uniformGrid;
+    vtkNew<vtkDataSetMapper> mapper_uniformgrid;
 
     // background grid
     vtkNew<vtkStructuredGrid> structuredGrid;

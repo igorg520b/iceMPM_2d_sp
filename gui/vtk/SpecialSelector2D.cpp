@@ -83,7 +83,7 @@ void SpecialSelector2D::OnLeftButtonDown()
         GetCurrentCoords(initialX, initialY);
         qDebug() << "SpecialSelector2D::OnLeftButtonDown() " << initialX << ", " << initialY;
         mw->model.gpu.hssoa.PrintOutNearestPoint(initialX, initialY,
-                                                 mw->model.prms.cellsize, mw->model.prms.GridY);
+                                                 mw->model.prms.cellsize, mw->model.prms.GridYTotal);
         mw->model.prms.Printout();
 //        mw->model.AttachSpring(initialX, initialY, selectionRadius);
     }

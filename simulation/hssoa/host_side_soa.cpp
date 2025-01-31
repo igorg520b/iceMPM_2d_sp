@@ -51,9 +51,9 @@ void HostSideSOA::RemoveDisabledAndSort(int GridY)
 }
 
 
-void HostSideSOA::Allocate(int pts_capacity, int gridTotal)
+void HostSideSOA::Allocate(int pts_capacity)
 {
-    spdlog::info("HostSideSOA::Allocate; pts {}; grid {}", pts_capacity, gridTotal);
+    spdlog::info("HostSideSOA::Allocate; pts {}", pts_capacity);
     cudaFreeHost(host_buffer);
     this->capacity = pts_capacity;
     size_t allocation_size = sizeof(t_PointReal)*capacity*SimParams::nPtsArrays;
@@ -67,11 +67,6 @@ void HostSideSOA::Allocate(int pts_capacity, int gridTotal)
     size = 0;
     memset(host_buffer, 0, allocation_size);
 
-    point_colors_rgb.resize(pts_capacity);
-
-    // grid buffer
-    grid_status_buffer.resize(gridTotal);
-    grid_colors_rgb.resize(gridTotal*3);
     spdlog::info("HSSOA allocate capacity {} pt; toal {} Gb", capacity, (double)allocation_size/(1024.*1024.*1024.));
 }
 

@@ -34,7 +34,7 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 
     const double &h = gprms.cellsize;
     const double &particle_mass = gprms.ParticleMass;
-    const int &gridY = gprms.GridY;
+    const int &gridY = gprms.GridYTotal;
 
     // pull point data from SOA
     PointVector2r pos, velocity;
@@ -97,7 +97,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= nNodes) return;
 
-    const int &gridY = gprms.GridY;
+    const int &gridY = gprms.GridYTotal;
 
     t_GridReal mass = buffer_grid[idx];
     if(mass == 0) return;
@@ -130,7 +130,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         const t_GridReal water_coeff = 1e-4 * gprms.InitialTimeStep;
 
         GridVector2r waterVelVector(0,0);
-
+/*
         float lat = gprms.LatMin + (gprms.LatMax-gprms.LatMin)*(float)gi.y()/(float)gprms.GridY;
         float lon = gprms.LonMin + (gprms.LonMax-gprms.LonMin)*(float)gi.x()/(float)gprms.GridXTotal;
 
@@ -142,8 +142,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         {
             vWind *= intensity;
         }
-//        velocity = (1-air_coeff-water_coeff)*velocity + vWind*air_coeff + waterVelVector*water_coeff;
-
+*/
 
         // wind drag
         t_GridReal hsq = gprms.cellsize * gprms.cellsize;
@@ -189,7 +188,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     const double &dt = gprms.InitialTimeStep;
     const double &mu = gprms.mu;
     const double &kappa = gprms.kappa;
-    const int &gridY = gprms.GridY;
+    const int &gridY = gprms.GridYTotal;
     const int &gridX = gprms.GridXTotal;
 
     PointVector2r pos;
@@ -561,18 +560,18 @@ __device__ void GetParametersForGrain(uint32_t utility_data, t_PointReal &pmin, 
     //    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + ((int)grain+4)%11);
 
     uint16_t grain = utility_data & 0xffff;
-    bool is_weakened = utility_data & status_weakened;
+//    bool is_weakened = utility_data & status_weakened;
 
-    t_PointReal gv = gprms.GrainVariability;
+//    t_PointReal gv = gprms.GrainVariability;
 
     t_PointReal var2 = 1.0;
     t_PointReal var3 = 1.0;
 //    if(((int)grain)%3==0) var2 = 1.0 - gv;
 //    if(((int)grain+1)%5==0) var3 = 1.0 - gv;
-    if(is_weakened)
-    {
-        var3 = var2 = 1.0 - gv;
-    }
+//    if(is_weakened)
+//    {
+//        var3 = var2 = 1.0 - gv;
+//    }
 
 
     pmax = gprms.IceCompressiveStrength;// * var1;
@@ -585,7 +584,7 @@ __device__ void GetParametersForGrain(uint32_t utility_data, t_PointReal &pmin, 
     mSq = (4.*qmax*qmax*(1.+2.*beta))/((pmax-pmin)*(pmax-pmin));
 }
 
-
+/*
 __device__ GridVector2r get_wind_vector(float lat, float lon, float tb)
 {
     const double &gridLatMin = gprms.gridLatMin;
@@ -627,7 +626,7 @@ __device__ GridVector2r get_wind_vector(float lat, float lon, float tb)
     GridVector2r final_result = (1-tb)*ipVal[0] + tb*ipVal[1];
     return final_result;
 }
-
+*/
 
 
 /*

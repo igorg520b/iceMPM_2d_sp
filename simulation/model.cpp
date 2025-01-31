@@ -28,7 +28,7 @@ bool icy::Model::Step()
         gpu.reset_grid();
         gpu.p2g();
 
-        if(prms.use_GFS_wind && wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
+        if(prms.UseWindData && wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
 
         gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
         const bool isCycleStart = step % prms.UpdateEveryNthStep == 0;
@@ -68,7 +68,7 @@ bool icy::Model::Step()
     if(disabled_proportion > SimParams::disabled_pts_proportion_threshold)
     {
         spdlog::info("Model::Step() squeezing and sorting HSSOA");
-        gpu.hssoa.RemoveDisabledAndSort(prms.GridY);
+        gpu.hssoa.RemoveDisabledAndSort(prms.GridYTotal);
         gpu.split_hssoa_into_partitions();
         gpu.transfer_to_device();
         SyncTopologyRequired = true;

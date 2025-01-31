@@ -90,7 +90,8 @@ MainWindow::MainWindow(QWidget *parent)
 // anything that includes the Model
     renderer->AddActor(representation.actor_points);
 //    renderer->AddActor(representation.actor_grid);
-    renderer->AddActor(representation.actor_grid2);
+//    renderer->AddActor(representation.actor_grid2);
+    renderer->AddActor(representation.actor_uniformgrid);
     renderer->AddActor(representation.actorText);
     renderer->AddActor(representation.scalarBar);
 

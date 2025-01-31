@@ -32,11 +32,8 @@ void GPU_Implementation5::reset_grid()
 void GPU_Implementation5::p2g()
 {
     cudaError_t err;
-    const int &gridY = model->prms.GridY;
-    const int &gridXT = model->prms.GridXTotal;
 
     partitions.front().p2g();
-
     cudaEventRecord(partitions.front().event_20_grid_halo_sent, partitions.front().streamCompute);
 }
 
@@ -116,6 +113,37 @@ void GPU_Implementation5::split_hssoa_into_partitions()
     p.disabled_points_count = 0;
     spdlog::info("split_hssoa_into_partitions() done");
 }
+
+
+void GPU_Implementation5::allocate_host_arrays()
+{
+    // allocate space for points on hssoa
+    model->gpu.hssoa.Allocate(model->prms.nPtsInitial);
+
+    // points' colors (never copied to device)
+    point_colors_rgb.resize(model->prms.nPtsInitial);
+
+    // grid sizes
+    const int modeled_grid_total = model->prms.GridXTotal * model->prms.GridYTotal;
+    const int initial_image_total = model->prms.InitializationImageSizeX * model->prms.InitializationImageSizeY;
+
+    // allocate grid arrays
+    grid_status_buffer.resize(modeled_grid_total);
+    original_image_colors_rgb.resize(3*initial_image_total);
+
+    cudaFreeHost(grid_water_current_velocities);
+    const size_t allocation_size = sizeof(float)*modeled_grid_total*4;  // (2 velocity componets x 2 frames)
+    cudaError_t err = cudaMallocHost(&grid_water_current_velocities, allocation_size);
+    if(err != cudaSuccess)
+    {
+        const char *description = cudaGetErrorString(err);
+        spdlog::critical("allocating grid_water_current_velocities of size {}: {}",allocation_size,description);
+        throw std::runtime_error("allocating host buffer for grid water current velocities");
+    }
+    memset(grid_water_current_velocities, 0, allocation_size);
+    spdlog::info("GPU_Implementation5::allocate_host_arrays() completed");
+}
+
 
 
 void GPU_Implementation5::allocate_arrays()

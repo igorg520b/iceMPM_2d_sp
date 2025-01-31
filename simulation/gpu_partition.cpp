@@ -80,9 +80,10 @@ void GPU_Partition::transfer_grid_data_to_device(HostSideSOA &hssoa)
     cudaError_t err;
     err = cudaSetDevice(Device);
     if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
-    size_t grid_array_size = prms->GridXTotal * prms->GridY * sizeof(uint8_t);
-    err = cudaMemcpyAsync(grid_status_array, hssoa.grid_status_buffer.data(), grid_array_size, cudaMemcpyHostToDevice,streamCompute);
-    if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
+    size_t grid_array_size = prms->GridXTotal * prms->GridYTotal * sizeof(uint8_t);
+
+    //err = cudaMemcpyAsync(grid_status_array, hssoa.grid_status_buffer.data(), grid_array_size, cudaMemcpyHostToDevice,streamCompute);
+    //if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
 }
 
 
@@ -150,7 +151,7 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
     spdlog::info("P{}-{} allocate", PartitionID, Device);
 
     // grid
-    const int &gy = prms->GridY;
+    const int &gy = prms->GridYTotal;
 
     size_t total_device = 0;
     size_t grid_size_local_requested = sizeof(t_GridReal) * gy * gx;
@@ -172,7 +173,7 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
 
     spdlog::info("allocate: P {}-{}:  GridPitch/Y {}; Pts {}; total {:.2} Mb",
                  PartitionID, Device,
-                 nGridPitch/prms->GridY, nPtsPitch,
+                 nGridPitch/prms->GridYTotal, nPtsPitch,
                  (double)total_device/(1024*1024));
 }
 
@@ -223,7 +224,7 @@ void GPU_Partition::p2g()
 void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind, const float interpolation_coeff)
 {
     cudaSetDevice(Device);
-    const int nGridNodes = prms->GridY * (GridX_partition);
+    const int nGridNodes = prms->GridYTotal * (GridX_partition);
 
     int tpb = prms->tpb_Upd;
     int nBlocks = (nGridNodes + tpb - 1) / tpb;

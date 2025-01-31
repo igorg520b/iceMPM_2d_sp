@@ -1,8 +1,10 @@
 {
-"InputPNG":"/home/s2/Sync/Sync-default/POAC-25/Hans_Island_images/lowres/lowres_combined.png",
-"ModeledRegion":"/home/s2/Sync/Sync-default/POAC-25/Hans_Island_images/lowres/lowres_combined_boundary.png",
+"InputPNG":"/home/s2/Projects-CUDA/iceMPM_2d_sp/_maps/combined2_lowres.png",
+"ModeledRegion":"/home/s2/Projects-CUDA/iceMPM_2d_sp/_maps/combined2_lowres_boundary.png",
 "DimensionHorizontal":430000,
 "SurfaceDensity":916,
+
+"SimulationStartUnixTime":1717988400,
 
 "InitialTimeStep":0.3,
 "SimulationEndTime":900000,

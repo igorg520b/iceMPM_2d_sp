@@ -28,7 +28,15 @@ public:
     icy::Model *model;
     std::vector<GPU_Partition> partitions;
     HostSideSOA hssoa;  // mainly stores host-side points
-    std::vector<t_GridReal> grid_visualized_data;
+
+    std::vector<uint32_t> point_colors_rgb;     // rgb values of original point colors
+    std::vector<uint8_t> grid_status_buffer;    // land (0), modeled area (>0)
+    std::vector<uint8_t> original_image_colors_rgb;
+    float *grid_water_current_velocities = nullptr; // 4 * float * gx * gy (vx1, vy1, vx2, vy2)
+
+
+    void allocate_host_arrays();
+
 
     std::function<void()> transfer_completion_callback; // currently not used
 

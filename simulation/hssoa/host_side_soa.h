@@ -53,16 +53,13 @@ class HostSideSOA
 {
 public:
     t_PointReal *host_buffer = nullptr; // buffer in page-locked memory for transferring the data between device and host
-    std::vector<uint8_t> grid_status_buffer;    // marks as land (1) or water (0)
-    std::vector<uint8_t> grid_colors_rgb;
-    std::vector<uint32_t> point_colors_rgb;     // rgb values of original point colors
     unsigned capacity;  // max number of points that the host-side buffer can hold
     unsigned size = 0;      // the number of points, including "disabled" ones, in the host buffer (may fluctuate)
 
     SOAIterator begin(){return SOAIterator(0, host_buffer, capacity);}
     SOAIterator end(){return SOAIterator(size, host_buffer, capacity);}
 
-    void Allocate(int pts_capacity, int gridTotal);
+    void Allocate(int pts_capacity);
     void RemoveDisabledAndSort(int GridY);
 
     t_PointReal* getPointerToPosX() {return host_buffer + capacity*SimParams::posx;}

@@ -40,8 +40,7 @@ private:
     static std::string prepare_file_name(int gx, int gy);
     static bool attempt_to_fill_from_cache(int gx, int gy, std::vector<std::array<float, 2>> &buffer);
     static void generate_and_save(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
-
-    void load_png(std::string pngFileName, unsigned char* &png_data);
+    static void generate_points(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
 
 
     static constexpr std::array<std::array<float, 3>, 5> colordata_OpenWater = {{

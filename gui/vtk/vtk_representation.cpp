@@ -105,6 +105,10 @@ icy::VisualRepresentation::VisualRepresentation()
     txtprop->SetColor(0,0,0);
     actorText->SetDisplayPosition(500, 30);
 
+
+    // uniform grid
+    mapper_uniformgrid->SetInputData(uniformGrid);
+    actor_uniformgrid->SetMapper(mapper_uniformgrid);
 }
 
 
@@ -121,9 +125,29 @@ void icy::VisualRepresentation::SynchronizeTopology()
     pts_colors->SetNumberOfValues(nPts*3);
 
     int gx = model->prms.GridXTotal;
-    int gy = model->prms.GridY;
+    int gy = model->prms.GridYTotal;
+
+    const int imgx = model->prms.InitializationImageSizeX;
+    const int imgy = model->prms.InitializationImageSizeY;
     const double h = model->prms.cellsize;
 
+    uniformGrid->SetDimensions(imgx, imgy, 1);
+    uniformGrid->SetSpacing(h, h, 1.0);
+    uniformGrid->AllocateScalars(VTK_UNSIGNED_CHAR, 3);
+
+    for(int i=0;i<imgx;i++)
+        for(int j=0;j<imgy;j++)
+        {
+            unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i, j, 0));
+            int idx = (i+imgx*j)*3;
+            pixel[0] = model->gpu.original_image_colors_rgb[idx+0];
+            pixel[1] = model->gpu.original_image_colors_rgb[idx+1];
+            pixel[2] = model->gpu.original_image_colors_rgb[idx+2];
+        }
+//    uniformGrid->Modified();
+    mapper_uniformgrid->Update();
+
+/*
     // GRID1 now shows the parallels and meridians
     int nGridLat = model->wind_interpolator.extentLat;
     int nGridLon = model->wind_interpolator.extentLon;
@@ -151,7 +175,10 @@ void icy::VisualRepresentation::SynchronizeTopology()
             }
         structuredGrid->SetPoints(grid_points);
     }
+  */
 
+
+    /*
 
     // grid2
     int gx1 = gx+1;
@@ -196,7 +223,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
 
         grid_colors->Modified();
     }
-
+*/
 
 
     model->accessing_point_data.unlock();
@@ -215,7 +242,7 @@ void icy::VisualRepresentation::SynchronizeValues()
     {
         SOAIterator s = model->gpu.hssoa.begin()+i;
         PointVector2r pos = s->getPos(model->prms.cellsize);
-        points->SetPoint((vtkIdType)i, pos[0], pos[1], -1.0);
+        points->SetPoint((vtkIdType)i, pos[0], pos[1], +1.0);
     }
     points->Modified();
     actor_points->GetProperty()->SetPointSize(model->prms.ParticleViewSize);
@@ -353,7 +380,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             int pt_idx = s->getValueInt(SimParams::integer_point_idx);
-            uint32_t rgb = model->gpu.hssoa.point_colors_rgb[pt_idx];
+            uint32_t rgb = model->gpu.point_colors_rgb[pt_idx];
             uint8_t r = (rgb >> 16) & 0xff;
             uint8_t g = (rgb >> 8) & 0xff;
             uint8_t b = rgb & 0xff;
@@ -380,7 +407,7 @@ void icy::VisualRepresentation::SynchronizeValues()
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             int pt_idx = s->getValueInt(SimParams::integer_point_idx);
-            uint32_t rgb = model->gpu.hssoa.point_colors_rgb[pt_idx];
+            uint32_t rgb = model->gpu.point_colors_rgb[pt_idx];
             uint8_t _r = (rgb >> 16) & 0xff;
             uint8_t _g = (rgb >> 8) & 0xff;
             uint8_t _b = rgb & 0xff;
@@ -533,11 +560,7 @@ void icy::VisualRepresentation::SynchronizeValues()
     }
     else if(VisualizingVariable == VisOpt::boundary)
     {
-        int gx = model->prms.GridXTotal;
-        int gy = model->prms.GridY;
-        // TODO
         actor_points->VisibilityOff();
-
     }
     else if(VisualizingVariable == VisOpt::strength)
     {

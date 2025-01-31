@@ -33,7 +33,7 @@ public:
     constexpr static float disabled_pts_proportion_threshold = 0.05; // when exceeded, disabled points are removed
     constexpr static t_PointReal pi = 3.14159265358979323846;
     constexpr static double Earth_Radius = 6371000.0;
-    constexpr static float MPM_points_per_cells = 5.0;    // approximate average value
+    constexpr static float MPM_points_per_cell = 5.0;    // approximate average value
 
     constexpr static int dim = 2;
     constexpr static int nGridArrays = 3; // mass, px, py
@@ -58,20 +58,22 @@ public:
 
     int nPtsInitial;
     int64_t SimulationStartUnixTime;
-    int GridXTotal, GridY;
-    double LatMin, LatMax, LonMin, LonMax; // coordinates corresponding to the modelled space
-    double gridLatMin, gridLonMin;
-    double DimensionHorizontal, DimensionVertical;
-
     double InitialTimeStep, SimulationEndTime;
     int AnimationFramesRequested; // run N steps without update
     int SimulationStep;
     double SimulationTime;
     bool SaveSnapshots;
 
-    // wind
+    // grid
+    int GridXTotal, GridYTotal;     // actually used in simulation
+    int ModeledRegionOffsetX, ModeledRegionOffsetY;
+    int InitializationImageSizeX, InitializationImageSizeY;
+    double DimensionHorizontal; // with respect to initialization image
+
+    // wind and/or current data
     double windDragCoeff_airDensity;
-    bool use_GFS_wind;
+    double currentDragCoeff_waterDensity;
+    bool UseWindData, UseCurrentData;
 
     // material properties
     double SurfaceDensity, PoissonsRatio, YoungsModulus;
@@ -79,8 +81,6 @@ public:
     double DP_phi, DP_threshold_p;
     double cellsize;
     double ParticleVolume, ParticleViewSize;
-
-    double GrainVariability;
 
     // computed parameters/properties
     double dt_vol_Dpinv, vmax, vmax_squared;
