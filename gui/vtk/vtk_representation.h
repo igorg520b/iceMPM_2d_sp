@@ -61,7 +61,6 @@ public:
     vtkNew<vtkLookupTable> hueLut, lutMPM;
     vtkNew<vtkActor> actor_points;
     vtkNew<vtkActor> actor_grid;
-    vtkNew<vtkActor> actor_grid2;
     vtkNew<vtkActor> actor_uniformgrid;
     vtkNew<vtkScalarBarActor> scalarBar;
 
@@ -88,13 +87,6 @@ private:
     vtkNew<vtkStructuredGrid> structuredGrid;
     vtkNew<vtkDataSetMapper> grid_mapper;
     vtkNew<vtkPoints> grid_points;
-
-    // background grid 2
-    vtkNew<vtkStructuredGrid> structuredGrid2;
-    vtkNew<vtkDataSetMapper> grid_mapper2;
-    vtkNew<vtkPoints> grid_points2;
-    vtkNew<vtkUnsignedCharArray> grid_colors;
-
 
     void populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);
     void interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table);

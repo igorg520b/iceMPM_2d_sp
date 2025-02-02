@@ -61,28 +61,6 @@ icy::VisualRepresentation::VisualRepresentation()
     actor_grid->GetProperty()->SetColor(0.1,0.1,0.1);
     actor_grid->GetProperty()->SetRepresentationToWireframe();
 
-    // grid2
-
-    grid_colors->SetName("grid_colors");
-    grid_colors->SetNumberOfComponents(3);
-
-    structuredGrid2->GetCellData()->AddArray(grid_colors);
-    structuredGrid2->GetCellData()->SetActiveScalars("grid_colors");
-
-    grid_mapper2->SetInputData(structuredGrid2);
-//    grid_mapper2->SetLookupTable(hueLut_four);
-//    grid_mapper2->UseLookupTableScalarRangeOn();
-    grid_mapper2->SetColorModeToDirectScalars();
-
-
-    actor_grid2->SetMapper(grid_mapper2);
-    actor_grid2->GetProperty()->SetEdgeVisibility(false);
-    actor_grid2->GetProperty()->LightingOff();
-    actor_grid2->GetProperty()->ShadingOff();
-    actor_grid2->GetProperty()->SetInterpolationToFlat();
-    actor_grid2->PickableOff();
-    actor_grid2->GetProperty()->SetColor(0.98,0.98,0.98);
-
     // scalar bar
     scalarBar->SetLookupTable(lutMPM);
     scalarBar->SetMaximumWidthInPixels(130);
@@ -124,6 +102,9 @@ void icy::VisualRepresentation::SynchronizeTopology()
     visualized_values->SetNumberOfValues(nPts);
     pts_colors->SetNumberOfValues(nPts*3);
 
+    int ox = model->prms.ModeledRegionOffsetX;
+    int oy = model->prms.ModeledRegionOffsetY;
+
     int gx = model->prms.GridXTotal;
     int gy = model->prms.GridYTotal;
 
@@ -144,7 +125,20 @@ void icy::VisualRepresentation::SynchronizeTopology()
             pixel[1] = model->gpu.original_image_colors_rgb[idx+1];
             pixel[2] = model->gpu.original_image_colors_rgb[idx+2];
         }
-//    uniformGrid->Modified();
+
+    for(int i=0;i<gx;i++)
+        for(int j=0;j<gy;j++)
+        {
+            int idx2 = (j + gy*i);
+            if(model->gpu.grid_status_buffer[idx2])
+            {
+                // water color
+                unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+ox, j+oy, 0));
+                pixel[0] = 0x15;
+                pixel[1] = 0x1f;
+                pixel[2] = 0x2f;
+            }
+        }
     mapper_uniformgrid->Update();
 
 /*
@@ -178,52 +172,6 @@ void icy::VisualRepresentation::SynchronizeTopology()
   */
 
 
-    /*
-
-    // grid2
-    int gx1 = gx+1;
-    int gy1 = gy+1;
-    structuredGrid2->SetDimensions(gx1, gy1, 1);
-    grid_points2->SetNumberOfPoints(gx1*gy1);
-    for(int idx_y=0; idx_y<=gy; idx_y++)
-        for(int idx_x=0; idx_x<=gx; idx_x++)
-        {
-            float x = ((float)idx_x - 0.5) * h;
-            float y = ((float)idx_y - 0.5) * h;
-            double pt_pos[3] {x, y, -3.0};
-            grid_points2->SetPoint((vtkIdType)(idx_x+idx_y*gx1), pt_pos);
-        }
-    structuredGrid2->SetPoints(grid_points2);
-
-//    visualized_values_grid->SetNumberOfValues(gx*gy);
-    grid_colors->SetNumberOfValues(gx*gy*3);
-    std::vector<uint8_t> &gb = model->gpu.hssoa.grid_status_buffer;
-    if(gb.size() > 0)
-    {
-        spdlog::info("gb size {}; gx {}; gy {}",gb.size(), gx, gy);
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
-            {
-                int idx_visual = idx_x + idx_y*gx;
-                int idx_storage = idx_y + idx_x*gy;
-
-                //int value = gb[idx_storage]+5;
-                //visualized_values_grid->SetValue(idx_visual, value);
-                uint8_t r = model->gpu.hssoa.grid_colors_rgb[idx_storage*3+0];
-                uint8_t g = model->gpu.hssoa.grid_colors_rgb[idx_storage*3+1];
-                uint8_t b = model->gpu.hssoa.grid_colors_rgb[idx_storage*3+2];
-
-                uint8_t water = model->gpu.hssoa.grid_status_buffer[idx_storage];
-                if(water) {r = 29; g=41; b=58;}
-
-                grid_colors->SetValue(idx_visual*3+0, r);
-                grid_colors->SetValue(idx_visual*3+1, g);
-                grid_colors->SetValue(idx_visual*3+2, b);
-            }
-
-        grid_colors->Modified();
-    }
-*/
 
 
     model->accessing_point_data.unlock();
@@ -236,13 +184,16 @@ void icy::VisualRepresentation::SynchronizeValues()
     model->accessing_point_data.lock();
 
     double sim_time = model->prms.SimulationTime;
+    const double &h = model->prms.cellsize;
+    const double &ox = h * model->prms.ModeledRegionOffsetX;
+    const double &oy = h * model->prms.ModeledRegionOffsetY;
 
     const int nPts = model->gpu.hssoa.size;
     for(int i=0;i<nPts;i++)
     {
         SOAIterator s = model->gpu.hssoa.begin()+i;
         PointVector2r pos = s->getPos(model->prms.cellsize);
-        points->SetPoint((vtkIdType)i, pos[0], pos[1], +1.0);
+        points->SetPoint((vtkIdType)i, pos[0]+ox, pos[1]+oy, 1.0);
     }
     points->Modified();
     actor_points->GetProperty()->SetPointSize(model->prms.ParticleViewSize);
@@ -251,8 +202,11 @@ void icy::VisualRepresentation::SynchronizeValues()
 
     actor_points->VisibilityOn();
 
-
-    if(VisualizingVariable == VisOpt::status)
+    if(VisualizingVariable == VisOpt::none)
+    {
+        actor_points->VisibilityOff();
+    }
+    else if(VisualizingVariable == VisOpt::status)
     {
         scalarBar->VisibilityOn();
         points_mapper->ScalarVisibilityOn();
@@ -271,7 +225,6 @@ void icy::VisualRepresentation::SynchronizeValues()
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
-        grid_mapper2->SetLookupTable(hueLut_four);
     }
 
     else if(VisualizingVariable == VisOpt::wind_u)
@@ -393,7 +346,6 @@ void icy::VisualRepresentation::SynchronizeValues()
 
         points_polydata->Modified();
         points_filter->Update();
-        grid_mapper2->SetLookupTable(hueLut_four);
     }
     else if(VisualizingVariable == VisOpt::special)
     {
@@ -431,7 +383,6 @@ void icy::VisualRepresentation::SynchronizeValues()
 
         points_polydata->Modified();
         points_filter->Update();
-        grid_mapper2->SetLookupTable(hueLut_four);
     }
     else if(VisualizingVariable == VisOpt::Jp_inv)
     {
@@ -452,7 +403,6 @@ void icy::VisualRepresentation::SynchronizeValues()
         }
         points_polydata->GetPointData()->SetActiveScalars("visualized_values");
         visualized_values->Modified();
-        grid_mapper2->SetLookupTable(hueLut_four);
     }
     else if(VisualizingVariable == VisOpt::P)
     {

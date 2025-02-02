@@ -1,4 +1,5 @@
 #include "gpu_partition.h"
+#include "gpu_implementation5.h"
 #include "helper_math.cuh"
 #include "kernels.cuh"
 #include <stdio.h>
@@ -75,15 +76,16 @@ void GPU_Partition::transfer_points_from_soa_to_device(HostSideSOA &hssoa, int p
 
 }
 
-void GPU_Partition::transfer_grid_data_to_device(HostSideSOA &hssoa)
+void GPU_Partition::transfer_grid_data_to_device(GPU_Implementation5* gpu)
 {
     cudaError_t err;
     err = cudaSetDevice(Device);
     if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
     size_t grid_array_size = prms->GridXTotal * prms->GridYTotal * sizeof(uint8_t);
 
-    //err = cudaMemcpyAsync(grid_status_array, hssoa.grid_status_buffer.data(), grid_array_size, cudaMemcpyHostToDevice,streamCompute);
-    //if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
+    err = cudaMemcpyAsync(grid_status_array, gpu->grid_status_buffer.data(),
+                          grid_array_size, cudaMemcpyHostToDevice,streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
 }
 
 

@@ -165,7 +165,7 @@ void GPU_Implementation5::transfer_to_device()
     points_uploaded += p.nPts_partition;
     spdlog::info("transfer_to_device() done; transferred points {}", points_uploaded);
 
-    p.transfer_grid_data_to_device(hssoa);
+    p.transfer_grid_data_to_device(this);
 }
 
 

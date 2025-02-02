@@ -12,6 +12,10 @@ class ParamsWrapper : public QObject
 {
     Q_OBJECT
 
+Q_SIGNALS:
+    void propertyChanged();
+
+public:
     SimParams *prms;
 
     Q_PROPERTY(double in_TimeStep READ getTimeStep WRITE setTimeStep NOTIFY propertyChanged)
@@ -54,7 +58,7 @@ class ParamsWrapper : public QObject
 
     Q_PROPERTY(double p_ParticleViewSize READ getParticleViewSize WRITE setParticleViewSize NOTIFY propertyChanged)
     double getParticleViewSize() {return prms->ParticleViewSize;}
-    void setParticleViewSize(double val) {prms->ParticleViewSize=val;}
+    void setParticleViewSize(double val) {prms->ParticleViewSize=val; Q_EMIT propertyChanged();}
 
 
     // ice block
@@ -114,8 +118,6 @@ public:
     }
 
 
-Q_SIGNALS:
-    void propertyChanged();
 };
 
 

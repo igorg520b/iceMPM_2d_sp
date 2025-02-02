@@ -22,7 +22,7 @@ MainWindow::MainWindow(QWidget *parent)
     params = new ParamsWrapper(&model.prms);
     representation.model = &model;
     worker = new BackgroundWorker(&model);
-    representation.SynchronizeTopology();
+//    representation.SynchronizeTopology();
 
     // VTK
     qt_vtk_widget = new QVTKOpenGLNativeWidget();
@@ -187,12 +187,15 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->actionLoad_Parameters, &QAction::triggered, this, &MainWindow::load_parameter_triggered);
     connect(ui->actionLoad_FLUENT_Result, &QAction::triggered, this, &MainWindow::read_fluent_data_triggered);
 
-
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MainWindow::limits_changed);
     connect(qsbIntentionalSlowdown,QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::spinbox_slowdown_value_changed);
 
     connect(worker, SIGNAL(workerPaused()), SLOT(background_worker_paused()));
     connect(worker, SIGNAL(stepCompleted()), SLOT(simulation_data_ready()));
+
+    connect(params, SIGNAL(propertyChanged()), SLOT(parameters_updated()));
+
+
 
     representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);
@@ -475,4 +478,12 @@ void MainWindow::sliderValueChanged(int val)
     std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
     representation.actorText->SetInput(buffer);
 */
+}
+
+
+void MainWindow::parameters_updated()
+{
+    qDebug() << "MainWindow::parameters_updated(); ptsize " << model.prms.ParticleViewSize;
+    representation.SynchronizeTopology();
+    renderWindow->Render();
 }

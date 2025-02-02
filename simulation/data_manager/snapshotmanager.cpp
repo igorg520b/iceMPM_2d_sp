@@ -137,6 +137,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     model->prms.cellsize_inv = 1.0/model->prms.cellsize;
     const t_PointReal &h = model->prms.cellsize;
     model->prms.ParticleVolume = h*h*gx*gy/ buffer.size();
+    const double pointScale = (gx-1) * h;
 
     spdlog::info("assumed horizontal scale: {}; cellsize {}", XScale, model->prms.cellsize);
 
@@ -173,8 +174,8 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
         // write into SOA
         SOAIterator it = hssoa.begin()+count;
         ProxyPoint &p = *it;
-        p.setValue(SimParams::posx, pt[0]*XScale);      // set point's x-position in SOA
-        p.setValue(SimParams::posx+1, pt[1]*XScale);    // set point's y-position in SOA
+        p.setValue(SimParams::posx, pt[0]*pointScale);      // set point's x-position in SOA
+        p.setValue(SimParams::posx+1, pt[1]*pointScale);    // set point's y-position in SOA
 
         uint32_t rgba = (static_cast<uint32_t>(r) << 16) |  (static_cast<uint32_t>(g) << 8) |  static_cast<uint32_t>(b);
         model->gpu.point_colors_rgb[count] = rgba;
@@ -208,7 +209,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     for(int i=0;i<gx;i++)
         for(int j=0;j<gy;j++)
         {
-            bool is_modeled = is_modeled_area(i+ox,j+ox);
+            bool is_modeled = is_modeled_area(i+ox,j+oy);
             int host_grid_idx = j + i*gy;
             model->gpu.grid_status_buffer[host_grid_idx] = is_modeled ? 1 : 0;
         }
@@ -225,6 +226,8 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
 
 
     //model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY);
+    stbi_image_free(png_data);
+    stbi_image_free(png_data_modelled_region);
 
     // particle volume and mass
     model->prms.ComputeHelperVariables();
@@ -236,10 +239,6 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     model->gpu.transfer_to_device();
 
     model->Prepare();
-
-    stbi_image_free(png_data);
-    stbi_image_free(png_data_modelled_region);
-
     spdlog::info("PreparePointsAndSetupGrid done\n");
 }
 

@@ -89,6 +89,8 @@ private Q_SLOTS:
     void sliderValueChanged(int val);
     void spinbox_slowdown_value_changed(int val);
 
+    void parameters_updated();
+
 private:
     void updateGUI();   // when simulation is started/stopped or when a step is advanced
     void updateActorText();

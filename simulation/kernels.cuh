@@ -126,10 +126,10 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     }
     else
     {
-        const t_GridReal air_coeff = 1e-3 * gprms.InitialTimeStep;
-        const t_GridReal water_coeff = 1e-4 * gprms.InitialTimeStep;
+//        const t_GridReal air_coeff = 1e-3 * gprms.InitialTimeStep;
+//        const t_GridReal water_coeff = 1e-4 * gprms.InitialTimeStep;
 
-        GridVector2r waterVelVector(0,0);
+//        GridVector2r waterVelVector(0,0);
 /*
         float lat = gprms.LatMin + (gprms.LatMax-gprms.LatMin)*(float)gi.y()/(float)gprms.GridY;
         float lon = gprms.LonMin + (gprms.LonMax-gprms.LonMin)*(float)gi.x()/(float)gprms.GridXTotal;

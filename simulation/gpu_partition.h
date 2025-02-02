@@ -70,6 +70,7 @@ __device__ t_PointReal smoothstep(t_PointReal x);
 
 __device__ GridVector2r get_wind_vector(float lat, float lon, float tb);
 
+class GPU_Implementation5;
 
 struct GPU_Partition
 {
@@ -80,7 +81,7 @@ struct GPU_Partition
     void initialize(int device, int partition);
     void allocate(int n_points_capacity, int grid_x_capacity);
     void transfer_points_from_soa_to_device(HostSideSOA &hssoa, int point_idx_offset);
-    void transfer_grid_data_to_device(HostSideSOA &hssoa);
+    void transfer_grid_data_to_device(GPU_Implementation5* gpu);
     void update_constants();
     void update_wind_velocity_grid(float data[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4]);
     void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset);
