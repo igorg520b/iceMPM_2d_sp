@@ -22,7 +22,6 @@ MainWindow::MainWindow(QWidget *parent)
     params = new ParamsWrapper(&model.prms);
     representation.model = &model;
     worker = new BackgroundWorker(&model);
-//    representation.SynchronizeTopology();
 
     // VTK
     qt_vtk_widget = new QVTKOpenGLNativeWidget();
@@ -196,11 +195,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(params, SIGNAL(propertyChanged()), SLOT(parameters_updated()));
 
 
-
-    representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);
     qDebug() << "MainWindow constructor done";
-    updateGUI();
 }
 
 
@@ -416,6 +412,13 @@ void MainWindow::LoadParameterFile(QString qFileName)
 
     if(additionalFiles.count("InputWindData")) model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
 
+    if(additionalFiles.count("InputCurrentData"))
+    {
+        model.fluent_interpolatror.prms = &model.prms;
+        model.fluent_interpolatror.ScanDirectory(additionalFiles["InputCurrentData"]);
+        model.fluent_interpolatror.SetTime(0);
+    }
+
     representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);
     updateGUI();
@@ -432,8 +435,8 @@ void MainWindow::read_fluent_data_triggered()
 {
     qDebug() << "MainWindow::read_fluent_data_triggered()";
 
-    model.fluent_interpolatror.TestLoad();
-    renderer->AddActor(model.fluent_interpolatror.actor);
+    model.fluent_interpolatror.TestLoad(model.prms.FluentDataScale, model.prms.FluentDataOffsetX, model.prms.FluentDataOffsetY);
+//    renderer->AddActor(model.fluent_interpolatror.actor);
     renderer->AddActor(model.fluent_interpolatror.actor_original);
     renderWindow->Render();
 
@@ -458,7 +461,7 @@ void MainWindow::read_fluent_data_triggered()
 
 void MainWindow::sliderValueChanged(int val)
 {
-    model.fluent_interpolatror.LoadDataFrame(val);
+    //model.fluent_interpolatror.LoadDataFrame(val);
 
  /*
     float b_val = (float)val/1000.;

@@ -41,6 +41,10 @@ void SimParams::Reset()
     tpb_Upd = 512;
     tpb_G2P = 128;
 
+    FluentDataScale = 3;
+    FluentDataOffsetX = 0;
+    FluentDataOffsetY = 0;
+
     ComputeLame();
     ComputeHelperVariables();
     spdlog::info("SimParams reset; nPtsArrays {}", nPtsArrays);
@@ -85,6 +89,10 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("tpb_P2G")) tpb_P2G = doc["tpb_P2G"].GetInt();
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();
     if(doc.HasMember("tpb_G2P")) tpb_G2P = doc["tpb_G2P"].GetInt();
+
+    if(doc.HasMember("FluentDataScale")) FluentDataScale = doc["FluentDataScale"].GetDouble();
+    if(doc.HasMember("FluentDataOffsetX")) FluentDataOffsetX = doc["FluentDataOffsetX"].GetDouble();
+    if(doc.HasMember("FluentDataOffsetY")) FluentDataOffsetY = doc["FluentDataOffsetY"].GetDouble();
 
     std::map<std::string,std::string> result;
 

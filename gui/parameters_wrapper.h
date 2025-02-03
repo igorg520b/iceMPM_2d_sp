@@ -105,6 +105,20 @@ public:
         return QString("%1 x %2 km").arg(x, 0, 'f', 1).arg(y, 0, 'f', 1);
     }
 
+
+    Q_PROPERTY(double fl_Scale READ getFluentDataScale WRITE setFluentDataScale NOTIFY propertyChanged)
+    double getFluentDataScale() {return prms->FluentDataScale;}
+    void setFluentDataScale(double val) {prms->FluentDataScale=val;}
+
+    Q_PROPERTY(double fl_OX READ getFluentDataOffsetX WRITE setFluentDataOffsetX NOTIFY propertyChanged)
+    double getFluentDataOffsetX() {return prms->FluentDataOffsetX;}
+    void setFluentDataOffsetX(double val) {prms->FluentDataOffsetX=val;}
+
+    Q_PROPERTY(double fl_OY READ getFluentDataOffsetY WRITE setFluentDataOffsetY NOTIFY propertyChanged)
+    double getFluentDataOffsetY() {return prms->FluentDataOffsetY;}
+    void setFluentDataOffsetY(double val) {prms->FluentDataOffsetY=val;}
+
+
 public:
     ParamsWrapper(SimParams *p)
     {

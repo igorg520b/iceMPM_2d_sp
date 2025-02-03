@@ -1,8 +1,14 @@
 {
 "InputPNG":"/home/s2/Projects-CUDA/iceMPM_2d_sp/_maps/combined2_lowres.png",
 "ModeledRegion":"/home/s2/Projects-CUDA/iceMPM_2d_sp/_maps/combined2_lowres_boundary.png",
+"InputCurrentData":"/home/s2/Documents/vm_shared/fluent4/data2/FFF.1-3.cas.h5",
 "DimensionHorizontal":430000,
 "SurfaceDensity":916,
+
+"FluentDataScale":11.37,
+"FluentDataOffsetX":18150.0,
+"FluentDataOffsetY":13520.0,
+
 
 "SimulationStartUnixTime":1717988400,
 

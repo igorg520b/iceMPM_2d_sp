@@ -74,6 +74,7 @@ public:
     double windDragCoeff_airDensity;
     double currentDragCoeff_waterDensity;
     bool UseWindData, UseCurrentData;
+    double FluentDataScale, FluentDataOffsetX, FluentDataOffsetY;
 
     // material properties
     double SurfaceDensity, PoissonsRatio, YoungsModulus;

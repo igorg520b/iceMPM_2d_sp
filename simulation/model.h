@@ -51,10 +51,8 @@ public:
     FluentInterpolator fluent_interpolatror;
     icy::SnapshotManager snapshot;
 
-    std::vector<std::array<float,3>> wind_data;
-    float windSpeed, windAngle;
     GPU_Implementation5 gpu;
-    bool SyncTopologyRequired;
+    bool SyncTopologyRequired;  // especially when some points get removed
 
     std::mutex processing_current_cycle_data; // locked until the current cycle results' are copied to host and processed
     std::mutex accessing_point_data;
@@ -73,8 +71,6 @@ private:
     int saving_SimulationStep = -1;
     double saving_SimulationTime;
 
-
-    std::pair<float, float> interpolateWind(float current_time);
 };
 
 #endif
