@@ -11,31 +11,21 @@
 
 icy::VisualRepresentation::VisualRepresentation()
 {
-    populateLut(lutArrayTemperatureAdj, (sizeof(lutArrayTemperatureAdj)/(sizeof(lutArrayTemperatureAdj[0]))), hueLut_temperature);
-    populateLut(lutSouthwest, (sizeof(lutSouthwest)/(sizeof(lutSouthwest[0]))), hueLut_Southwest);
-    populateLut(lutArrayPastel, (sizeof(lutArrayPastel)/(sizeof(lutArrayPastel[0]))), hueLut_pastel);
-    populateLut(lutArrayMPMColors, (sizeof(lutArrayMPMColors)/(sizeof(lutArrayMPMColors[0]))), lutMPM);
-    populateLut(lutSpecialSeven, (sizeof(lutSpecialSeven)/(sizeof(lutSpecialSeven[0]))), hueLut_four);
-
-    interpolateLut(lutSpecialP, (sizeof(lutSpecialP)/(sizeof(lutSpecialP[0]))), hueLut_pressure);
-
     // points
+    pts_colors->SetNumberOfComponents(3);
+    pts_colors->SetName("pts_colors");
+
     points_polydata->SetPoints(points);
-//    points_polydata->GetPointData()->AddArray(visualized_values);
-//    visualized_values->SetName("visualized_values");
-//    points_polydata->GetPointData()->SetActiveScalars("visualized_values");
+    points_polydata->GetPointData()->AddArray(pts_colors);
 
     points_filter->SetInputData(points_polydata);
     points_filter->Update();
 
     points_mapper->SetInputData(points_filter->GetOutput());
-    points_mapper->UseLookupTableScalarRangeOn();
-    points_mapper->SetLookupTable(lutMPM);
 
     actor_points->SetMapper(points_mapper);
     actor_points->GetProperty()->SetPointSize(2);
     actor_points->GetProperty()->SetVertexColor(1,0,0);
-//    actor_points->GetProperty()->SetColor(41./255,128./255,215./255);
     actor_points->GetProperty()->SetColor(151./255,188./255,215./255);
     actor_points->GetProperty()->LightingOff();
     actor_points->GetProperty()->ShadingOff();
@@ -43,13 +33,8 @@ icy::VisualRepresentation::VisualRepresentation()
     actor_points->PickableOff();
 
 
-    pts_colors->SetNumberOfComponents(3);
-    pts_colors->SetName("pts_colors");
-    points_polydata->GetPointData()->AddArray(pts_colors);
-
     // GRID
     grid_mapper->SetInputData(structuredGrid);
-//    grid_mapper->SetLookupTable(hueLut);
 
     actor_grid->SetMapper(grid_mapper);
     actor_grid->GetProperty()->SetEdgeVisibility(true);
@@ -62,7 +47,7 @@ icy::VisualRepresentation::VisualRepresentation()
     actor_grid->GetProperty()->SetRepresentationToWireframe();
 
     // scalar bar
-    scalarBar->SetLookupTable(lutMPM);
+    //scalarBar->SetLookupTable(lutMPM);
     scalarBar->SetMaximumWidthInPixels(130);
     scalarBar->SetBarRatio(0.07);
     scalarBar->SetMaximumHeightInPixels(200);
@@ -94,9 +79,11 @@ icy::VisualRepresentation::VisualRepresentation()
 void icy::VisualRepresentation::SynchronizeTopology()
 {
     spdlog::info("SynchronizeTopology()");
-    model->accessing_point_data.lock();
 
     const int nPts = model->gpu.hssoa.size;
+    if(!nPts) return;
+
+    model->accessing_point_data.lock();
     points->SetNumberOfPoints(nPts);
 //    visualized_values->SetNumberOfValues(nPts);
     pts_colors->SetNumberOfValues(nPts*3);
@@ -138,8 +125,6 @@ void icy::VisualRepresentation::SynchronizeTopology()
                 pixel[2] = 0x2f;
             }
         }
-
-    spdlog::info("SynchronizeTopology() 3");
 
     mapper_uniformgrid->Update();
 
@@ -183,14 +168,19 @@ void icy::VisualRepresentation::SynchronizeTopology()
 
 void icy::VisualRepresentation::SynchronizeValues()
 {
-    model->accessing_point_data.lock();
-//    spdlog::info("SynchronizeValues()");
+    spdlog::info("SynchronizeValues()");
+    const int &_ox = model->prms.ModeledRegionOffsetX;
+    const int &_oy = model->prms.ModeledRegionOffsetY;
 
+    const int &gx = model->prms.GridXTotal;
+    const int &gy = model->prms.GridYTotal;
+
+    model->accessing_point_data.lock();
 
     double sim_time = model->prms.SimulationTime;
     const double &h = model->prms.cellsize;
-    const double &ox = h * model->prms.ModeledRegionOffsetX;
-    const double &oy = h * model->prms.ModeledRegionOffsetY;
+    const double ox = h * model->prms.ModeledRegionOffsetX;
+    const double oy = h * model->prms.ModeledRegionOffsetY;
 
     const int nPts = model->gpu.hssoa.size;
     for(int i=0;i<nPts;i++)
@@ -204,6 +194,21 @@ void icy::VisualRepresentation::SynchronizeValues()
     double range = std::pow(10,ranges[VisualizingVariable]);
     double centerVal = 0;
 
+    for(int i=0;i<gx;i++)
+        for(int j=0;j<gy;j++)
+        {
+            int idx2 = (j + gy*i);
+            if(model->gpu.grid_status_buffer[idx2])
+            {
+                // water color
+                unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                pixel[0] = 0x15;
+                pixel[1] = 0x1f;
+                pixel[2] = 0x2f;
+            }
+        }
+
+
     actor_points->VisibilityOn();
 
     if(VisualizingVariable == VisOpt::none)
@@ -216,8 +221,6 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_mapper->ScalarVisibilityOn();
         points_mapper->SetColorModeToMapScalars();
         points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_four);
-        scalarBar->SetLookupTable(hueLut_four);
         for(int i=0;i<nPts;i++)
         {
             float value = 1;
@@ -230,96 +233,63 @@ void icy::VisualRepresentation::SynchronizeValues()
 
     else if(VisualizingVariable == VisOpt::v_u)
     {
-        /*
-        int gx = model->prms.GridXTotal;
-        int gy = model->prms.GridY;
         actor_points->VisibilityOff();
-
-        model->wind_interpolator.setTime(wind_visualization_time);
-        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
+        for(int i=0;i<gx;i++)
+            for(int j=0;j<gy;j++)
             {
-                int idx_visual = idx_x + idx_y*gx;
+                int idx2 = (j + gy*i);
+                if(model->gpu.grid_status_buffer[idx2])
+                {
+                    // water color
+                    Eigen::Vector2f v = model->fluent_interpolatror.getInterpolation(i,j);
+                    float val = (v.x()+0.1)/0.2;
+                    //float val = (sin(i/100.)+1.)/2.;
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::SpecialJ, val);
 
-                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
-
-                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
-                float value = wv.x();
-                visualized_values_grid->SetValue(idx_visual, value);
+                    unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                    for(int k=0;k<3;k++) pixel[k] = c[k];
+                }
             }
-
-        grid_mapper2->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(-range, range);
-
-        visualized_values_grid->Modified();
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut_pressure);
-*/
     }
     else if(VisualizingVariable == VisOpt::v_v)
     {
-        /*
-        int gx = model->prms.GridXTotal;
-        int gy = model->prms.GridY;
         actor_points->VisibilityOff();
-        model->wind_interpolator.setTime(wind_visualization_time);
-        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
+        for(int i=0;i<gx;i++)
+            for(int j=0;j<gy;j++)
             {
-                int idx_visual = idx_x + idx_y*gx;
+                int idx2 = (j + gy*i);
+                if(model->gpu.grid_status_buffer[idx2])
+                {
+                    // water color
+                    Eigen::Vector2f v = model->fluent_interpolatror.getInterpolation(i,j);
+                    float val = (v.y()+0.1)/0.2;
+                    //float val = (sin(i/100.)+1.)/2.;
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::SpecialJ, val);
 
-                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
-
-                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
-                float value = wv.y();
-                visualized_values_grid->SetValue(idx_visual, value);
+                    unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                    for(int k=0;k<3;k++) pixel[k] = c[k];
+                }
             }
 
-        grid_mapper2->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(-range, range);
-
-        visualized_values_grid->Modified();
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut_pressure);
-*/
     }
     else if(VisualizingVariable == VisOpt::v_norm)
     {
-        /*
-        int gx = model->prms.GridXTotal;
-        int gy = model->prms.GridY;
         actor_points->VisibilityOff();
-
-        model->wind_interpolator.setTime(wind_visualization_time);
-        float tb = model->wind_interpolator.interpolationCoeffFromTime(wind_visualization_time);
-
-        for(int idx_y=0; idx_y<gy; idx_y++)
-            for(int idx_x=0; idx_x<gx; idx_x++)
+        for(int i=0;i<gx;i++)
+            for(int j=0;j<gy;j++)
             {
-                int idx_visual = idx_x + idx_y*gx;
-
-                float lat = model->prms.LatMin + (model->prms.LatMax-model->prms.LatMin)*(float)idx_y/(float)gy;
-                float lon = model->prms.LonMin + (model->prms.LonMax-model->prms.LonMin)*(float)idx_x/(float)gx;
-
-                Eigen::Vector2f wv = model->wind_interpolator.interpolationResult(lat, lon, tb);
-                float value = wv.norm();
-                visualized_values_grid->SetValue(idx_visual, value);
+                int idx2 = (j + gy*i);
+                if(model->gpu.grid_status_buffer[idx2])
+                {
+                    // water color
+                    Eigen::Vector2f v = model->fluent_interpolatror.getInterpolation(i,j);
+                    float val = (v.norm())/0.2;
+                    //float val = (sin(i/100.)+1.)/2.;
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::P2, val);
+                    unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                    for(int k=0;k<3;k++) pixel[k] = c[k];
+                }
             }
-
-        grid_mapper2->SetLookupTable(hueLut_Southwest);
-        hueLut_Southwest->SetTableRange(0, range);
-
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(hueLut_Southwest);
-
-        visualized_values_grid->Modified();
-*/
     }
     else if(VisualizingVariable == VisOpt::color)
     {
@@ -352,26 +322,29 @@ void icy::VisualRepresentation::SynchronizeValues()
     {
         scalarBar->VisibilityOn();
         points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_pressure);
-        scalarBar->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
+        points_mapper->SetColorModeToDirectScalars();
         for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            double value = s->getValue(SimParams::idx_Jp_inv)-1;
+            double val = s->getValue(SimParams::idx_Jp_inv)-1.;
+            double value = (val+0.1)/0.1;
+            double alpha = abs(val)/0.1;
+
+            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
+            uint32_t rgb = model->gpu.point_colors_rgb[pt_idx];
+            std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::SpecialJ, value);
+            std::array<uint8_t, 3> c2 = colormap.mergeColors(rgb, c, alpha);
+
+            for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(i*3+k), c2[k]);
         }
+        points_polydata->GetPointData()->SetActiveScalars("pts_colors");
+        pts_colors->Modified();
+//        points_polydata->Modified();
+        points_filter->Update();
     }
     else if(VisualizingVariable == VisOpt::P)
     {
         scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_pressure);
-        scalarBar->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
         for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
@@ -381,44 +354,24 @@ void icy::VisualRepresentation::SynchronizeValues()
     }
     else if(VisualizingVariable == VisOpt::Q)
     {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_pressure);
-        scalarBar->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(centerVal-range, centerVal+range);
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            float value = s->getValue(SimParams::idx_Q);
-            if(s->getDisabledStatus()) value = -2*range;
-        }
+
     }
 
 
     else if(VisualizingVariable == VisOpt::strength)
     {
-        scalarBar->VisibilityOn();
-        points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
-        points_mapper->SetLookupTable(hueLut_pressure);
-        scalarBar->SetLookupTable(hueLut_pressure);
-        hueLut_pressure->SetTableRange(0.5, 1);
-        for(int i=0;i<nPts;i++)
-        {
-            SOAIterator s = model->gpu.hssoa.begin()+i;
-            float value = s->getValue(SimParams::idx_initial_strength);
-            //else if(s->getCrushedStatus()) value = 2*range;
-        }
+
     }
     else
     {
         points_mapper->ScalarVisibilityOff();
         scalarBar->VisibilityOff();
     }
+
     points_filter->Update();
+    uniformGrid->Modified();
+    mapper_uniformgrid->Update();
+
 
     model->accessing_point_data.unlock();
 
@@ -431,63 +384,6 @@ void icy::VisualRepresentation::ChangeVisualizationOption(int option)
     SynchronizeTopology();
 }
 
-void icy::VisualRepresentation::populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
-{
-    table->SetNumberOfTableValues(size);
-    for(int i=0;i<size;i++)
-        table->SetTableValue(i,lutArray[i][0],lutArray[i][1],lutArray[i][2]);
-    table->SetTableRange(0, size-1);
-
-    table->SetRampToLinear();
-}
 
 
-void icy::VisualRepresentation::interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
-{
-    const int m = 256;
-    table->SetNumberOfTableValues(m);
 
-    for (int i = 0; i < m; ++i) {
-        float t = static_cast<float>(i) / (float)(m-1); // Normalize index to [0, 1]
-
-        // Map t to the interval [0, N-1] for interpolation
-        float scaledT = t * (size - 1);
-        int lowerIdx = static_cast<int>(std::floor(scaledT)); // Lower bound
-        int upperIdx = static_cast<int>(std::ceil(scaledT));  // Upper bound
-        float localT = scaledT - lowerIdx; // Fractional position between indices
-
-        // Linearly interpolate between colors at lowerIdx and upperIdx
-        float r = (1.0f - localT) * lutArray[lowerIdx][0] + localT * lutArray[upperIdx][0];
-        float g = (1.0f - localT) * lutArray[lowerIdx][1] + localT * lutArray[upperIdx][1];
-        float b = (1.0f - localT) * lutArray[lowerIdx][2] + localT * lutArray[upperIdx][2];
-
-        // Set the interpolated color in the lookup table
-        table->SetTableValue(i, r, g, b, 1.0); // Alpha is set to 1.0 (opaque)
-    }
-}
-
-
-void icy::VisualRepresentation::interpolateColor(const float colorArray[][3],
-                                                 int nColors, float value, float& r_out, float& g_out, float& b_out) {
-    if (nColors < 2) {
-        throw std::invalid_argument("Color array must have at least two colors for interpolation.");
-    }
-
-    // Clamp value to range [0, 1]
-    value = std::clamp(value, 0.0f, 1.0f);
-
-    // Find the segment
-    float segmentSize = 1.0f / (nColors - 1); // Divide [0, 1] into nColors-1 segments
-    int segmentIndex = static_cast<int>(value / segmentSize); // Determine which segment we're in
-    segmentIndex = std::min(segmentIndex, nColors - 2); // Ensure index doesn't go out of bounds
-
-    // Compute local position within the segment
-    float localT = (value - segmentIndex * segmentSize) / segmentSize;
-
-    // Interpolate between the two colors
-    const float* color1 = colorArray[segmentIndex];
-    const float* color2 = colorArray[segmentIndex + 1];
-    r_out = (1 - localT) * color1[0] + localT * color2[0];
-    g_out = (1 - localT) * color1[1] + localT * color2[1];
-    b_out = (1 - localT) * color1[2] + localT * color2[2];
-}

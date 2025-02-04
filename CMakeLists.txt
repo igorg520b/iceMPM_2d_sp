@@ -224,6 +224,8 @@ FetchContent_MakeAvailable(PBrowser)
 
         gui/vtk/SpecialSelector2D.cpp
         gui/vtk/SpecialSelector2D.h
+        gui/colormap.h
+        gui/colormap.cpp
 
     )
     set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)

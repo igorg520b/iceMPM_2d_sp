@@ -174,11 +174,14 @@ void FluentInterpolator::ScanDirectory(std::string fileName)
 
     spdlog::info("FluentInterpolator::ScanDirectory: files {}; interval {}; prefix {}",
                  file_count, interval_size, geometryFilePrefix);
+    is_initialized = true;
+    SetTime(10);
 }
 
 
 bool FluentInterpolator::SetTime(double t)
 {
+    spdlog::info("FluentInterpolator::SetTime {}", t);
     this->currentTime = t;
 
     // which file indices to read
@@ -194,15 +197,15 @@ bool FluentInterpolator::SetTime(double t)
     {
         frameChanged = true;
         currentFrame = frameFrom;
+
+        // load data
+        LoadDataFrame(frameFrom, flatData1_U, flatData1_V);
+        LoadDataFrame(frameTo, flatData2_U, flatData2_V);
     }
 
     // Compute position within the interval (0 to 1)
     double intervalStartTime = rawInterval * interval_size;
     position = (currentTime - intervalStartTime) / interval_size; // 0 to 1 range
-
-    // load data
-    LoadDataFrame(frameFrom, flatData1_U, flatData1_V);
-    LoadDataFrame(frameTo, flatData2_U, flatData2_V);
 
     return frameChanged;
 }
@@ -294,7 +297,17 @@ void FluentInterpolator::LoadDataFrame(int frame, std::vector<float> &flatData_U
             int idx2 = (ox+i) + vgx * (oy+j);
             flatData_U[idx1] = dataArray->GetValue(idx2);
         }
-
-
-
 }
+
+
+Eigen::Vector2f FluentInterpolator::getInterpolation(int i, int j)
+{
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+
+    int idx = j + gy*i;
+    float vx = (1-position)*flatData1_U[idx] + position*flatData2_U[idx];
+    float vy = (1-position)*flatData1_V[idx] + position*flatData2_V[idx];
+    return Eigen::Vector2f(vx, vy);
+}
+

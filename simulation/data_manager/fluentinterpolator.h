@@ -24,6 +24,8 @@
 #include <string>
 #include <utility>
 
+#include <Eigen/Core>
+
 #include "parameters_sim.h"
 
 class FluentInterpolator
@@ -31,6 +33,7 @@ class FluentInterpolator
 public:
     FluentInterpolator();
     SimParams *prms;
+    bool is_initialized = false;
 
     void ScanDirectory(std::string geometryFile);
 
@@ -38,13 +41,12 @@ public:
 
     bool SetTime(double t);
 
+    Eigen::Vector2f getInterpolation(int i, int j);
 
 
     int file_count, interval_size;   // files from the scanned directory
     std::vector<float> flatData1_U, flatData1_V;  // accessible by the model to transfer to GPU
     std::vector<float> flatData2_U, flatData2_V;  // value of interest is interpolated between (1) and (2)
-
-
 
     vtkNew<vtkActor> actor;
     vtkNew<vtkActor> actor_original;
@@ -63,10 +65,6 @@ public:
 
 
 private:
-    int gx, gy; // modelled area grid resolution
-    int ox, oy; // offset of modelled area from visual grid
-    int vgx, vgy; // visual grid dimensions
-    double scale, offsetX, offsetY;
     int currentFrame = -1;
     double currentTime, position;
 

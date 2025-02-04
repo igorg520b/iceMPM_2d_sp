@@ -92,7 +92,7 @@ MainWindow::MainWindow(QWidget *parent)
 //    renderer->AddActor(representation.actor_grid2);
     renderer->AddActor(representation.actor_uniformgrid);
     renderer->AddActor(representation.actorText);
-    renderer->AddActor(representation.scalarBar);
+//    renderer->AddActor(representation.scalarBar);
 
     // populate combobox
     QMetaEnum qme = QMetaEnum::fromType<icy::VisualRepresentation::VisOpt>();
@@ -105,7 +105,7 @@ MainWindow::MainWindow(QWidget *parent)
     // slider
     slider1 = new QSlider(Qt::Horizontal);
     ui->toolBar->addWidget(slider1);
-    slider1->setTracking(false);
+    slider1->setTracking(true);
     slider1->setMinimum(0);
     slider1->setMaximum(1000);
     connect(slider1, SIGNAL(valueChanged(int)), this, SLOT(sliderValueChanged(int)));
@@ -293,11 +293,13 @@ void MainWindow::open_snapshot_triggered()
 
 void MainWindow::OpenSnapshot(QString fileName)
 {
+    /*
     model.snapshot.ReadSnapshot(fileName.toStdString());
     representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);
 
     updateGUI();
+*/
 }
 
 
@@ -321,6 +323,7 @@ void MainWindow::simulation_data_ready()
 
 void MainWindow::updateGUI()
 {
+    spdlog::info("updateGUI");
     labelStepCount->setText(QString::number(model.prms.SimulationStep));
     labelElapsedTime->setText(QString("%1 s").arg(model.prms.SimulationTime,0,'f',0));
 //    labelWindSpeed->setText(QString("%1 m/s").arg(model.windSpeed,0,'f',2));
@@ -416,7 +419,6 @@ void MainWindow::LoadParameterFile(QString qFileName)
     {
         model.fluent_interpolatror.prms = &model.prms;
         model.fluent_interpolatror.ScanDirectory(additionalFiles["InputCurrentData"]);
-        model.fluent_interpolatror.SetTime(0);
     }
 
     representation.SynchronizeTopology();
@@ -461,6 +463,11 @@ void MainWindow::read_fluent_data_triggered()
 
 void MainWindow::sliderValueChanged(int val)
 {
+    spdlog::info("sliderValueChanged {}", val);
+    model.fluent_interpolatror.SetTime((double)val);
+    representation.SynchronizeValues();
+    renderWindow->Render();
+
     //model.fluent_interpolatror.LoadDataFrame(val);
 
  /*
@@ -469,8 +476,6 @@ void MainWindow::sliderValueChanged(int val)
     float set_val = b_val*max_val;
 
     representation.wind_visualization_time = b_val*max_val;
-    representation.SynchronizeValues();
-    renderWindow->Render();
 
     int64_t display_date = (int64_t)set_val + model.prms.SimulationStartUnixTime;
 
