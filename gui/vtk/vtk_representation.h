@@ -49,7 +49,7 @@ public:
     icy::Model *model;
     double wind_visualization_time;
 
-    enum VisOpt { none, status, Jp_inv, grains, velocity, P, Q, qp, color, special, wind_u, wind_v, wind_norm, boundary, strength};
+    enum VisOpt { none, status, Jp_inv, P, Q, color, v_u, v_v, v_norm, strength};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};
@@ -76,7 +76,7 @@ private:
     vtkNew<vtkPolyDataMapper> points_mapper;
     vtkNew<vtkCellArray> points_cells;
     vtkNew<vtkVertexGlyphFilter> points_filter;
-    vtkNew<vtkFloatArray> visualized_values;
+//    vtkNew<vtkFloatArray> visualized_values;
     vtkNew<vtkUnsignedCharArray> pts_colors;    // for color visualization per point
 
     // draw background grid as vtkImageData
