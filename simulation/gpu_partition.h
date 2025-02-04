@@ -84,6 +84,8 @@ struct GPU_Partition
     void transfer_grid_data_to_device(GPU_Implementation5* gpu);
     void update_constants();
     void update_wind_velocity_grid(float data[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4]);
+    void update_water_flow_grid(float *U);
+
     void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset);
 
     // calculation
@@ -102,7 +104,6 @@ struct GPU_Partition
     int Device;
     static SimParams *prms;
 
-    size_t nPtsPitch, nGridPitch; // in number of elements(!), for coalesced access on the device
     int nPts_partition;    // actual number of points (including disabled)
     int GridX_partition;   // size of the portion of the grid for which this partition is "responsible"
 
@@ -124,6 +125,12 @@ struct GPU_Partition
     // pointers to device-side arrays
     t_PointReal *pts_array;
     t_GridReal *grid_array;         // grid nodes: mass, vx, vy
+    size_t nPtsPitch, nGridPitch; // in number of elements(!), for coalesced access on the device
+
+    constexpr static int grid_water_components = 4;
+    float *grid_water_current; // v1x, v1y, v2x, v2y (4 components)
+    size_t gwcPitch; // pitch (in elements) for grid_water_current
+
     uint8_t *grid_status_array;     // boundary condition for grid nodes
 
     // frame analysis

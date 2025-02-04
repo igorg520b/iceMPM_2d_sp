@@ -29,6 +29,8 @@ bool icy::Model::Step()
         gpu.p2g();
 
         if(prms.UseWindData && wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
+        if(prms.UseCurrentData && (fluent_interpolatror.SetTime(simulation_time) || step == 0))
+            gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getData(fluent_interpolatror.currentFrame,0));
 
         gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
         const bool isCycleStart = step % prms.UpdateEveryNthStep == 0;

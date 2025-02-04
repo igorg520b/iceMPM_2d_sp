@@ -43,10 +43,11 @@ public:
 
     Eigen::Vector2f getInterpolation(int i, int j);
 
+    float *getData(int frame, int subIdx);
+
 
     int file_count, interval_size;   // files from the scanned directory
-    std::vector<float> flatData1_U, flatData1_V;  // accessible by the model to transfer to GPU
-    std::vector<float> flatData2_U, flatData2_V;  // value of interest is interpolated between (1) and (2)
+    int currentFrame = -1;
 
     vtkNew<vtkActor> actor;
     vtkNew<vtkActor> actor_original;
@@ -54,24 +55,22 @@ public:
     vtkNew<vtkDataSetMapper> mapper;
     vtkNew<vtkUnstructuredGrid> grid;
     vtkNew<vtkLookupTable> lut;
-
-    vtkNew<vtkCellDataToPointData> filter_cd2pd;
-    vtkNew<vtkImageData> imageData;
-    vtkNew<vtkProbeFilter> probeFilter;
-
     vtkNew<vtkDataSetMapper> probeMapper;
-    vtkNew<vtkTransformFilter> transformFilter;
-    vtkNew<vtkTransform> transform;
-
 
 private:
-    int currentFrame = -1;
     double currentTime, position;
 
     std::string geometryFilePrefix;
     vtkNew<vtkFLUENTCFFCustomReader> fluentReader;
+    vtkNew<vtkTransform> transform;
+    vtkNew<vtkTransformFilter> transformFilter;
+    vtkNew<vtkCellDataToPointData> filter_cd2pd;
+    vtkNew<vtkImageData> imageData;
+    vtkNew<vtkProbeFilter> probeFilter;
 
-    void LoadDataFrame(int frame, std::vector<float> &flatData_U, std::vector<float> &flatData_V);
+    std::vector<float> _data;
+
+    void LoadDataFrame(int frame, float *U, float *V);
 
 };
 

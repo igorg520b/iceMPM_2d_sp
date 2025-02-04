@@ -99,6 +99,7 @@ GPU_Partition::GPU_Partition()
     pts_array = nullptr;
     grid_array = nullptr;
     grid_status_array = nullptr;
+    grid_water_current = nullptr;
 }
 
 GPU_Partition::~GPU_Partition()
@@ -118,6 +119,7 @@ GPU_Partition::~GPU_Partition()
     cudaFree(grid_array);
     cudaFree(pts_array);
     cudaFree(grid_status_array);
+    cudaFree(grid_water_current);
     spdlog::info("Destructor invoked; partition {} on device {}", PartitionID, Device);
 }
 
@@ -173,9 +175,16 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate");
     nPtsPitch /= sizeof(t_PointReal);
 
-    spdlog::info("allocate: P {}-{}:  GridPitch/Y {}; Pts {}; total {:.2} Mb",
+    // grid for water current data
+    size_t grid_current_size_requested = sizeof(float) * gy * gx;
+    err = cudaMallocPitch (&grid_water_current, &gwcPitch, grid_current_size_requested, grid_water_components);
+    total_device += gwcPitch * grid_water_components;
+    if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid array");
+    gwcPitch /= sizeof(float); // assume that this divides without remainder
+
+    spdlog::info("allocate: P {}-{}:  GridPitch/Y {}; Pts {}; gx*gy {}; gwcPitch {}, total {:.2} Mb",
                  PartitionID, Device,
-                 nGridPitch/prms->GridYTotal, nPtsPitch,
+                 nGridPitch/prms->GridYTotal, nPtsPitch, gx*gy, gwcPitch,
                  (double)total_device/(1024*1024));
 }
 
@@ -197,6 +206,24 @@ void GPU_Partition::update_wind_velocity_grid(float data[WindInterpolator::alloc
     cudaError_t err = cudaMemcpyToSymbolAsync(wgrid, data, data_size,0,cudaMemcpyHostToDevice, streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("update_wind_velocity_grid");
 }
+
+void GPU_Partition::update_water_flow_grid(float *U)
+{
+    cudaSetDevice(Device);
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+
+    size_t data_size = gx*gy*sizeof(float);
+    cudaError_t err = cudaMemcpy(grid_water_current, U, data_size, cudaMemcpyHostToDevice);
+    if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
+    err = cudaMemcpy(grid_water_current+gwcPitch*1, U+data_size*1, data_size, cudaMemcpyHostToDevice);
+    if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
+    err = cudaMemcpy(grid_water_current+gwcPitch*2, U+data_size*2, data_size, cudaMemcpyHostToDevice);
+    if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
+    err = cudaMemcpy(grid_water_current+gwcPitch*3, U+data_size*3, data_size, cudaMemcpyHostToDevice);
+    if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
+}
+
 
 
 

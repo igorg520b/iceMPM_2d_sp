@@ -172,46 +172,32 @@ void FluentInterpolator::ScanDirectory(std::string fileName)
     interval_size = (numbers.size() > 1) ? (numbers[1] - numbers[0]) : 0;
     file_count = static_cast<int>(numbers.size());
 
+
+    // load all these into memory
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+
+    _data.resize(file_count*gx*gy*2);
+
+    for(int i=0;i<file_count;i++)
+    {
+        spdlog::info("FluentInterpolator::ScanDirectory: loading frame {}",i);
+        LoadDataFrame(i, getData(i,0), getData(i,1));
+    }
+
+
+
     spdlog::info("FluentInterpolator::ScanDirectory: files {}; interval {}; prefix {}",
                  file_count, interval_size, geometryFilePrefix);
     is_initialized = true;
-    SetTime(10);
+
+    SetTime(0);
 }
 
 
-bool FluentInterpolator::SetTime(double t)
-{
-    spdlog::info("FluentInterpolator::SetTime {}", t);
-    this->currentTime = t;
-
-    // which file indices to read
-    int rawInterval = static_cast<int>(std::floor(currentTime / interval_size));
-
-    // Wrap around using modulo operation
-
-    const int frameFrom = (rawInterval % file_count);
-    const int frameTo = ((rawInterval+1) % file_count);
-
-    bool frameChanged = false;
-    if(frameFrom != currentFrame)
-    {
-        frameChanged = true;
-        currentFrame = frameFrom;
-
-        // load data
-        LoadDataFrame(frameFrom, flatData1_U, flatData1_V);
-        LoadDataFrame(frameTo, flatData2_U, flatData2_V);
-    }
-
-    // Compute position within the interval (0 to 1)
-    double intervalStartTime = rawInterval * interval_size;
-    position = (currentTime - intervalStartTime) / interval_size; // 0 to 1 range
-
-    return frameChanged;
-}
 
 
-void FluentInterpolator::LoadDataFrame(int frame, std::vector<float> &flatData_U, std::vector<float> &flatData_V)
+void FluentInterpolator::LoadDataFrame(int frame, float *U, float *V)
 {
     const int &gx = prms->GridXTotal;
     const int &gy = prms->GridYTotal;
@@ -228,9 +214,6 @@ void FluentInterpolator::LoadDataFrame(int frame, std::vector<float> &flatData_U
 
     const double &h = prms->cellsize;
 
-    flatData_U.resize(gx*gy);
-    flatData_V.resize(gx*gy);
-
     // FFF.1-3-00130.dat.h5
     // FFF.1-3.cas.h5
     //    std::string dataFile1 = fmt::format("{}-{:05}.dat.h5", geometryFilePrefix, frame*interval);
@@ -238,6 +221,17 @@ void FluentInterpolator::LoadDataFrame(int frame, std::vector<float> &flatData_U
     std::string casFileName = fmt::format("{}.cas.h5", geometryFilePrefix);
     spdlog::info("data file {}", dataFileName);
     spdlog::info("cas file {}", casFileName);
+
+
+
+    vtkNew<vtkFLUENTCFFCustomReader> fluentReader;
+    vtkNew<vtkTransform> transform;
+    vtkNew<vtkTransformFilter> transformFilter;
+    vtkNew<vtkCellDataToPointData> filter_cd2pd;
+    vtkNew<vtkImageData> imageData;
+    vtkNew<vtkProbeFilter> probeFilter;
+
+
 
     fluentReader->SetDataFileName(dataFileName.c_str());  // Set the mesh file (.cas.h5)
     fluentReader->SetFileName(casFileName.c_str());  // Set the mesh file (.cas.h5)
@@ -282,7 +276,7 @@ void FluentInterpolator::LoadDataFrame(int frame, std::vector<float> &flatData_U
         {
             int idx1 = j + gy*i;
             int idx2 = (ox+i) + vgx * (oy+j);
-            flatData_V[idx1] = dataArray->GetValue(idx2);
+            V[idx1] = dataArray->GetValue(idx2);
         }
 
     dataArray = vtkDoubleArray::SafeDownCast(probedData->GetPointData()->GetScalars("SV_U"));
@@ -295,7 +289,7 @@ void FluentInterpolator::LoadDataFrame(int frame, std::vector<float> &flatData_U
         {
             int idx1 = j + gy*i;
             int idx2 = (ox+i) + vgx * (oy+j);
-            flatData_U[idx1] = dataArray->GetValue(idx2);
+            U[idx1] = dataArray->GetValue(idx2);
         }
 }
 
@@ -306,8 +300,48 @@ Eigen::Vector2f FluentInterpolator::getInterpolation(int i, int j)
     const int &gy = prms->GridYTotal;
 
     int idx = j + gy*i;
-    float vx = (1-position)*flatData1_U[idx] + position*flatData2_U[idx];
-    float vy = (1-position)*flatData1_V[idx] + position*flatData2_V[idx];
+    float *fd1u = getData(currentFrame, 0);
+    float *fd1v = getData(currentFrame, 1);
+    float *fd2u = getData(currentFrame, 2);
+    float *fd2v = getData(currentFrame, 3);
+
+    float vx = (1-position)*fd1u[idx] + position*fd2u[idx];
+    float vy = (1-position)*fd1v[idx] + position*fd2v[idx];
     return Eigen::Vector2f(vx, vy);
+}
+
+float* FluentInterpolator::getData(int frame, int subIdx)
+{
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+    const int framesize = gx*gy;
+    return _data.data() + framesize*((frame*2+subIdx)%file_count);
+}
+
+bool FluentInterpolator::SetTime(double t)
+{
+    //    spdlog::info("FluentInterpolator::SetTime {}", t);
+    this->currentTime = t;
+
+    // which file indices to read
+    int rawInterval = static_cast<int>(std::floor(currentTime / interval_size));
+
+    // Wrap around using modulo operation
+
+    const int frameFrom = (rawInterval % file_count);
+    const int frameTo = ((rawInterval+1) % file_count);
+
+    bool frameChanged = false;
+    if(frameFrom != currentFrame)
+    {
+        frameChanged = true;
+        currentFrame = frameFrom;
+    }
+
+    // Compute position within the interval (0 to 1)
+    double intervalStartTime = rawInterval * interval_size;
+    position = (currentTime - intervalStartTime) / interval_size; // 0 to 1 range
+
+    return frameChanged;
 }
 
