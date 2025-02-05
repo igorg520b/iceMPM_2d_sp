@@ -82,7 +82,7 @@ const std::array<std::vector<Eigen::Vector3f>, static_cast<size_t>(ColorMap::Pal
         {0xee/255.,0x6e/255.,0xba/255.},
         {0x94/255.,0x00/255.,0x58/255.}
     },
-
+//P2
                             {{0xed/255.,0xdf/255.,0xd6/255.},
                             {0xc6/255.,0xb8/255.,0xaf/255.},
                             {0x9c/255.,0x8b/255.,0x7b/255.},
@@ -90,6 +90,16 @@ const std::array<std::vector<Eigen::Vector3f>, static_cast<size_t>(ColorMap::Pal
                             {0x52/255.,0x40/255.,0x32/255.},
                              {0x2d/255.,0x1e/255.,0x17/255.}},
 
+                            //Pressure
+                            {    {0x03/255.,0x36/255.,0xb3/255.},
+                             {0x27/255.,0x5d/255.,0x96/255.},    //3
+                             {0x80/255.,0xac/255.,0xd9/255.},    //1
+
+                             {0x77/255.,0x9a/255.,0xae/255.},  // crushed 9
+
+                             {0xdf/255.,0xa7/255.,0xac/255.},             // -1
+                             {0xc2/255.,0x66/255.,0x6e/255.},             // -2
+                             {0xb7/255.,0x24/255.,0x30/255.}},
     // VIRIDIS colormap (9 colors)
     {
         {0.267, 0.004, 0.329}, {0.283, 0.141, 0.458}, {0.254, 0.265, 0.530},

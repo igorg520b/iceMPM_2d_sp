@@ -168,7 +168,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
 
 void icy::VisualRepresentation::SynchronizeValues()
 {
-    spdlog::info("SynchronizeValues()");
+    //spdlog::info("SynchronizeValues()");
     const int &_ox = model->prms.ModeledRegionOffsetX;
     const int &_oy = model->prms.ModeledRegionOffsetY;
 
@@ -283,7 +283,7 @@ void icy::VisualRepresentation::SynchronizeValues()
                 {
                     // water color
                     Eigen::Vector2f v = model->fluent_interpolatror.getInterpolation(i,j);
-                    float val = (v.norm())/0.2;
+                    float val = (v.norm())/0.4;
                     //float val = (sin(i/100.)+1.)/2.;
                     std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::P2, val);
                     unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
@@ -345,12 +345,26 @@ void icy::VisualRepresentation::SynchronizeValues()
     else if(VisualizingVariable == VisOpt::P)
     {
         scalarBar->VisibilityOn();
+        points_mapper->ScalarVisibilityOn();
+        points_mapper->SetColorModeToDirectScalars();
         for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            float value = s->getValue(SimParams::idx_P);
-            if(s->getDisabledStatus()) value = -2*range;
+            double val = s->getValue(SimParams::idx_P);
+            double value = (val)/range+0.5;
+            double alpha = abs(val)/range;
+
+            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
+            uint32_t rgb = model->gpu.point_colors_rgb[pt_idx];
+            std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, value);
+            std::array<uint8_t, 3> c2 = colormap.mergeColors(rgb, c, alpha);
+
+            for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(i*3+k), c2[k]);
         }
+        points_polydata->GetPointData()->SetActiveScalars("pts_colors");
+        pts_colors->Modified();
+        //        points_polydata->Modified();
+        points_filter->Update();
     }
     else if(VisualizingVariable == VisOpt::Q)
     {

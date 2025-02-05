@@ -207,20 +207,20 @@ void GPU_Partition::update_wind_velocity_grid(float data[WindInterpolator::alloc
     if(err != cudaSuccess) throw std::runtime_error("update_wind_velocity_grid");
 }
 
-void GPU_Partition::update_water_flow_grid(float *U)
+void GPU_Partition::update_water_flow_grid(float *v1u, float *v1v, float *v2u, float *v2v)
 {
     cudaSetDevice(Device);
     const int &gx = prms->GridXTotal;
     const int &gy = prms->GridYTotal;
 
     size_t data_size = gx*gy*sizeof(float);
-    cudaError_t err = cudaMemcpy(grid_water_current, U, data_size, cudaMemcpyHostToDevice);
+    cudaError_t err = cudaMemcpy(grid_water_current, v1u, data_size, cudaMemcpyHostToDevice);
     if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
-    err = cudaMemcpy(grid_water_current+gwcPitch*1, U+data_size*1, data_size, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(grid_water_current+gwcPitch*1, v1v, data_size, cudaMemcpyHostToDevice);
     if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
-    err = cudaMemcpy(grid_water_current+gwcPitch*2, U+data_size*2, data_size, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(grid_water_current+gwcPitch*2, v2u, data_size, cudaMemcpyHostToDevice);
     if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
-    err = cudaMemcpy(grid_water_current+gwcPitch*3, U+data_size*3, data_size, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(grid_water_current+gwcPitch*3, v2v, data_size, cudaMemcpyHostToDevice);
     if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
 }
 
@@ -261,7 +261,8 @@ void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind
     partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(nGridNodes,
                                                                       nGridPitch, grid_array,
                                                                       simulation_time, grid_status_array, vWind,
-                                                                      interpolation_coeff);
+                                                                      interpolation_coeff,
+                                                                      grid_water_current, gwcPitch);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
 }
 

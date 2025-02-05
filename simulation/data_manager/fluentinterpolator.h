@@ -2,9 +2,6 @@
 #define FLUENTINTERPOLATOR_H
 
 #include <vtkNew.h>
-//#include <vtkFLUENTCFFReader.h>
-#include "vtkFLUENTCFFCustomReader.h"
-
 #include <vtkUnstructuredGrid.h>
 #include <vtkDataSetMapper.h>
 #include <vtkActor.h>
@@ -23,54 +20,81 @@
 
 #include <string>
 #include <utility>
+#include <string>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <atomic>
+#include <optional>
 
 #include <Eigen/Core>
 
+#include "vtkFLUENTCFFCustomReader.h"
 #include "parameters_sim.h"
 
 class FluentInterpolator
 {
 public:
     FluentInterpolator();
+    ~FluentInterpolator();
     SimParams *prms;
     bool is_initialized = false;
+    double position;
 
-    void ScanDirectory(std::string geometryFile);
+    void PrepareFlowDataCache(std::string geometryFile);
 
     void TestLoad(double scale, double ox, double oy);
 
     bool SetTime(double t);
 
-    Eigen::Vector2f getInterpolation(int i, int j);
+    Eigen::Vector2f getInterpolation(int i, int j) const;
 
-    float *getData(int frame, int subIdx);
+    float* getFramePtr(int frame, int component);   // frame is either 0 (from) or 1 (to)
 
-
-    int file_count, interval_size;   // files from the scanned directory
-    int currentFrame = -1;
-
-    vtkNew<vtkActor> actor;
+    // for setting up the scale
     vtkNew<vtkActor> actor_original;
+/*
+    vtkNew<vtkActor> actor;
 
     vtkNew<vtkDataSetMapper> mapper;
     vtkNew<vtkUnstructuredGrid> grid;
     vtkNew<vtkLookupTable> lut;
     vtkNew<vtkDataSetMapper> probeMapper;
-
+*/
 private:
-    double currentTime, position;
+    constexpr static std::string_view flow_cache_path = "_data/flow_cache";
+    constexpr static int preloadedFrames = 3;   // 2 current and one extra for fast switching (circular buffer size)
 
+    int file_count, interval_size;   // files from the scanned directory
+    double currentTime;
     std::string geometryFilePrefix;
+    std::string cachedFileName;
+    std::vector<float> _data;
+
+    int currentFrame = -1;
+    int circularBufferIdx = -1; // between 0 and preloadedFrames-1; points to currentFrame
+
+/*
     vtkNew<vtkFLUENTCFFCustomReader> fluentReader;
     vtkNew<vtkTransform> transform;
     vtkNew<vtkTransformFilter> transformFilter;
     vtkNew<vtkCellDataToPointData> filter_cd2pd;
     vtkNew<vtkImageData> imageData;
     vtkNew<vtkProbeFilter> probeFilter;
+*/
 
-    std::vector<float> _data;
+    void ParseDataFrame(int frame, float *U, float *V);
+    void LoadFrame(int frame, int slot);    // from HDF5 into a given slot of _data
+    std::string CachedFileName();
 
-    void LoadDataFrame(int frame, float *U, float *V);
+    // async loading of next frame
+    std::mutex loadMutex;
+    std::condition_variable loadCV;
+    std::atomic<bool> loadInProgress{false};
+    std::optional<std::thread> loadThread;
+
+    // for setting up the scale
+    vtkNew<vtkDataSetMapper> mapper;
 
 };
 

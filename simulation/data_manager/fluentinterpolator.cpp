@@ -11,144 +11,74 @@
 #include <vtkMultiBlockDataSet.h>
 #include <vtkVersion.h>
 
+#include <H5Cpp.h>
 
 namespace fs = std::filesystem;
 
-
-void FluentInterpolator::TestLoad(double scale, double ox, double oy)
+float* FluentInterpolator::getFramePtr(int frame, int component)
 {
-    std::string dataFileName = R"(/home/s2/Documents/vm_shared/fluent4/data2/FFF.1-3-01100.dat.h5)";
-    fluentReader->SetDataFileName(dataFileName.c_str());  // Set the mesh file (.cas.h5)
+    if(currentFrame < 0 || circularBufferIdx < 0)
+        throw std::runtime_error("FluentInterpolator::getFramePtr");
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+    int slot = (circularBufferIdx+frame)%preloadedFrames;
+    return _data.data() + gx*gy*(2*slot+component);
+}
 
-    std::string fileName = R"(/home/s2/Documents/vm_shared/fluent4/data2/FFF.1-3.cas.h5)";
-    fluentReader->SetFileName(fileName.c_str());  // Set the mesh file (.cas.h5)
-    fluentReader->Update(); // Update the reader
+void FluentInterpolator::LoadFrame(int frame, int slot)
+{
+    H5::H5File file(cachedFileName, H5F_ACC_RDONLY);
+    H5::DataSet ds = file.openDataSet("vx_vy");
 
-    vtkUnstructuredGrid* extractedGrid = vtkUnstructuredGrid::SafeDownCast(fluentReader->GetOutput()->GetBlock(0));
-    double bounds[6];
-    extractedGrid->GetBounds(bounds);
-    spdlog::info("bounds x [{}, {}]; y[{}, {}]", bounds[0], bounds[1], bounds[2], bounds[3]);
-    double width = bounds[1]-bounds[0];
-    double height = bounds[3]-bounds[2];
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+    float *ptr = _data.data() + gx*gy*2*slot;
 
-    extractedGrid->GetCellData()->SetActiveScalars("SV_U");
+    hsize_t dims_mem[3] = {2, (hsize_t)gx, (hsize_t)gy};
+    H5::DataSpace memspace(3, dims_mem);
 
+    hsize_t offset[3] = {(hsize_t)frame*2, 0, 0};
+    hsize_t count[3] = {2, (hsize_t)gx, (hsize_t)gy};
 
-    transform->Identity();
-    transform->Scale(scale, scale, scale);  // Scale uniformly
-    transform->Translate(ox, oy, 0.);  // Offset
+    H5::DataSpace dsp = ds.getSpace();
+    dsp.selectHyperslab(H5S_SELECT_SET, count, offset);
 
-    // Apply the transform using vtkTransformFilter
-    transformFilter->SetTransform(transform);
-    transformFilter->SetInputData(extractedGrid);
-    transformFilter->Update();
-
-    filter_cd2pd->SetInputData(transformFilter->GetUnstructuredGridOutput());
-    filter_cd2pd->Update();
-
-    mapper->SetInputConnection(filter_cd2pd->GetOutputPort());
-//    mapper->ScalarVisibilityOn();
-    mapper->ScalarVisibilityOff();
-    mapper->SetLookupTable(lut);
-    mapper->SetScalarRange(-0.1, 0.1);
-
-    actor_original->SetMapper(mapper);
-    actor_original->GetProperty()->SetRepresentationToWireframe();
-    actor_original->GetProperty()->LightingOff();
-    actor_original->PickableOff();
-    actor_original->GetProperty()->SetColor(0.7,0.1,0.1);
-
-
-/*
-    // transfer to imageData via probeFilter
-    const int gx = 1000;
-    const int gy = (int)(gx*height/width);
-    const double spacing = width/(gx-1);
-
-    imageData->SetDimensions(gx, gy, 1);
-    imageData->SetSpacing(spacing, spacing, 1.0); // Adjust spacing as needed
-    imageData->SetOrigin(bounds[0], bounds[2], 0.0); // Adjust origin as needed
-
-    probeFilter->SetInputData(imageData); // Set the 2D structured grid as input
-    probeFilter->SetSourceData(filter_cd2pd->GetOutput()); // Set the unstructured grid as source
-    probeFilter->Update();
-
-    vtkImageData* probedData = vtkImageData::SafeDownCast(probeFilter->GetOutput());
-
-    // transfer the image into array
-
-    vtkDoubleArray* dataArray = vtkDoubleArray::SafeDownCast(probedData->GetPointData()->GetScalars("SV_U"));
-    if (!dataArray) {
-        spdlog::error("Failed to extract SV_U from probedData");
-        throw std::runtime_error("Failed to extract SV_U from probedData");
-    }
-
-    flatData_U.resize(gx*gy);
-    for (int idx = 0; idx < gx * gy; ++idx) flatData_U[idx] = dataArray->GetValue(idx);
-
-    flatData_V.resize(gx*gy);
-    dataArray = vtkDoubleArray::SafeDownCast(probedData->GetPointData()->GetScalars("SV_V"));
-    if (!dataArray) {
-        spdlog::error("Failed to extract SV_V from probedData");
-        throw std::runtime_error("Failed to extract SV_V from probedData");
-    }
-    for (int idx = 0; idx < gx * gy; ++idx) flatData_V[idx] = dataArray->GetValue(idx);
-
-
-    imageData->AllocateScalars(VTK_FLOAT,1);
-    float* data = static_cast<float*>(imageData->GetScalarPointer());
-    for (int idx = 0; idx < gx * gy; ++idx) data[idx] = flatData_V[idx];
-    imageData->Modified();
-
-//    probeMapper->SetInputData(probedData);
-    probeMapper->SetInputData(imageData);
-    probeMapper->SetScalarRange(-0.1, 0.1);
-    probeMapper->ScalarVisibilityOn();
-    probeMapper->SetLookupTable(lut);
-
-    actor->SetMapper(probeMapper);
-
-
-//    actor->SetMapper(mapper);
-    actor->GetProperty()->SetEdgeVisibility(true);
-    actor->GetProperty()->SetEdgeColor(0.2,0.2,0.2);
-    actor->GetProperty()->LightingOff();
-    actor->PickableOff();
-    actor->GetProperty()->SetColor(0.1,0.1,0.1);
-
-
-
-    //    vtkMultiBlockDataSet* set = fluentReader->GetOutput();
-    //    spdlog::info("FluentInterpolator::LoadDataFrame; dataFile {}, blocks {}; cells {}; points {}", fileName,
-    //                 set->GetNumberOfBlocks(), set->GetNumberOfCells(), set->GetNumberOfPoints());
-
-    //    vtkCellData* cellData = extractedGrid->GetCellData();
-    //    if (!cellData || cellData->GetNumberOfArrays() == 0) {
-    //        std::cerr << "Error: No per-cell scalar data found!" << std::endl;
-    //        throw std::runtime_error("celldata");
-    //    }
-    //   spdlog::info("celldata arrays {}", cellData->GetNumberOfArrays());
-*/
+    ds.read(ptr, H5::PredType::NATIVE_FLOAT, memspace, dsp);
 }
 
 
-
-FluentInterpolator::FluentInterpolator()
-{
-    spdlog::info("FluentInterpolator::FluentInterpolator()");
-    std::cout << "VTK Version: " << VTK_MAJOR_VERSION << "."
-              << VTK_MINOR_VERSION << "."
-              << VTK_BUILD_VERSION << std::endl;
-
-}
-
-
-void FluentInterpolator::ScanDirectory(std::string fileName)
+void FluentInterpolator::PrepareFlowDataCache(std::string fileName)
 {
     fs::path dirPath = fs::path(fileName).parent_path();
     std::string baseName = fs::path(fileName).stem().string(); // Extract "fileName.cas"
     baseName = baseName.substr(0, baseName.size() - 4); // Remove ".cas"
     geometryFilePrefix = dirPath.string() + "/" + baseName;
+
+    currentFrame = -1;
+    circularBufferIdx = -1;
+
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+    _data.resize(gx*gy*2*preloadedFrames); // storage to hold preloaded frames
+
+    // check if cached data is available
+    cachedFileName = CachedFileName();
+    if(fs::exists(cachedFileName))
+    {
+        {
+            H5::H5File file(cachedFileName, H5F_ACC_RDONLY);
+            H5::DataSet ds = file.openDataSet("vx_vy");
+            ds.openAttribute("file_count").read(H5::PredType::NATIVE_INT, &file_count);
+            ds.openAttribute("interval_size").read(H5::PredType::NATIVE_INT, &interval_size);
+        }
+
+        SetTime(0);
+        is_initialized = true;
+        return;
+    }
+    spdlog::info("preparing cache file {}", cachedFileName);
+
+    // generate and save HDF5 file with rasterized flow data
 
     std::regex filePattern(baseName + "-(\\d{5})\\.dat\\.h5");
 
@@ -170,22 +100,38 @@ void FluentInterpolator::ScanDirectory(std::string fileName)
 
     std::sort(numbers.begin(), numbers.end());
     interval_size = (numbers.size() > 1) ? (numbers[1] - numbers[0]) : 0;
-    file_count = static_cast<int>(numbers.size());
+    file_count = static_cast<int>(numbers.size())-1;
 
 
-    // load all these into memory
-    const int &gx = prms->GridXTotal;
-    const int &gy = prms->GridYTotal;
+    // prepare the cache file
+    H5::H5File file(cachedFileName, H5F_ACC_TRUNC);
 
-    _data.resize(file_count*gx*gy*2);
+    hsize_t dims[3] = {(hsize_t)file_count*2, (hsize_t)gx, (hsize_t)gy};
+    H5::DataSpace dataspace(3, dims);
+    H5::DataSet dataset = file.createDataSet("vx_vy", H5::PredType::NATIVE_FLOAT, dataspace);
 
+    H5::DataSpace att_dspace(H5S_SCALAR);
+    dataset.createAttribute("gx", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &gx);
+    dataset.createAttribute("gy", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &gy);
+    dataset.createAttribute("file_count", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &file_count);
+    dataset.createAttribute("interval_size", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &interval_size);
+
+    hsize_t dims_mem[3] = {2, (hsize_t)gx, (hsize_t)gy};
+    H5::DataSpace memspace(3, dims_mem);
+
+    // rasterize frames one by one into HDF5
     for(int i=0;i<file_count;i++)
     {
+        size_t frameSize = gx*gy;
         spdlog::info("FluentInterpolator::ScanDirectory: loading frame {}",i);
-        LoadDataFrame(i, getData(i,0), getData(i,1));
+        ParseDataFrame(i+1, _data.data(), _data.data()+frameSize);
+
+        // define hyperslab
+        hsize_t offset[3] = {(hsize_t)i*2, 0, 0};
+        hsize_t count[3] = {2, (hsize_t)gx, (hsize_t)gy};
+        dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+        dataset.write(_data.data(),H5::PredType::NATIVE_FLOAT,memspace,dataspace);
     }
-
-
 
     spdlog::info("FluentInterpolator::ScanDirectory: files {}; interval {}; prefix {}",
                  file_count, interval_size, geometryFilePrefix);
@@ -197,7 +143,7 @@ void FluentInterpolator::ScanDirectory(std::string fileName)
 
 
 
-void FluentInterpolator::LoadDataFrame(int frame, float *U, float *V)
+void FluentInterpolator::ParseDataFrame(int frame, float *U, float *V)
 {
     const int &gx = prms->GridXTotal;
     const int &gy = prms->GridYTotal;
@@ -294,37 +240,31 @@ void FluentInterpolator::LoadDataFrame(int frame, float *U, float *V)
 }
 
 
-Eigen::Vector2f FluentInterpolator::getInterpolation(int i, int j)
+Eigen::Vector2f FluentInterpolator::getInterpolation(int i, int j) const
 {
     const int &gx = prms->GridXTotal;
     const int &gy = prms->GridYTotal;
 
-    int idx = j + gy*i;
-    float *fd1u = getData(currentFrame, 0);
-    float *fd1v = getData(currentFrame, 1);
-    float *fd2u = getData(currentFrame, 2);
-    float *fd2v = getData(currentFrame, 3);
+    const int idx = j + gy*i;
+    const float *fd1u = _data.data()+(circularBufferIdx*2+0)*gx*gy;
+    const float *fd1v = _data.data()+(circularBufferIdx*2+1)*gx*gy;
+    const float *fd2u = _data.data()+(((circularBufferIdx+1)%preloadedFrames)*2+0)*gx*gy;
+    const float *fd2v = _data.data()+(((circularBufferIdx+1)%preloadedFrames)*2+1)*gx*gy;
 
-    float vx = (1-position)*fd1u[idx] + position*fd2u[idx];
-    float vy = (1-position)*fd1v[idx] + position*fd2v[idx];
+    const float vx = (1-position)*fd1u[idx] + position*fd2u[idx];
+    const float vy = (1-position)*fd1v[idx] + position*fd2v[idx];
     return Eigen::Vector2f(vx, vy);
 }
 
-float* FluentInterpolator::getData(int frame, int subIdx)
-{
-    const int &gx = prms->GridXTotal;
-    const int &gy = prms->GridYTotal;
-    const int framesize = gx*gy;
-    return _data.data() + framesize*((frame*2+subIdx)%file_count);
-}
 
 bool FluentInterpolator::SetTime(double t)
 {
     //    spdlog::info("FluentInterpolator::SetTime {}", t);
     this->currentTime = t;
+    const double frame_interval = interval_size * prms->FrameTimeInterval;
 
     // which file indices to read
-    int rawInterval = static_cast<int>(std::floor(currentTime / interval_size));
+    int rawInterval = static_cast<int>(std::floor(currentTime / frame_interval));
 
     // Wrap around using modulo operation
 
@@ -332,16 +272,122 @@ bool FluentInterpolator::SetTime(double t)
     const int frameTo = ((rawInterval+1) % file_count);
 
     bool frameChanged = false;
+    if(frameFrom == (currentFrame+1)%file_count)
+    {
+        frameChanged = true;
+        circularBufferIdx = (circularBufferIdx+1)%preloadedFrames;
+        currentFrame = frameFrom;
+
+        // Launch LoadFrame asynchronously, but ensure only one instance runs at a time
+        {
+            std::unique_lock<std::mutex> lock(loadMutex);
+            loadCV.wait(lock, [this] { return !loadInProgress.load(); });
+            loadInProgress = true;
+        }
+
+        if (loadThread && loadThread->joinable()) {
+            loadThread->join();
+        }
+
+        loadThread = std::thread([this, frameFrom]() {
+            spdlog::info("async loading of frame {}",(frameFrom + 2) % file_count);
+            LoadFrame((frameFrom + 2) % file_count, (circularBufferIdx + 2) % preloadedFrames);
+
+            {
+                std::lock_guard<std::mutex> lock(loadMutex);
+                loadInProgress = false;
+            }
+            loadCV.notify_one();
+        });
+
+//        LoadFrame((currentFrame+2)%file_count, (circularBufferIdx+2)%preloadedFrames); // needs to be invoked asynchronously
+    }
     if(frameFrom != currentFrame)
     {
         frameChanged = true;
         currentFrame = frameFrom;
+        circularBufferIdx = 0;
+        // reload circular buffer entirely
+        spdlog::info("complete reloading of frame buffer {}",currentFrame);
+        for(int i=0;i<preloadedFrames;i++) LoadFrame((currentFrame+i)%file_count, i);
+    }
+    else
+    {
+        // no change in the interval
     }
 
     // Compute position within the interval (0 to 1)
-    double intervalStartTime = rawInterval * interval_size;
-    position = (currentTime - intervalStartTime) / interval_size; // 0 to 1 range
+    double intervalStartTime = rawInterval * frame_interval;
+    position = (currentTime - intervalStartTime) / frame_interval; // 0 to 1 range
 
     return frameChanged;
 }
+
+
+
+
+std::string FluentInterpolator::CachedFileName()
+{
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+    const int &ox = prms->ModeledRegionOffsetX;
+    const int &oy = prms->ModeledRegionOffsetY;
+    const int &vgx = prms->InitializationImageSizeX;
+    const int &vgy = prms->InitializationImageSizeY;
+    std::string result = fmt::format("{}/flc_{:05}_{:05}_{:05}_{:05}_{:05}_{:05}.h5", flow_cache_path, gx, gy, ox, oy, vgx, vgy);
+    return result;
+}
+
+FluentInterpolator::FluentInterpolator()
+{
+    spdlog::info("FluentInterpolator::FluentInterpolator()");
+    std::cout << "VTK Version: " << VTK_MAJOR_VERSION << "."
+              << VTK_MINOR_VERSION << "."
+              << VTK_BUILD_VERSION << std::endl;
+
+    std::filesystem::path directory_path(flow_cache_path);
+    if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
+}
+
+FluentInterpolator::~FluentInterpolator()
+{
+    if (loadThread && loadThread->joinable()) {
+        loadThread->join();
+    }
+}
+
+void FluentInterpolator::TestLoad(double scale, double ox, double oy)
+{
+    std::string dataFileName = fmt::format("{}-{:05}.dat.h5", geometryFilePrefix, 0);
+    std::string casFileName = fmt::format("{}.cas.h5", geometryFilePrefix);
+
+    vtkNew<vtkFLUENTCFFCustomReader> fluentReader;
+    fluentReader->SetDataFileName(dataFileName.c_str());  // Set the mesh file (.cas.h5)
+    fluentReader->SetFileName(casFileName.c_str());  // Set the mesh file (.cas.h5)
+    fluentReader->Update(); // Update the reader
+
+    vtkUnstructuredGrid* extractedGrid = vtkUnstructuredGrid::SafeDownCast(fluentReader->GetOutput()->GetBlock(0));
+
+    vtkNew<vtkTransform> transform;
+    vtkNew<vtkTransformFilter> transformFilter;
+
+    transform->Identity();
+    transform->Scale(scale, scale, scale);  // Scale uniformly
+    transform->Translate(ox, oy, 0.);  // Offset
+
+    // Apply the transform using vtkTransformFilter
+    transformFilter->SetTransform(transform);
+    transformFilter->SetInputData(extractedGrid);
+    transformFilter->Update();
+
+
+    mapper->SetInputData(transformFilter->GetUnstructuredGridOutput());
+
+    actor_original->SetMapper(mapper);
+    actor_original->GetProperty()->SetRepresentationToWireframe();
+    actor_original->GetProperty()->LightingOff();
+    actor_original->PickableOff();
+    actor_original->GetProperty()->SetColor(0.7,0.1,0.1);
+}
+
 

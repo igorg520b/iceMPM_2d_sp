@@ -26,7 +26,9 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
                                               t_GridReal *_buffer_grid,
                                               t_PointReal simulation_time, const uint8_t *grid_status,
                                               const GridVector2r vWind,
-                                              const float interpolation_coeff);
+                                              const float interpolation_coeff,
+                                              const float *grid_water_current,
+                                              const size_t gwcPitch);
 
 __global__ void partition_kernel_g2p(const bool recordPQ,
                                      const int pitch_grid,
@@ -84,7 +86,7 @@ struct GPU_Partition
     void transfer_grid_data_to_device(GPU_Implementation5* gpu);
     void update_constants();
     void update_wind_velocity_grid(float data[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4]);
-    void update_water_flow_grid(float *U);
+    void update_water_flow_grid(float *v1u, float *v1v, float *v2u, float *v2v);
 
     void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset);
 

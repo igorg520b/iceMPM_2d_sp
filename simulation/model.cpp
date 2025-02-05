@@ -29,8 +29,11 @@ bool icy::Model::Step()
         gpu.p2g();
 
         if(prms.UseWindData && wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
-        if(prms.UseCurrentData && (fluent_interpolatror.SetTime(simulation_time) || step == 0))
-            gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getData(fluent_interpolatror.currentFrame,0));
+        if(prms.UseCurrentData && fluent_interpolatror.SetTime(simulation_time))
+            gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getFramePtr(0,0),
+                                                          fluent_interpolatror.getFramePtr(0,1),
+                                                          fluent_interpolatror.getFramePtr(1,0),
+                                                          fluent_interpolatror.getFramePtr(1,1));
 
         gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
         const bool isCycleStart = step % prms.UpdateEveryNthStep == 0;
@@ -103,17 +106,6 @@ icy::Model::Model() : frame_ready(false), done(false)
     prms.Reset();
     gpu.model = this;
     GPU_Partition::prms = &this->prms;
-/*
-    float angle = 270;
-    for(int i=0;i<50;i++)
-    {
-        float windVelocity = 15;//(float)i/2.+5
-        wind_data.push_back({i*1000, 0, angle});
-        wind_data.push_back({i*1000+900, windVelocity, angle});
-        angle += 90;
-        if(angle >= 360) angle = 0;
-    }
-*/
     saver_thread = std::thread(&icy::Model::SaveThread, this);
     spdlog::info("Model constructor");
 }
@@ -187,5 +179,9 @@ void icy::Model::Prepare()
     //abortRequested = false;
     gpu.update_constants();
 
-
+    fluent_interpolatror.SetTime(prms.SimulationTime);
+    gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getFramePtr(0,0),
+                                                  fluent_interpolatror.getFramePtr(0,1),
+                                                  fluent_interpolatror.getFramePtr(1,0),
+                                                  fluent_interpolatror.getFramePtr(1,1));
 }

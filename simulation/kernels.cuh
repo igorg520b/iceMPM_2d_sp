@@ -92,7 +92,9 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
                                               t_GridReal *buffer_grid,
                                               t_PointReal simulation_time, const uint8_t *grid_status,
-                                              GridVector2r vWind, const float interpolation_coeff)
+                                              GridVector2r vWind, const float interpolation_coeff_w,
+                                              const float *grid_water_current,
+                                              const size_t gwcPitch)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= nNodes) return;
@@ -126,24 +128,37 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     }
     else
     {
-//        const t_GridReal air_coeff = 1e-3 * gprms.InitialTimeStep;
-//        const t_GridReal water_coeff = 1e-4 * gprms.InitialTimeStep;
+        //grid_water_current
 
-//        GridVector2r waterVelVector(0,0);
+        const float v1u = grid_water_current[idx];
+        const float v1v = grid_water_current[idx + gwcPitch*1];
+        const float v2u = grid_water_current[idx + gwcPitch*2];
+        const float v2v = grid_water_current[idx + gwcPitch*3];
+
+        const float _vx = v1u*(1-interpolation_coeff_w) + v2u*interpolation_coeff_w;
+        const float _vy = v1v*(1-interpolation_coeff_w) + v2v*interpolation_coeff_w;
+        GridVector2r wvel(_vx, _vy);
+
+        wvel *= (11+simulation_time/15000);
+
+        t_GridReal hsq = gprms.cellsize * gprms.cellsize;
+        GridVector2r vrel = wvel - velocity;
+        const t_GridReal Density_coeff_A = gprms.currentDragCoeff_waterDensity * hsq;
+        const t_GridReal dragForce = vrel.squaredNorm() * Density_coeff_A;
+        vrel.normalize();
+        vrel *= dragForce * dt / mass;
+        velocity += vrel;
+
+
+
+        //interpolation_coeff_w
+
+//        float lat = gprms.LatMin + (gprms.LatMax-gprms.LatMin)*(float)gi.y()/(float)gprms.GridY;
+//        float lon = gprms.LonMin + (gprms.LonMax-gprms.LonMin)*(float)gi.x()/(float)gprms.GridXTotal;
+//        vWind = get_wind_vector(lat, lon, interpolation_coeff);
+
+
 /*
-        float lat = gprms.LatMin + (gprms.LatMax-gprms.LatMin)*(float)gi.y()/(float)gprms.GridY;
-        float lon = gprms.LonMin + (gprms.LonMax-gprms.LonMin)*(float)gi.x()/(float)gprms.GridXTotal;
-
-        if(gprms.use_GFS_wind)
-        {
-            vWind = get_wind_vector(lat, lon, interpolation_coeff);
-        }
-        else
-        {
-            vWind *= intensity;
-        }
-*/
-
         // wind drag
         t_GridReal hsq = gprms.cellsize * gprms.cellsize;
         GridVector2r vrel = vWind - velocity;
@@ -152,20 +167,12 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         vrel.normalize();
         vrel *= dragForce * dt / mass;
         velocity += vrel;
+*/
 
-        // water drag
-//        t_GridReal coeff_relax = 1e-4;
-//        velocity *= (1.0 - coeff_relax*gprms.InitialTimeStep);
-
-//        const t_GridReal waterDragForce = velocity.squaredNorm() * gprms.waterDrag_waterDensity * hsq;
-//        t_GridReal dv = waterDragForce*dt/mass;
-//        if(dv > velocity.norm()) dv = velocity.norm()/2;
-//        vrel = velocity.normalized();
-//        velocity -= vrel * (waterDragForce*dt/mass);
     }
 
     // write the updated grid velocity back to memory
-    if(velocity.squaredNorm() > vmax_squared) velocity = velocity.normalized()*vmax;
+    if(velocity.squaredNorm() > vmax*vmax) velocity = velocity.normalized()*vmax;
     buffer_grid[1*pitch_grid + idx] = (t_GridReal)velocity[0];
     buffer_grid[2*pitch_grid + idx] = (t_GridReal)velocity[1];
 }

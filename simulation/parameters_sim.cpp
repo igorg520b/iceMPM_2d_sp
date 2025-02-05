@@ -44,6 +44,7 @@ void SimParams::Reset()
     FluentDataScale = 3;
     FluentDataOffsetX = 0;
     FluentDataOffsetY = 0;
+    FrameTimeInterval = 1.0;
 
     ComputeLame();
     ComputeHelperVariables();
@@ -93,6 +94,7 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("FluentDataScale")) FluentDataScale = doc["FluentDataScale"].GetDouble();
     if(doc.HasMember("FluentDataOffsetX")) FluentDataOffsetX = doc["FluentDataOffsetX"].GetDouble();
     if(doc.HasMember("FluentDataOffsetY")) FluentDataOffsetY = doc["FluentDataOffsetY"].GetDouble();
+    if(doc.HasMember("FrameTimeInterval")) FrameTimeInterval = doc["FrameTimeInterval"].GetDouble();
 
     std::map<std::string,std::string> result;
 
@@ -153,7 +155,7 @@ void SimParams::ComputeHelperVariables()
     cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
     Dp_inv = 4./(cellsize*cellsize);
     dt_vol_Dpinv = InitialTimeStep*ParticleVolume*Dp_inv;
-    vmax = 0.5*cellsize/InitialTimeStep;
+    vmax = 0.25*cellsize/InitialTimeStep;
     vmax_squared = vmax*vmax;
 
     ComputeLame();

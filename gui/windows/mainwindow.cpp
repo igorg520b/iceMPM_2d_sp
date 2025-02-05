@@ -107,7 +107,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->toolBar->addWidget(slider1);
     slider1->setTracking(true);
     slider1->setMinimum(0);
-    slider1->setMaximum(1000);
+    slider1->setMaximum(10000);
     connect(slider1, SIGNAL(valueChanged(int)), this, SLOT(sliderValueChanged(int)));
 
 
@@ -418,7 +418,7 @@ void MainWindow::LoadParameterFile(QString qFileName)
     if(additionalFiles.count("InputCurrentData"))
     {
         model.fluent_interpolatror.prms = &model.prms;
-        model.fluent_interpolatror.ScanDirectory(additionalFiles["InputCurrentData"]);
+        model.fluent_interpolatror.PrepareFlowDataCache(additionalFiles["InputCurrentData"]);
     }
 
     representation.SynchronizeTopology();

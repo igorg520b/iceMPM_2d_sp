@@ -36,7 +36,6 @@ void BackgroundWorker::Finalize()
 
 void BackgroundWorker::run()
 {
-    controller->Prepare();
     while(!kill)
     {
         if (timeToPause)

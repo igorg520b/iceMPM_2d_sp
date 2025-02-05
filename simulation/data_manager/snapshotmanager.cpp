@@ -238,7 +238,6 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     model->gpu.allocate_arrays();
     model->gpu.transfer_to_device();
 
-    model->Prepare();
     spdlog::info("PreparePointsAndSetupGrid done\n");
 }
 
@@ -538,12 +537,6 @@ std::string icy::SnapshotManager::prepare_file_name(int gx, int gy)
 
 std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3f& rgb)
 {
-//    if(rgb.x() > 0.95 && rgb.y() < 0.05 && rgb.z() < 0.05) return {-1, 0.f}; // land
-//    if(rgb.x() >= 0xca/255. && rgb.y() >= 0xca/255. && rgb.z() >= 0xca/255.) return {2, 0.f}; // intact ice
-//    if(rgb.x() >= 0xcd/255. && rgb.y() >= 0xd5/255. && rgb.z() >= 0xd6/255.) return {2, 0.f}; // intact ice
-
-
-
     // check if open water
     float minDist = std::numeric_limits<float>::max();
     int bestInterval = -1;
@@ -765,8 +758,7 @@ void icy::SnapshotManager::generate_and_save(int gx, int gy, float points_per_ce
     H5::DataSet dataset = file.createDataSet("coords", H5::PredType::NATIVE_FLOAT, dataspace_pts);
     dataset.write(buffer.data(), H5::PredType::NATIVE_FLOAT);
 
-    hsize_t att_dim = 1;
-    H5::DataSpace att_dspace(1, &att_dim);
+    H5::DataSpace att_dspace(H5S_SCALAR);
     dataset.createAttribute("gx", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &gx);
     dataset.createAttribute("gy", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &gy);
     file.close();
