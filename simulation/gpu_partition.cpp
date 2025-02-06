@@ -213,6 +213,7 @@ void GPU_Partition::update_water_flow_grid(float *v1u, float *v1v, float *v2u, f
     const int &gx = prms->GridXTotal;
     const int &gy = prms->GridYTotal;
 
+    cudaDeviceSynchronize();
     size_t data_size = gx*gy*sizeof(float);
     cudaError_t err = cudaMemcpy(grid_water_current, v1u, data_size, cudaMemcpyHostToDevice);
     if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");

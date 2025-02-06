@@ -17,7 +17,7 @@ bool icy::Model::Step()
     const float pp = 1000;
     const double st = prms.SimulationTime;
     std::pair<float, float> spd_and_angle = {
-                                             10+(30+st/pp)*sin(SimParams::pi * st/pp),
+                                             10+(20+st/pp)*sin(SimParams::pi * st/pp),
                                              370+10*sin(SimParams::pi * st/(10*60.))};
     double simulation_time;
     do
@@ -92,6 +92,8 @@ bool icy::Model::Step()
 
 icy::Model::Model() : frame_ready(false), done(false)
 {
+    fluent_interpolatror.gpu = &gpu;
+    fluent_interpolatror.prms = &prms;
     snapshot.model = this;
     prms.SimulationStep = 0;
     prms.SimulationTime = 0;

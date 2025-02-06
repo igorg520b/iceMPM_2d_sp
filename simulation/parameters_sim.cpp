@@ -14,7 +14,8 @@ void SimParams::Reset()
 
     nPtsInitial = 0;
     windDragCoeff_airDensity = 0.0025 * 1.2;
-    currentDragCoeff_waterDensity = 0.0025 * 1025;
+//    currentDragCoeff_waterDensity = 0.0025 * 1025;
+    currentDragCoeff_waterDensity = 0.15 * 1025;
 
     InitialTimeStep = 3.e-5;
     YoungsModulus = 5.e8;
@@ -96,6 +97,13 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("FluentDataOffsetY")) FluentDataOffsetY = doc["FluentDataOffsetY"].GetDouble();
     if(doc.HasMember("FrameTimeInterval")) FrameTimeInterval = doc["FrameTimeInterval"].GetDouble();
 
+    if(doc.HasMember("currentDragCoeff_waterDensity")) currentDragCoeff_waterDensity = doc["currentDragCoeff_waterDensity"].GetDouble();
+
+
+
+    if(doc.HasMember("SaveSnapshots")) SaveSnapshots = doc["SaveSnapshots"].GetBool();
+
+
     std::map<std::string,std::string> result;
 
     if(!doc.HasMember("InputPNG") || !doc.HasMember("ModeledRegion"))
@@ -155,7 +163,7 @@ void SimParams::ComputeHelperVariables()
     cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
     Dp_inv = 4./(cellsize*cellsize);
     dt_vol_Dpinv = InitialTimeStep*ParticleVolume*Dp_inv;
-    vmax = 0.25*cellsize/InitialTimeStep;
+    vmax = 0.5*cellsize/InitialTimeStep;
     vmax_squared = vmax*vmax;
 
     ComputeLame();
@@ -181,6 +189,7 @@ void SimParams::SaveParametersAsHDF5Attributes(H5::DataSet &dataset)
 
     dataset.createAttribute("UseWindData", H5::PredType::NATIVE_HBOOL, att_dspace).write(H5::PredType::NATIVE_HBOOL, &UseWindData);
     dataset.createAttribute("UseCurrentData", H5::PredType::NATIVE_HBOOL, att_dspace).write(H5::PredType::NATIVE_HBOOL, &UseCurrentData);
+    dataset.createAttribute("SaveSnapshots", H5::PredType::NATIVE_HBOOL, att_dspace).write(H5::PredType::NATIVE_HBOOL, &SaveSnapshots);
 
     // parameters
     dataset.createAttribute("windDragCoeff_airDensity", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &windDragCoeff_airDensity);
@@ -205,6 +214,9 @@ void SimParams::SaveParametersAsHDF5Attributes(H5::DataSet &dataset)
     dataset.createAttribute("ModeledRegionOffsetY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &ModeledRegionOffsetY);
     dataset.createAttribute("InitializationImageSizeX", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &InitializationImageSizeX);
     dataset.createAttribute("InitializationImageSizeY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &InitializationImageSizeY);
+
+    // flow render / interpolator
+    dataset.createAttribute("FrameTimeInterval", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &FrameTimeInterval);
 }
 
 void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset)
@@ -221,6 +233,7 @@ void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset)
 
     dataset.openAttribute("UseWindData").read(H5::PredType::NATIVE_HBOOL, &UseWindData);
     dataset.openAttribute("UseCurrentData").read(H5::PredType::NATIVE_HBOOL, &UseCurrentData);
+    dataset.openAttribute("SaveSnapshots").read(H5::PredType::NATIVE_HBOOL, &SaveSnapshots);
 
     // parameters
     dataset.openAttribute("windDragCoeff_airDensity").read(H5::PredType::NATIVE_DOUBLE, &windDragCoeff_airDensity);
@@ -237,7 +250,6 @@ void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset)
     dataset.openAttribute("DP_threshold_p").read(H5::PredType::NATIVE_DOUBLE, &DP_threshold_p);
     dataset.openAttribute("ParticleVolume").read(H5::PredType::NATIVE_DOUBLE, &ParticleVolume);
 
-
     // grid
     dataset.openAttribute("cellsize").read(H5::PredType::NATIVE_DOUBLE, &cellsize);
     dataset.openAttribute("GridXTotal").read(H5::PredType::NATIVE_INT, &GridXTotal);
@@ -247,6 +259,9 @@ void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset)
     dataset.openAttribute("ModeledRegionOffsetY").read(H5::PredType::NATIVE_INT, &ModeledRegionOffsetY);
     dataset.openAttribute("InitializationImageSizeX").read(H5::PredType::NATIVE_INT, &InitializationImageSizeX);
     dataset.openAttribute("InitializationImageSizeY").read(H5::PredType::NATIVE_INT, &InitializationImageSizeY);
+
+    // flow render / interpolator
+    dataset.openAttribute("FrameTimeInterval").read(H5::PredType::NATIVE_DOUBLE, &FrameTimeInterval);
 
     tpb_P2G = 256;
     tpb_Upd = 512;

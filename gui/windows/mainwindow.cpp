@@ -417,7 +417,6 @@ void MainWindow::LoadParameterFile(QString qFileName)
 
     if(additionalFiles.count("InputCurrentData"))
     {
-        model.fluent_interpolatror.prms = &model.prms;
         model.fluent_interpolatror.PrepareFlowDataCache(additionalFiles["InputCurrentData"]);
     }
 

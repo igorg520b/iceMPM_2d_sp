@@ -132,16 +132,6 @@ void GPU_Implementation5::allocate_host_arrays()
     grid_status_buffer.resize(modeled_grid_total);
     original_image_colors_rgb.resize(3*initial_image_total);
 
-    cudaFreeHost(grid_water_current_velocities);
-    const size_t allocation_size = sizeof(float)*modeled_grid_total*4;  // (2 velocity componets x 2 frames)
-    cudaError_t err = cudaMallocHost(&grid_water_current_velocities, allocation_size);
-    if(err != cudaSuccess)
-    {
-        const char *description = cudaGetErrorString(err);
-        spdlog::critical("allocating grid_water_current_velocities of size {}: {}",allocation_size,description);
-        throw std::runtime_error("allocating host buffer for grid water current velocities");
-    }
-    memset(grid_water_current_velocities, 0, allocation_size);
     spdlog::info("GPU_Implementation5::allocate_host_arrays() completed");
 }
 

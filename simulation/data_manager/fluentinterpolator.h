@@ -31,6 +31,7 @@
 
 #include "vtkFLUENTCFFCustomReader.h"
 #include "parameters_sim.h"
+#include "gpu_implementation5.h"
 
 class FluentInterpolator
 {
@@ -38,6 +39,7 @@ public:
     FluentInterpolator();
     ~FluentInterpolator();
     SimParams *prms;
+    GPU_Implementation5 *gpu;
     bool is_initialized = false;
     double position;
 
@@ -51,16 +53,11 @@ public:
 
     float* getFramePtr(int frame, int component);   // frame is either 0 (from) or 1 (to)
 
+
+    std::string cachedFileName;
+
     // for setting up the scale
     vtkNew<vtkActor> actor_original;
-/*
-    vtkNew<vtkActor> actor;
-
-    vtkNew<vtkDataSetMapper> mapper;
-    vtkNew<vtkUnstructuredGrid> grid;
-    vtkNew<vtkLookupTable> lut;
-    vtkNew<vtkDataSetMapper> probeMapper;
-*/
 private:
     constexpr static std::string_view flow_cache_path = "_data/flow_cache";
     constexpr static int preloadedFrames = 3;   // 2 current and one extra for fast switching (circular buffer size)
@@ -68,24 +65,15 @@ private:
     int file_count, interval_size;   // files from the scanned directory
     double currentTime;
     std::string geometryFilePrefix;
-    std::string cachedFileName;
     std::vector<float> _data;
 
     int currentFrame = -1;
     int circularBufferIdx = -1; // between 0 and preloadedFrames-1; points to currentFrame
 
-/*
-    vtkNew<vtkFLUENTCFFCustomReader> fluentReader;
-    vtkNew<vtkTransform> transform;
-    vtkNew<vtkTransformFilter> transformFilter;
-    vtkNew<vtkCellDataToPointData> filter_cd2pd;
-    vtkNew<vtkImageData> imageData;
-    vtkNew<vtkProbeFilter> probeFilter;
-*/
-
     void ParseDataFrame(int frame, float *U, float *V);
     void LoadFrame(int frame, int slot);    // from HDF5 into a given slot of _data
     std::string CachedFileName();
+    void applyDiffusion(float* V, int gx, int gy, float D, float dt, int steps);
 
     // async loading of next frame
     std::mutex loadMutex;

@@ -223,6 +223,7 @@ void FluentInterpolator::ParseDataFrame(int frame, float *U, float *V)
             int idx1 = j + gy*i;
             int idx2 = (ox+i) + vgx * (oy+j);
             V[idx1] = dataArray->GetValue(idx2);
+            if(gpu->grid_status_buffer[idx1]==0) V[idx1]=0;
         }
 
     dataArray = vtkDoubleArray::SafeDownCast(probedData->GetPointData()->GetScalars("SV_U"));
@@ -236,7 +237,12 @@ void FluentInterpolator::ParseDataFrame(int frame, float *U, float *V)
             int idx1 = j + gy*i;
             int idx2 = (ox+i) + vgx * (oy+j);
             U[idx1] = dataArray->GetValue(idx2);
+            if(gpu->grid_status_buffer[idx1]==0) U[idx1]=0;
         }
+
+    // smooth the data
+    applyDiffusion(V, gx, gy, 0.1, 1.0, 50);
+    applyDiffusion(U, gx, gy, 0.1, 1.0, 50);
 }
 
 
@@ -390,4 +396,41 @@ void FluentInterpolator::TestLoad(double scale, double ox, double oy)
     actor_original->GetProperty()->SetColor(0.7,0.1,0.1);
 }
 
+void FluentInterpolator::applyDiffusion(float* V, int gx, int gy, float D, float dt, int steps) {
+    // Create a temporary array to store the updated values
+    std::vector<float> temp(gx * gy, 0.0f);
 
+    // Loop over the number of diffusion steps
+    for (int step = 0; step < steps; step++) {
+        // Apply diffusion to each grid point
+        for (int i = 0; i < gx; i++) {
+            for (int j = 0; j < gy; j++) {
+                int idx = j + gy * i;
+
+                // Get neighboring indices (with boundary checks)
+                int i_prev = (i > 0) ? i - 1 : i;
+                int i_next = (i < gx - 1) ? i + 1 : i;
+                int j_prev = (j > 0) ? j - 1 : j;
+                int j_next = (j < gy - 1) ? j + 1 : j;
+
+                // Compute second derivatives using finite differences
+                float d2u_dx2 = V[j + gy * i_prev] - 2 * V[idx] + V[j + gy * i_next];
+                float d2u_dy2 = V[j_prev + gy * i] - 2 * V[idx] + V[j_next + gy * i];
+
+                // Update the value using the diffusion equation
+                temp[idx] = V[idx] + D * dt * (d2u_dx2 + d2u_dy2);
+            }
+        }
+
+        // Copy updated values back to the original array
+        std::copy(temp.begin(), temp.end(), V);
+        for (int i = 0; i < gx; i++) {
+            for (int j = 0; j < gy; j++) {
+                int idx = j + gy * i;
+                if(gpu->grid_status_buffer[idx]==0) V[idx]=0;
+            }
+        }
+
+
+    }
+}

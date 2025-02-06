@@ -138,17 +138,30 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         const float _vx = v1u*(1-interpolation_coeff_w) + v2u*interpolation_coeff_w;
         const float _vy = v1v*(1-interpolation_coeff_w) + v2v*interpolation_coeff_w;
         GridVector2r wvel(_vx, _vy);
+//        wvel *= 100;
 
-        wvel *= (11+simulation_time/15000);
+//        wvel *= (13+min(simulation_time/20000, 2.));
+        wvel *= (1+min(simulation_time/86400, 2.));
+
+
+        // quadratic term
 
         t_GridReal hsq = gprms.cellsize * gprms.cellsize;
         GridVector2r vrel = wvel - velocity;
         const t_GridReal Density_coeff_A = gprms.currentDragCoeff_waterDensity * hsq;
-        const t_GridReal dragForce = vrel.squaredNorm() * Density_coeff_A;
+        t_GridReal dragForce = vrel.squaredNorm() * Density_coeff_A;
         vrel.normalize();
         vrel *= dragForce * dt / mass;
-        velocity += vrel;
 
+        if(vrel.norm() > wvel.norm()*20) vrel = vrel.normalized()*wvel.norm()*20;
+
+        const double coeff2 = 0.1;
+        velocity = (1-coeff2)*velocity + coeff2*(velocity+vrel);
+
+
+        // linear term
+        const double coeff = 0.00001;
+        velocity = (1-coeff)*velocity + coeff*wvel;
 
 
         //interpolation_coeff_w
@@ -158,16 +171,17 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 //        vWind = get_wind_vector(lat, lon, interpolation_coeff);
 
 
-/*
+
         // wind drag
-        t_GridReal hsq = gprms.cellsize * gprms.cellsize;
-        GridVector2r vrel = vWind - velocity;
+        //t_GridReal hsq = gprms.cellsize * gprms.cellsize;
+        vWind *= 10 * wvel.norm();
+        vrel = vWind - velocity;
         const t_GridReal airDensity_coeff_A = gprms.windDragCoeff_airDensity * hsq;
-        t_GridReal dragForce = vrel.squaredNorm() * airDensity_coeff_A;
+        dragForce = vrel.squaredNorm() * airDensity_coeff_A;
         vrel.normalize();
         vrel *= dragForce * dt / mass;
-        velocity += vrel;
-*/
+        velocity = (1-coeff2)*velocity + coeff2*(velocity+vrel);
+
 
     }
 

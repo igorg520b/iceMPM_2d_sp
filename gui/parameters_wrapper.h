@@ -32,6 +32,16 @@ public:
     Q_PROPERTY(int in_UpdateEvery READ getUpdateEveryNthStep NOTIFY propertyChanged)
     int getUpdateEveryNthStep() {return prms->UpdateEveryNthStep;}
 
+    Q_PROPERTY(bool in_SaveSnapshots READ getSaveSnapshots WRITE setSaveSnapshots NOTIFY propertyChanged)
+    bool getSaveSnapshots() {return prms->SaveSnapshots;}
+    void setSaveSnapshots(bool val) {prms->SaveSnapshots=val; }
+
+    Q_PROPERTY(double in_ParticleViewSize READ getParticleViewSize WRITE setParticleViewSize NOTIFY propertyChanged)
+    double getParticleViewSize() {return prms->ParticleViewSize;}
+    void setParticleViewSize(double val) {prms->ParticleViewSize=val; Q_EMIT propertyChanged();}
+
+
+    // parameters
     Q_PROPERTY(double p_YoungsModulus READ getYoungsModulus WRITE setYoungsModulus NOTIFY propertyChanged)
     double getYoungsModulus() {return prms->YoungsModulus;}
     void setYoungsModulus(double val) { prms->YoungsModulus = (float)val; prms->ComputeLame(); }
@@ -56,9 +66,10 @@ public:
     double getKappa() {return prms->kappa;}
 
 
-    Q_PROPERTY(double p_ParticleViewSize READ getParticleViewSize WRITE setParticleViewSize NOTIFY propertyChanged)
-    double getParticleViewSize() {return prms->ParticleViewSize;}
-    void setParticleViewSize(double val) {prms->ParticleViewSize=val; Q_EMIT propertyChanged();}
+    Q_PROPERTY(double p_cdcoeff READ getcurrentDragCoeff_waterDensity NOTIFY propertyChanged)
+    double getcurrentDragCoeff_waterDensity() {return prms->currentDragCoeff_waterDensity;}
+
+
 
 
     // ice block
@@ -105,6 +116,9 @@ public:
         return QString("%1 x %2 km").arg(x, 0, 'f', 1).arg(y, 0, 'f', 1);
     }
 
+    Q_PROPERTY(double cellsize READ getCellsize NOTIFY propertyChanged)
+    double getCellsize() {return prms->cellsize;}
+
 
     Q_PROPERTY(double fl_Scale READ getFluentDataScale WRITE setFluentDataScale NOTIFY propertyChanged)
     double getFluentDataScale() {return prms->FluentDataScale;}
@@ -117,6 +131,11 @@ public:
     Q_PROPERTY(double fl_OY READ getFluentDataOffsetY WRITE setFluentDataOffsetY NOTIFY propertyChanged)
     double getFluentDataOffsetY() {return prms->FluentDataOffsetY;}
     void setFluentDataOffsetY(double val) {prms->FluentDataOffsetY=val;}
+
+    Q_PROPERTY(double fl_FrameTimeInterval READ getFrameTimeInterval WRITE setFrameTimeInterval NOTIFY propertyChanged)
+    double getFrameTimeInterval() {return prms->FrameTimeInterval;}
+    void setFrameTimeInterval(double val) {prms->FrameTimeInterval=val;}
+
 
 
 public:

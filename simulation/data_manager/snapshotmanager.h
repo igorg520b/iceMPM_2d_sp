@@ -27,7 +27,8 @@ public:
     void ReadSnapshot(std::string fileName);    // custom HDF5 file
 
 private:
-    std::vector<uint8_t> tmp;   // used for counting points per cell and image generation
+    std::vector<uint8_t> count;   // used for counting points per cell and image generation
+    std::vector<uint8_t> rgb;
     std::vector<float> vis_r, vis_g, vis_b, vis_alpha, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
 
     constexpr static std::string_view pts_cache_path = "_data/point_cache";
