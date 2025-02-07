@@ -77,7 +77,7 @@ void FrameData::LoadHDF5Frame(std::string frameFileName, bool loadGridAndWind)
         size_t gridXTotal = dims[0];
         size_t gridY = dims[1];
 
-        if(gridXTotal != prms.GridXTotal || gridY != prms.GridY)
+        if(gridXTotal != prms.GridXTotal || gridY != prms.GridYTotal)
             throw std::runtime_error("LoadHDF5Frame grid size mismatch");
 
         // Resize the vector to hold the data
@@ -86,21 +86,34 @@ void FrameData::LoadHDF5Frame(std::string frameFileName, bool loadGridAndWind)
         // Read the dataset into the vector
         gridDataset.read(grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
 
-        windInterpolator.ReadFromOwnHDF5(file);
+        // read original image color
+        original_image_colors_rgb.resize(prms.InitializationImageSizeX*prms.InitializationImageSizeY*3);
+        H5::DataSet rgbDataset = file.openDataSet("colorImage");
+        rgbDataset.read(original_image_colors_rgb.data(), H5::PredType::NATIVE_UINT8);
+/*
+        if(prms.UseCurrentData)
+        {
+            H5::Attribute attr = rgbDataset.openAttribute("CachedFileName");
+            H5::StrType str_type = attr.getStrType(); // get datatype
+            char* buffer = nullptr;
+            attr.read(str_type, &buffer);
+            // Free allocated memory (HDF5 allocates memory dynamically for variable-length strings)
+            free(buffer);
+            // Assign to std::string
+            fluentInterpolator.cachedFileName = std::string(buffer);
+        }
+*/
+//        windInterpolator.ReadFromOwnHDF5(file);
     }
 
-    size_t gridSize = prms.GridXTotal*prms.GridY;
+    size_t gridSize = prms.GridXTotal*prms.GridYTotal;
     count.resize(gridSize);
-    vis_r.resize(gridSize);
-    vis_g.resize(gridSize);
-    vis_b.resize(gridSize);
-    vis_alpha.resize(gridSize);
     vis_vx.resize(gridSize);
     vis_vy.resize(gridSize);
-
     vis_Jpinv.resize(gridSize);
     vis_P.resize(gridSize);
     vis_Q.resize(gridSize);
+    rgb.resize(gridSize*3);
 
 
     H5::H5File file(frameFileName, H5F_ACC_RDONLY);
@@ -111,26 +124,18 @@ void FrameData::LoadHDF5Frame(std::string frameFileName, bool loadGridAndWind)
 
     hsize_t dims[2];
     ds_count.getSpace().getSimpleExtentDims(dims, nullptr);
-    if(dims[0] != prms.GridXTotal || dims[1] != prms.GridY) throw std::runtime_error("LoadHDF5Frame frame grid size mismatch");
+    if(dims[0] != prms.GridXTotal || dims[1] != prms.GridYTotal) throw std::runtime_error("LoadHDF5Frame frame grid size mismatch");
     ds_count.read(count.data(), H5::PredType::NATIVE_UINT8);
 
     file.openDataSet("vis_vx").read(vis_vx.data(), H5::PredType::NATIVE_FLOAT);
     file.openDataSet("vis_vy").read(vis_vy.data(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("vis_r").read(vis_r.data(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("vis_g").read(vis_g.data(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("vis_b").read(vis_b.data(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("vis_alpha").read(vis_alpha.data(), H5::PredType::NATIVE_FLOAT);
 
     file.openDataSet("vis_Jpinv").read(vis_Jpinv.data(), H5::PredType::NATIVE_FLOAT);
     file.openDataSet("vis_P").read(vis_P.data(), H5::PredType::NATIVE_FLOAT);
     file.openDataSet("vis_Q").read(vis_Q.data(), H5::PredType::NATIVE_FLOAT);
 
+    file.openDataSet("rgb").read(rgb.data(), H5::PredType::NATIVE_UINT8);
     dataLoaded = true;
 }
 
 
-void FrameData::LoadWindData(std::string initialGridAndWindFileName)
-{
-    H5::H5File file(initialGridAndWindFileName, H5F_ACC_RDONLY);
-
-}

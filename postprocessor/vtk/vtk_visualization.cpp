@@ -9,10 +9,7 @@
 
 VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
 {
-    populateLut(lutSpecialCount, (sizeof(lutSpecialCount)/(sizeof(lutSpecialCount[0]))), hueLut_count);
-    interpolateLut(lutSpecialJ, (sizeof(lutSpecialJ)/(sizeof(lutSpecialJ[0]))), hueLut_J);
-    interpolateLut(naturalRidges, (sizeof(naturalRidges)/(sizeof(naturalRidges[0]))), hueLut_Jpinv);
-    interpolateLut(lutSpecialQ, (sizeof(lutSpecialQ)/(sizeof(lutSpecialQ[0]))), hueLut_Q);
+    colormap.populateLut(ColorMap::Palette::Pressure, lut_Pressure);
 
     // text
     constexpr int fontSize = 20;
@@ -24,28 +21,16 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
     txtprop->SetColor(0,0,0);
 
     // main grid
-    mapper_grid_main->SetInputData(structuredGrid_main);
-    actor_grid_main->SetMapper(mapper_grid_main);
-
+    mapper_uniformgrid->SetInputData(uniformGrid);
+    actor_grid_main->SetMapper(mapper_uniformgrid);
     actor_grid_main->GetProperty()->SetEdgeVisibility(false);
     actor_grid_main->GetProperty()->LightingOff();
     actor_grid_main->GetProperty()->ShadingOff();
     actor_grid_main->PickableOff();
 
-    // main grid color data
-    visualized_values_grid->SetName("visualized_values_grid");
-    structuredGrid_main->GetCellData()->AddArray(visualized_values_grid);
-    mapper_grid_main->UseLookupTableScalarRangeOn();
-
-    pts_colors->SetName("pts_colors");
-    pts_colors->SetNumberOfComponents(3);
-    structuredGrid_main->GetCellData()->AddArray(pts_colors);
-
-    structuredGrid_main->GetCellData()->SetActiveScalars("visualized_values_grid");
-
 
     // scalar bar
-    scalarBar->SetLookupTable(hueLut_count);
+    scalarBar->SetLookupTable(lut_Pressure);
     scalarBar->SetMaximumWidthInPixels(180);
     scalarBar->SetBarRatio(0.1);
     scalarBar->SetMaximumHeightInPixels(250);
@@ -81,98 +66,71 @@ VTKVisualization::VTKVisualization(FrameData& fd) : frameData(fd)
 
     actor_text_title->SetDisplayPosition(10, 500);
 
-    // wind vectors
-    vectors_values->SetNumberOfComponents(3);
-    vectors_values->SetName("vectors_values");
-    polyData_wind->SetPoints(points_wind_vector);
-    polyData_wind->GetPointData()->SetVectors(vectors_values);
-
-    glyphFilter->SetSourceConnection(arrowSource->GetOutputPort());
-    glyphFilter->SetInputData(polyData_wind);
-    glyphFilter->OrientOn();
-    glyphFilter->SetVectorModeToUseVector();
-    glyphFilter->Update();
-    glyphFilter->SetScaleModeToScaleByVector();
-//    glyphFilter->SetScaleModeToScaleByVectorComponents();
-
-    actor_wind->SetMapper(vectorMapper_wind);
-    actor_wind->GetProperty()->SetColor(0.8,0.6,0.1);
-
-    vectorMapper_wind->SetInputConnection(glyphFilter->GetOutputPort());
 }
 
 
 
 void VTKVisualization::SynchronizeTopology()
 {
-    spdlog::info("SynchronizeTopology()");
+    spdlog::info("VTKVisualization::SynchronizeTopology()");
     if(!frameData.dataLoaded) return;
 
     // actor_grid_main
     const int gx = frameData.prms.GridXTotal;
-    const int gy = frameData.prms.GridY;
+    const int gy = frameData.prms.GridYTotal;
     const double h = frameData.prms.cellsize;
 
-    int gx1 = gx+1;
-    int gy1 = gy+1;
+    const int imgx = frameData.prms.InitializationImageSizeX;
+    const int imgy = frameData.prms.InitializationImageSizeY;
 
-    structuredGrid_main->SetDimensions(gx1, gy1, 1);
-    grid_main_points->SetNumberOfPoints(gx1*gy1);
-    for(int idx_y=0; idx_y<=gy; idx_y++)
-        for(int idx_x=0; idx_x<=gx; idx_x++)
+    int ox = frameData.prms.ModeledRegionOffsetX;
+    int oy = frameData.prms.ModeledRegionOffsetY;
+
+    spdlog::info("img size {}", frameData.original_image_colors_rgb.size());
+    spdlog::info("calculated size {}", imgx*imgy*3);
+
+    uniformGrid->SetDimensions(imgx, imgy, 1);
+    uniformGrid->SetSpacing(h, h, 1.0);
+    uniformGrid->AllocateScalars(VTK_UNSIGNED_CHAR, 3);
+
+    for(int i=0;i<imgx;i++)
+        for(int j=0;j<imgy;j++)
         {
-            double x = (idx_x-0.5)*h;
-            double y = (idx_y-0.5)*h;
-            double pt_pos[3] {x, y, -3.0};
-            grid_main_points->SetPoint((vtkIdType)(idx_x+idx_y*gx1), pt_pos);
+            unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i, j, 0));
+            int idx = (i+imgx*j)*3;
+            pixel[0] = frameData.original_image_colors_rgb[idx+0];
+            pixel[1] = frameData.original_image_colors_rgb[idx+1];
+            pixel[2] = frameData.original_image_colors_rgb[idx+2];
         }
-    structuredGrid_main->SetPoints(grid_main_points);
 
-    visualized_values_grid->SetNumberOfValues(gx*gy);
-    pts_colors->SetNumberOfValues(gx*gy*3);
+    for(int i=0;i<gx;i++)
+        for(int j=0;j<gy;j++)
+        {
+            int idx2 = (j + gy*i);
+            if(frameData.grid_status_buffer[idx2])
+            {
+                // water color
+                unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+ox, j+oy, 0));
+                pixel[0] = 0x15;
+                pixel[1] = 0x1f;
+                pixel[2] = 0x2f;
+            }
+        }
+
+    mapper_uniformgrid->Update();
 
 
     // rectangle
     rectanglePoints->SetNumberOfPoints(4);
-    rectanglePoints->SetPoint(0, 0.5*h, 0.5*h,-2.0);
-    rectanglePoints->SetPoint(1, (gx-1.5)*h, 0.5*h , -2.0);
-    rectanglePoints->SetPoint(2, (gx-1.5)*h, (gy-1.5)*h , -2.0);
-    rectanglePoints->SetPoint(3, 0.5*h, (gy-1.5)*h , -2.0);
+    rectanglePoints->SetPoint(0, 0.5*h, 0.5*h,2.0);
+    rectanglePoints->SetPoint(1, (imgx-1.5)*h, 0.5*h , 2.0);
+    rectanglePoints->SetPoint(2, (imgx-1.5)*h, (imgy-1.5)*h , 2.0);
+    rectanglePoints->SetPoint(3, 0.5*h, (imgy-1.5)*h , 2.0);
 
     vtkIdType pointIds[5] = {0, 1, 2, 3, 0};
     rectangleLines->Reset();
     rectangleLines->InsertNextCell(5, pointIds);
 
-
-    // wind vectors
-    points_wind_vector->SetNumberOfPoints(numwCols*numwRows);
-    vectors_values->SetNumberOfValues(3*numwCols*numwRows);
-    const float spacingX = gx*h*0.9/(numwCols-1);
-    const float spacingY = gy*h*0.9/(numwRows-1);
-
-    for (int i = 0; i < numwCols; ++i)
-    {
-        for (int j = 0; j < numwRows; ++j)
-        {
-            int idx = i+j*numwCols;
-            float x = i * spacingX + gx*h*0.05;
-            float y = j * spacingY + gy*h*0.05;
-
-            double pt[3] {x, y, 0};
-            points_wind_vector->SetPoint(idx, pt);
-            vectors_values->SetValue(idx*3+0, gx*h*0.01);
-            vectors_values->SetValue(idx*3+1, gx*h*0.002);
-            vectors_values->SetValue(idx*3+2, 0);
-        }
-    }
-
-//    float scale = gx*h*0.006;
-//    arrowSource->SetShaftRadius(scale*10); // Adjust for desired width
-//    arrowSource->SetTipLength(scale*10);   // Keep tip length constant
-
-    arrowSource->Update();
-    glyphFilter->SetScaleFactor(gx*h*0.007);
-    glyphFilter->Update();
 
     SynchronizeValues();
 }
@@ -180,6 +138,112 @@ void VTKVisualization::SynchronizeTopology()
 
 void VTKVisualization::SynchronizeValues()
 {
+    if(!frameData.dataLoaded) return;
+    const int &_ox = frameData.prms.ModeledRegionOffsetX;
+    const int &_oy = frameData.prms.ModeledRegionOffsetY;
+
+    const int &gx = frameData.prms.GridXTotal;
+    const int &gy = frameData.prms.GridYTotal;
+
+    double sim_time = frameData.prms.SimulationTime;
+    const double &h = frameData.prms.cellsize;
+    const double ox = h * frameData.prms.ModeledRegionOffsetX;
+    const double oy = h * frameData.prms.ModeledRegionOffsetY;
+
+    double range = std::pow(10,ranges[VisualizingVariable]);
+    double centerVal = 0;
+    spdlog::info("SynchronizeValues() {}; range {}", this->VisualizingVariable, range);
+
+    const std::array<uint8_t, 3>& seaWater {0x15, 0x1f, 0x2f};
+
+    for(int i=0;i<gx;i++)
+        for(int j=0;j<gy;j++)
+        {
+            int idx2 = (j + gy*i);
+            if(frameData.grid_status_buffer[idx2])
+            {
+                // water color
+                unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                pixel[0] = 0x15;
+                pixel[1] = 0x1f;
+                pixel[2] = 0x2f;
+            }
+        }
+
+
+    if(VisualizingVariable == VisOpt::Jp_inv)
+    {
+        spdlog::info("rendering Jp_inv");
+        for(int i=0;i<gx;i++)
+            for(int j=0;j<gy;j++)
+            {
+                int idx2 = (j + gy*i);
+                if(frameData.grid_status_buffer[idx2])
+                {
+                    uint8_t count = frameData.count[idx2];
+                    float Jp_inv = frameData.vis_Jpinv[idx2];
+                    std::array<uint8_t, 3> _rgb;
+                    for(int k=0;k<3;k++) _rgb[k] = frameData.rgb[idx2*3+k];
+
+                    if(count > 0)
+                    {
+                        float coeff2 = std::clamp(std::abs(Jp_inv-1)/range, 0., 1.);
+                        coeff2 = pow(coeff2, 2);
+                        float coeff1 = std::min(count/2.,1.); // how much water surface is obscured
+                        float val = (Jp_inv-1.)/range + 0.5;
+                        if(Jp_inv>1.) coeff2 = std::clamp(std::abs(Jp_inv-1)*0.5/range, 0., 1.);
+                        std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, val);
+
+                        std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
+                        std::array<uint8_t, 3> c3 = ColorMap::mergeColors(seaWater, c2, coeff1);
+
+                        unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                        for(int k=0;k<3;k++) pixel[k] = c3[k];
+                    }
+                }
+            }
+
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(lut_Pressure);
+        scalarBar->SetLabelFormat("%.1f");
+        lut_Pressure->SetTableRange(1-range, 1+range);
+
+    }
+    else if(VisualizingVariable == VisOpt::colors)
+    {
+        spdlog::info("rendering colors");
+
+        for(int i=0;i<gx;i++)
+            for(int j=0;j<gy;j++)
+            {
+                int idx2 = (j + gy*i);
+                if(frameData.grid_status_buffer[idx2])
+                {
+                    uint8_t count = frameData.count[idx2];
+                    std::array<uint8_t, 3> _rgb;
+                    for(int k=0;k<3;k++) _rgb[k] = frameData.rgb[idx2*3+k];
+
+                    if(count > 0)
+                    {
+                        unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                        for(int k=0;k<3;k++) pixel[k] = _rgb[k];
+                    }
+                }
+            }
+    }
+    uniformGrid->Modified();
+        mapper_uniformgrid->Update();
+
+    int64_t display_date = (int64_t)frameData.prms.SimulationTime + frameData.prms.SimulationStartUnixTime;
+    std::time_t unix_time = display_date;
+    std::tm* tm_time = std::gmtime(&unix_time);
+    // Format the time
+    char buffer[100];
+    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
+    actor_text->SetInput(buffer);
+
+
+    /*
     std::vector<uint8_t> &gb = frameData.grid_status_buffer;
     if(!frameData.dataLoaded || gb.size()==0) return;
 
@@ -476,13 +540,8 @@ void VTKVisualization::SynchronizeValues()
 
 
 
-    int64_t display_date = (int64_t)frameData.prms.SimulationTime + frameData.prms.SimulationStartUnixTime;
-    std::time_t unix_time = display_date;
-    std::tm* tm_time = std::gmtime(&unix_time);
-    // Format the time
-    char buffer[100];
-    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
-    actor_text->SetInput(buffer);
+
+*/
 }
 
 
@@ -499,7 +558,7 @@ void VTKVisualization::ChangeVisualizationOption(int option)
     }
     else if(option == VisOpt::Jp_inv)
     {
-        actor_text_title->SetInput("Surf. density");
+        actor_text_title->SetInput("Rel.surf.dens.");
     }
     else if(option == VisOpt::wind_norm)
     {
@@ -513,66 +572,4 @@ void VTKVisualization::ChangeVisualizationOption(int option)
     SynchronizeValues();
 }
 
-void VTKVisualization::populateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
-{
-    table->SetNumberOfTableValues(size);
-    for(int i=0;i<size;i++)
-        table->SetTableValue(i,lutArray[i][0],lutArray[i][1],lutArray[i][2]);
-    table->SetTableRange(0, size-1);
 
-    table->SetRampToLinear();
-}
-
-
-void VTKVisualization::interpolateLut(const float lutArray[][3], const int size, vtkNew<vtkLookupTable> &table)
-{
-    const int m = 256;
-    table->SetNumberOfTableValues(m);
-
-    for (int i = 0; i < m; ++i) {
-        float t = static_cast<float>(i) / (float)(m-1); // Normalize index to [0, 1]
-
-        // Map t to the interval [0, N-1] for interpolation
-        float scaledT = t * (size - 1);
-        int lowerIdx = static_cast<int>(std::floor(scaledT)); // Lower bound
-        int upperIdx = static_cast<int>(std::ceil(scaledT));  // Upper bound
-        float localT = scaledT - lowerIdx; // Fractional position between indices
-
-        // Linearly interpolate between colors at lowerIdx and upperIdx
-        float r = (1.0f - localT) * lutArray[lowerIdx][0] + localT * lutArray[upperIdx][0];
-        float g = (1.0f - localT) * lutArray[lowerIdx][1] + localT * lutArray[upperIdx][1];
-        float b = (1.0f - localT) * lutArray[lowerIdx][2] + localT * lutArray[upperIdx][2];
-
-        // Set the interpolated color in the lookup table
-        table->SetTableValue(i, r, g, b, 1.0); // Alpha is set to 1.0 (opaque)
-    }
-}
-
-
-Eigen::Vector3f VTKVisualization::interpolateColor(const float colorArray[][3], int nColors, float value)
-{
-    if (nColors < 2)
-    {
-        spdlog::error("Color array must have at least two colors for interpolation.");
-        throw std::invalid_argument("Color array must have at least two colors for interpolation.");
-    }
-
-    // Clamp value to range [0, 1]
-    value = std::clamp(value, 0.0f, 1.0f);
-
-    // Find the segment
-    float segmentSize = 1.0f / (nColors - 1); // Divide [0, 1] into nColors-1 segments
-    int segmentIndex = static_cast<int>(value / segmentSize); // Determine which segment we're in
-    segmentIndex = std::min(segmentIndex, nColors - 2); // Ensure index doesn't go out of bounds
-
-    // Compute local position within the segment
-    float localT = (value - segmentIndex * segmentSize) / segmentSize;
-
-    // Interpolate between the two colors
-    const float* color1 = colorArray[segmentIndex];
-    const float* color2 = colorArray[segmentIndex + 1];
-    float r_out = (1 - localT) * color1[0] + localT * color2[0];
-    float g_out = (1 - localT) * color1[1] + localT * color2[1];
-    float b_out = (1 - localT) * color1[2] + localT * color2[2];
-    return Eigen::Vector3f(r_out,g_out,b_out);
-}

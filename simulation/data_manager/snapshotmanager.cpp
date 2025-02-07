@@ -25,7 +25,6 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
 {
     spdlog::info("icy::SnapshotManager::PreparePointsAndSetupGrid {}",fileName);
     spdlog::info("modeled area file: {}", fileNameModelledArea);
-//    unsigned char* png_data, *png_data_modelled_region;
 
     // load satellite photo
     int channels, imgx, imgy;

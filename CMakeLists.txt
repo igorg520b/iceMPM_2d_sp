@@ -61,13 +61,16 @@ if(BUILD_POSTPROCESSOR)
         postprocessor/framedata.h
         postprocessor/framedata.cpp
 
-        simulation/data_manager/windinterpolator.cpp
-        simulation/data_manager/windinterpolator.h
-        simulation/data_manager/fluentinterpolator.h
-        simulation/data_manager/fluentinterpolator.cpp
+#        simulation/data_manager/windinterpolator.cpp
+#        simulation/data_manager/windinterpolator.h
+#        simulation/data_manager/fluentinterpolator.h
+#        simulation/data_manager/fluentinterpolator.cpp
+
+        gui/colormap.h
+        gui/colormap.cpp
     )
 
-    target_include_directories(pp PRIVATE postprocessor postprocessor/window postprocessor/vtk)
+    target_include_directories(pp PRIVATE postprocessor postprocessor/window postprocessor/vtk gui)
     target_include_directories(pp PRIVATE simulation simulation/hssoa simulation/data_manager)
     target_link_libraries(pp PRIVATE Qt5::Widgets Qt5::Core)
 
@@ -209,7 +212,6 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/gpu_partition.h
         simulation/gpu_partition.cpp
         simulation/kernels.cuh
-
         
         simulation/data_manager/snapshotmanager.h
         simulation/data_manager/snapshotmanager.cpp
@@ -226,7 +228,6 @@ FetchContent_MakeAvailable(PBrowser)
         gui/vtk/SpecialSelector2D.h
         gui/colormap.h
         gui/colormap.cpp
-
     )
     set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
     

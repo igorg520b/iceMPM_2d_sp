@@ -275,7 +275,7 @@ bool FluentInterpolator::SetTime(double t)
     // Wrap around using modulo operation
 
     const int frameFrom = (rawInterval % file_count);
-    const int frameTo = ((rawInterval+1) % file_count);
+//    const int frameTo = ((rawInterval+1) % file_count);
 
     bool frameChanged = false;
     if(frameFrom == (currentFrame+1)%file_count)

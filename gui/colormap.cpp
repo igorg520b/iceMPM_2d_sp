@@ -1,24 +1,6 @@
 #include "colormap.h"
 
 
-void ColorMap::populateLut(Palette palette, vtkNew<vtkLookupTable> &table)
-{
-    const auto& colors = colormaps[static_cast<size_t>(palette)];
-    int size = static_cast<int>(colors.size());
-
-    table->SetNumberOfTableValues(size);
-
-    for (int i = 0; i < size; i++) {
-        Eigen::Vector3f color = colors[i];
-        table->SetTableValue(i, static_cast<double>(color.x()),
-                             static_cast<double>(color.y()),
-                             static_cast<double>(color.z()));
-    }
-
-    table->SetTableRange(0.0, 1.0);  // Normalized range
-    table->SetRampToLinear();
-}
-
 
 Eigen::Vector3f ColorMap::interpolateColor(Palette palette, float value)
 {
@@ -71,6 +53,63 @@ std::array<uint8_t, 3> ColorMap::mergeColors(uint32_t rgb, const std::array<uint
     return {r, g, b};
 }
 
+std::array<uint8_t, 3> ColorMap::mergeColors(const std::array<uint8_t, 3>& colorArray1,
+                                          const std::array<uint8_t, 3>& colorArray2, float alpha)
+{
+        // Ensure alpha is clamped between 0 and 1
+        alpha = std::max(0.0f, std::min(1.0f, alpha));
+
+        // Extract RGB components from the uint32_t color
+        uint8_t r1 = colorArray1[0];
+        uint8_t g1 = colorArray1[1];
+        uint8_t b1 = colorArray1[2];
+
+        // Get the second color components
+        uint8_t r2 = colorArray2[0];
+        uint8_t g2 = colorArray2[1];
+        uint8_t b2 = colorArray2[2];
+
+        // Perform linear interpolation for each channel
+        uint8_t r = static_cast<uint8_t>(r1 * (1 - alpha) + r2 * alpha);
+        uint8_t g = static_cast<uint8_t>(g1 * (1 - alpha) + g2 * alpha);
+        uint8_t b = static_cast<uint8_t>(b1 * (1 - alpha) + b2 * alpha);
+
+        // Return the result as an std::array<uint8_t, 3>
+        return {r, g, b};
+}
+
+void ColorMap::populateLut(Palette palette, vtkNew<vtkLookupTable>& table) {
+    const std::vector<Eigen::Vector3f>& colorTable = getColorTable(palette);
+    int size = static_cast<int>(colorTable.size());
+
+    if (size < 2) {
+        std::cerr << "Error: Colormap must have at least two colors." << std::endl;
+        return;
+    }
+
+    const int m = 256;  // Number of colors in the lookup table
+    table->SetNumberOfTableValues(m);
+    table->Build();
+
+    for (int i = 0; i < m; ++i) {
+        float t = static_cast<float>(i) / (m - 1); // Normalize index to [0, 1]
+
+        // Scale t to the range [0, size-1] for interpolation
+        float scaledT = t * (size - 1);
+        int lowerIdx = static_cast<int>(std::floor(scaledT));
+        int upperIdx = static_cast<int>(std::ceil(scaledT));
+        float localT = scaledT - lowerIdx; // Fractional part for interpolation
+
+        // Interpolate RGB components
+        const Eigen::Vector3f& lowerColor = colorTable[lowerIdx];
+        const Eigen::Vector3f& upperColor = colorTable[upperIdx];
+
+        Eigen::Vector3f interpolatedColor = (1.0f - localT) * lowerColor + localT * upperColor;
+
+        // Set interpolated color in the lookup table
+        table->SetTableValue(i, interpolatedColor[0], interpolatedColor[1], interpolatedColor[2], 1.0);
+    }
+}
 
 const std::array<std::vector<Eigen::Vector3f>, static_cast<size_t>(ColorMap::Palette::COUNT)>
     ColorMap::colormaps = {{
@@ -99,18 +138,8 @@ const std::array<std::vector<Eigen::Vector3f>, static_cast<size_t>(ColorMap::Pal
 
                              {0xdf/255.,0xa7/255.,0xac/255.},             // -1
                              {0xc2/255.,0x66/255.,0x6e/255.},             // -2
-                             {0xb7/255.,0x24/255.,0x30/255.}},
-    // VIRIDIS colormap (9 colors)
-    {
-        {0.267, 0.004, 0.329}, {0.283, 0.141, 0.458}, {0.254, 0.265, 0.530},
-        {0.207, 0.372, 0.553}, {0.164, 0.471, 0.558}, {0.133, 0.567, 0.553},
-        {0.122, 0.659, 0.537}, {0.220, 0.741, 0.502}, {0.477, 0.821, 0.318}
-    },
-    // PLASMA colormap (5 colors)
-    {
-        {0.050, 0.029, 0.528}, {0.204, 0.027, 0.662}, {0.390, 0.072, 0.705},
-        {0.586, 0.165, 0.675}, {0.768, 0.247, 0.580}
-    }
+                             {0xb7/255.,0x24/255.,0x30/255.}}
+
 }};
 
 

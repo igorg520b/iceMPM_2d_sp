@@ -138,7 +138,6 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     renderer->AddActor(representation.scalarBar);
     renderer->AddActor(representation.rectangleActor);
     renderer->AddActor(representation.actor_text_title);
-    renderer->AddActor(representation.actor_wind);
 
     windowToImageFilter->SetInput(offscreenRenderWindow);
     windowToImageFilter->SetScale(1); // image quality
@@ -228,6 +227,7 @@ void PPMainWindow::closeEvent(QCloseEvent* event)
 
 void PPMainWindow::limits_changed(double val_)
 {
+    qDebug() << "limits_changed";
     int idx = (int)representation.VisualizingVariable;
     representation.ranges[idx] = val_;
     representation.SynchronizeValues();
@@ -244,8 +244,8 @@ void PPMainWindow::cameraReset_triggered()
     camera->ParallelProjectionOn();
     camera->SetClippingRange(1e-1,1e3);
 
-    const double dx = frameData.prms.DimensionHorizontal/2;
-    const double dy = frameData.prms.DimensionVertical/2;
+    const double dx = frameData.prms.cellsize*frameData.prms.InitializationImageSizeX/2;
+    const double dy = frameData.prms.cellsize*frameData.prms.InitializationImageSizeY/2;
 
     qDebug() << "dx " << dx << "\ndy " << dy;
 
@@ -286,8 +286,8 @@ void PPMainWindow::offscreen_camera_reset()
     camera->ParallelProjectionOn();
     camera->SetClippingRange(1e-1,1e3);
 
-    const double dx = frameData.prms.DimensionHorizontal/2;
-    const double dy = frameData.prms.DimensionVertical/2;
+    const double dx = frameData.prms.cellsize*frameData.prms.InitializationImageSizeX/2;
+    const double dy = frameData.prms.cellsize*frameData.prms.InitializationImageSizeY/2;
 
     qDebug() << "dx " << dx << "\ndy " << dy;
 
@@ -333,6 +333,16 @@ void PPMainWindow::render_all_triggered()
         std::string fileName = fmt::format("{}/frame_{:05d}.h5", frameData.frameDirectory, frame);
         frameData.LoadHDF5Frame(fileName, false);
 
+        std::string renderFileName;
+
+        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::Jp_inv);
+        offscreenRenderWindow->Render();
+        windowToImageFilter->Modified(); // this is extra important
+        renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryJpinv, frame);
+        writerPNG->SetFileName(renderFileName.c_str());
+        writerPNG->Write();
+/*
+
         representation.ChangeVisualizationOption(VTKVisualization::VisOpt::P);
         offscreenRenderWindow->Render();
         windowToImageFilter->Modified(); // this is extra important
@@ -347,12 +357,6 @@ void PPMainWindow::render_all_triggered()
         writerPNG->SetFileName(renderFileName.c_str());
         writerPNG->Write();
 
-        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::Jp_inv);
-        offscreenRenderWindow->Render();
-        windowToImageFilter->Modified(); // this is extra important
-        renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryJpinv, frame);
-        writerPNG->SetFileName(renderFileName.c_str());
-        writerPNG->Write();
 
         representation.ChangeVisualizationOption(VTKVisualization::VisOpt::colors);
         offscreenRenderWindow->Render();
@@ -360,7 +364,7 @@ void PPMainWindow::render_all_triggered()
         renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryColors, frame);
         writerPNG->SetFileName(renderFileName.c_str());
         writerPNG->Write();
-
+*/
     }
 
     offscreenRenderWindow->RemoveRenderer(renderer);
@@ -396,6 +400,5 @@ void PPMainWindow::generate_script_triggered()
 
 void PPMainWindow::toggle_wind_visualization(bool checked)
 {
-    representation.actor_wind->SetVisibility(checked);
     updateGUI();
 }
