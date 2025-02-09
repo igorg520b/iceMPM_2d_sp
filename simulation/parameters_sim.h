@@ -84,7 +84,7 @@ public:
     double ParticleVolume, ParticleViewSize;
 
     // computed parameters/properties
-    double dt_vol_Dpinv, vmax, vmax_squared;
+    double dt_vol_Dpinv, vmax;
     double lambda, mu, kappa; // Lame
     double ParticleMass;
     double cellsize_inv, Dp_inv;

@@ -71,7 +71,7 @@ void FluentInterpolator::PrepareFlowDataCache(std::string fileName)
             ds.openAttribute("file_count").read(H5::PredType::NATIVE_INT, &file_count);
             ds.openAttribute("interval_size").read(H5::PredType::NATIVE_INT, &interval_size);
         }
-
+        spdlog::info("invokign SetTime(0) from PrepareFlowDataCache");
         SetTime(0);
         is_initialized = true;
         return;
@@ -278,7 +278,7 @@ bool FluentInterpolator::SetTime(double t)
 //    const int frameTo = ((rawInterval+1) % file_count);
 
     bool frameChanged = false;
-    if(frameFrom == (currentFrame+1)%file_count)
+    if(currentFrame > 0 && frameFrom == (currentFrame+1)%file_count)
     {
         frameChanged = true;
         circularBufferIdx = (circularBufferIdx+1)%preloadedFrames;

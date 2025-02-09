@@ -2,17 +2,18 @@
 #include <regex>
 #include "framedata.h"
 
-FrameData::FrameData() {}
 
 
-void FrameData::ScanDirectory(std::string frameFileName)
+
+void GeneralGridData::ScanDirectory(std::string frameFileName)
 {
     std::filesystem::path framePath(frameFileName);
 
     // Navigate to the target file by appending the relative path
-    std::filesystem::path gridAndWindPath = framePath.parent_path();
-    frameDirectory = gridAndWindPath.string();
+    std::filesystem::path parentPath = framePath.parent_path();
+    frameDirectory = parentPath.string();
 
+    std::vector<bool> availableFrames;
 
     // Read the contents of the directory
     for (const auto& entry : std::filesystem::directory_iterator(frameDirectory)) {
@@ -37,76 +38,138 @@ void FrameData::ScanDirectory(std::string frameFileName)
         }
     }
 
+    countFrames = availableFrames.size();
     spdlog::info("availableFrames size {}",availableFrames.size());
     spdlog::info("frameDirectory {}", frameDirectory);
+
+    // Load grid data
+
+    // Navigate to the target file by appending the relative path
+    std::filesystem::path gridAndWindPath = parentPath / "../snapshots/_grid_and_wind.h5";
+
+    // Normalize the path (resolving ".." and ".")
+    gridAndWindPath = std::filesystem::canonical(gridAndWindPath);
+
+    // Convert back to std::string if needed
+    std::string resultPath = gridAndWindPath.string();
+
+    // open the initial data file
+    spdlog::info("LoadHDF5Frame resultPath = {}", resultPath);
+    H5::H5File file(resultPath, H5F_ACC_RDONLY);
+
+    H5::DataSet gridDataset = file.openDataSet("grid");
+    prms.ReadParametersFromHDF5Attributes(gridDataset);
+    prms.Printout();
+
+    // Get the dataspace of the dataset
+    H5::DataSpace dataspace = gridDataset.getSpace();
+
+    // Get the dimensions of the dataset
+    hsize_t dims[2];
+    dataspace.getSimpleExtentDims(dims, nullptr);
+    size_t gridXTotal = dims[0];
+    size_t gridY = dims[1];
+
+    if(gridXTotal != prms.GridXTotal || gridY != prms.GridYTotal)
+        throw std::runtime_error("LoadHDF5Frame grid size mismatch");
+
+    // Resize the vector to hold the data
+    grid_status_buffer.resize(gridXTotal * gridY);
+
+    // Read the dataset into the vector
+    gridDataset.read(grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
+
+    // read original image color
+    original_image_colors_rgb.resize(prms.InitializationImageSizeX*prms.InitializationImageSizeY*3);
+    H5::DataSet rgbDataset = file.openDataSet("colorImage");
+    rgbDataset.read(original_image_colors_rgb.data(), H5::PredType::NATIVE_UINT8);
+
+    spdlog::info("GeneralGridData::ScanDirectory done");
 }
 
 
 
-void FrameData::LoadHDF5Frame(std::string frameFileName, bool loadGridAndWind)
+
+//==========================================================================
+
+
+FrameData::FrameData()
 {
-    spdlog::info("LoadHDF5Frame: {}; {}",frameFileName, loadGridAndWind);
-    if(loadGridAndWind)
-    {
-        // Convert to std::filesystem::path for manipulation
-        std::filesystem::path framePath(frameFileName);
+    representation.frameData = this;
 
-        // Navigate to the target file by appending the relative path
-        std::filesystem::path gridAndWindPath = framePath.parent_path() / "../snapshots/_grid_and_wind.h5";
+    renderer->SetBackground(1.0,1.0,1.0);
+    offscreenRenderWindow->SetSize(1920, 1080);
+    offscreenRenderWindow->DoubleBufferOff();
+    offscreenRenderWindow->SetOffScreenRendering(true);
 
-        // Normalize the path (resolving ".." and ".")
-        gridAndWindPath = std::filesystem::canonical(gridAndWindPath);
+    renderer->AddActor(representation.actor_grid_main);
+    renderer->AddActor(representation.actor_text);
+    renderer->AddActor(representation.scalarBar);
+    renderer->AddActor(representation.rectangleActor);
+    renderer->AddActor(representation.actor_text_title);
 
-        // Convert back to std::string if needed
-        std::string resultPath = gridAndWindPath.string();
+    windowToImageFilter->SetInput(offscreenRenderWindow);
+    windowToImageFilter->SetScale(1); // image quality
+    windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
+    windowToImageFilter->ReadFrontBufferOn(); // read from the back buffer
+    writerPNG->SetInputConnection(windowToImageFilter->GetOutputPort());
+}
 
-        // open the initial data file
-        spdlog::info("LoadHDF5Frame resultPath = {}", resultPath);
-        H5::H5File file(resultPath, H5F_ACC_RDONLY);
 
-        H5::DataSet gridDataset = file.openDataSet("grid");
-        prms.ReadParametersFromHDF5Attributes(gridDataset);
-        prms.Printout();
+void FrameData::SetUpOffscreenRender(FrameData &guiFD, double data[10])
+{
+    this->ggd = guiFD.ggd;
 
-        // Get the dataspace of the dataset
-        H5::DataSpace dataspace = gridDataset.getSpace();
+    // copy ranges array
+    const VTKVisualization& other = guiFD.representation;
+    std::copy(std::begin(other.ranges), std::end(other.ranges), std::begin(this->representation.ranges));
 
-        // Get the dimensions of the dataset
-        hsize_t dims[2];
-        dataspace.getSimpleExtentDims(dims, nullptr);
-        size_t gridXTotal = dims[0];
-        size_t gridY = dims[1];
+    representation.VisualizingVariable = guiFD.representation.VisualizingVariable;
 
-        if(gridXTotal != prms.GridXTotal || gridY != prms.GridYTotal)
-            throw std::runtime_error("LoadHDF5Frame grid size mismatch");
+    // set up camera
 
-        // Resize the vector to hold the data
-        grid_status_buffer.resize(gridXTotal * gridY);
+    vtkCamera* camera = renderer->GetActiveCamera();
+    renderer->ResetCamera();
+    camera->ParallelProjectionOn();
 
-        // Read the dataset into the vector
-        gridDataset.read(grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
+    camera->SetClippingRange(1e-1,1e4);
+    camera->SetViewUp(0.0, 1.0, 0.0);
+    camera->SetPosition(data[0],data[1],data[2]);
+    camera->SetFocalPoint(data[3],data[4],data[5]);
+    camera->SetParallelScale(data[6]);
+    camera->Modified();
 
-        // read original image color
-        original_image_colors_rgb.resize(prms.InitializationImageSizeX*prms.InitializationImageSizeY*3);
-        H5::DataSet rgbDataset = file.openDataSet("colorImage");
-        rgbDataset.read(original_image_colors_rgb.data(), H5::PredType::NATIVE_UINT8);
-/*
-        if(prms.UseCurrentData)
-        {
-            H5::Attribute attr = rgbDataset.openAttribute("CachedFileName");
-            H5::StrType str_type = attr.getStrType(); // get datatype
-            char* buffer = nullptr;
-            attr.read(str_type, &buffer);
-            // Free allocated memory (HDF5 allocates memory dynamically for variable-length strings)
-            free(buffer);
-            // Assign to std::string
-            fluentInterpolator.cachedFileName = std::string(buffer);
-        }
-*/
-//        windInterpolator.ReadFromOwnHDF5(file);
-    }
+    // renderer -> offscreen
+    offscreenRenderWindow->AddRenderer(renderer);
+}
 
-    size_t gridSize = prms.GridXTotal*prms.GridYTotal;
+void FrameData::RenderFrame(VTKVisualization::VisOpt visopt, std::string outputDirectory)
+{
+    spdlog::info("FrameData::RenderFrame");
+    representation.ChangeVisualizationOption(visopt);
+    offscreenRenderWindow->Render();
+    windowToImageFilter->Modified(); // this is extra important
+    std::string renderFileName = fmt::format("{}/{:05d}.png", outputDirectory, frame);
+    spdlog::info("writing {}", renderFileName);
+    writerPNG->SetFileName(renderFileName.c_str());
+    mutex->lock();
+    writerPNG->Write();
+    mutex->unlock();
+}
+
+
+void FrameData::LoadHDF5Frame(int frameNumber)
+{
+    spdlog::info("LoadHDF5Frame: {}", frameNumber);
+    std::string fileName = fmt::format("{}/frame_{:05d}.h5", ggd->frameDirectory, frameNumber);
+    LoadHDF5Frame(fileName);
+    this->frame = frameNumber;
+}
+
+
+void FrameData::LoadHDF5Frame(std::string fileName)
+{
+    size_t gridSize = ggd->prms.GridXTotal*ggd->prms.GridYTotal;
     count.resize(gridSize);
     vis_vx.resize(gridSize);
     vis_vy.resize(gridSize);
@@ -115,16 +178,16 @@ void FrameData::LoadHDF5Frame(std::string frameFileName, bool loadGridAndWind)
     vis_Q.resize(gridSize);
     rgb.resize(gridSize*3);
 
-
-    H5::H5File file(frameFileName, H5F_ACC_RDONLY);
+    H5::H5File file(fileName, H5F_ACC_RDONLY);
     H5::DataSet ds_count = file.openDataSet("count");
 
-    ds_count.openAttribute("SimulationStep").read(H5::PredType::NATIVE_INT, &prms.SimulationStep);
-    ds_count.openAttribute("SimulationTime").read(H5::PredType::NATIVE_DOUBLE, &prms.SimulationTime);
+    ds_count.openAttribute("SimulationStep").read(H5::PredType::NATIVE_INT, &SimulationStep);
+    ds_count.openAttribute("SimulationTime").read(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
 
     hsize_t dims[2];
     ds_count.getSpace().getSimpleExtentDims(dims, nullptr);
-    if(dims[0] != prms.GridXTotal || dims[1] != prms.GridYTotal) throw std::runtime_error("LoadHDF5Frame frame grid size mismatch");
+    if(dims[0] != ggd->prms.GridXTotal || dims[1] != ggd->prms.GridYTotal)
+        throw std::runtime_error("LoadHDF5Frame frame grid size mismatch");
     ds_count.read(count.data(), H5::PredType::NATIVE_UINT8);
 
     file.openDataSet("vis_vx").read(vis_vx.data(), H5::PredType::NATIVE_FLOAT);

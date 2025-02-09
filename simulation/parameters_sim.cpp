@@ -163,8 +163,7 @@ void SimParams::ComputeHelperVariables()
     cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
     Dp_inv = 4./(cellsize*cellsize);
     dt_vol_Dpinv = InitialTimeStep*ParticleVolume*Dp_inv;
-    vmax = 0.5*cellsize/InitialTimeStep;
-    vmax_squared = vmax*vmax;
+    vmax = 0.25*cellsize/InitialTimeStep;
 
     ComputeLame();
 }
@@ -286,7 +285,7 @@ void SimParams::Printout()
     // parameters
     spdlog::info("\n");
     spdlog::info("Parameters:");
-    spdlog::info("dt_vol_Dpinv: {}, vmax: {}, vmax_squared: {}", dt_vol_Dpinv, vmax, vmax_squared);
+    spdlog::info("dt_vol_Dpinv: {}, vmax: {}", dt_vol_Dpinv, vmax);
     spdlog::info("windDragCoeff_airDensity: {}", windDragCoeff_airDensity);
     spdlog::info("lambda: {}, mu: {}, kappa: {}", lambda, mu, kappa);
     spdlog::info("ParticleVolume: {}, ParticleViewSize: {}", ParticleVolume, ParticleViewSize);

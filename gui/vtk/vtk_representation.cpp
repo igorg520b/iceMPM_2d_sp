@@ -242,7 +242,7 @@ void icy::VisualRepresentation::SynchronizeValues()
                 {
                     // water color
                     Eigen::Vector2f v = model->fluent_interpolatror.getInterpolation(i,j);
-                    float val = (v.x()+0.1)/0.2;
+                    float val = (v.x())/range + 0.5;
                     //float val = (sin(i/100.)+1.)/2.;
                     std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::SpecialJ, val);
 
@@ -262,7 +262,7 @@ void icy::VisualRepresentation::SynchronizeValues()
                 {
                     // water color
                     Eigen::Vector2f v = model->fluent_interpolatror.getInterpolation(i,j);
-                    float val = (v.y()+0.1)/0.2;
+                    float val = (v.y())/range + 0.5;
                     //float val = (sin(i/100.)+1.)/2.;
                     std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::SpecialJ, val);
 
@@ -283,7 +283,7 @@ void icy::VisualRepresentation::SynchronizeValues()
                 {
                     // water color
                     Eigen::Vector2f v = model->fluent_interpolatror.getInterpolation(i,j);
-                    float val = (v.norm())/0.4;
+                    float val = (v.norm())/range;
                     //float val = (sin(i/100.)+1.)/2.;
                     std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::P2, val);
                     unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
@@ -327,12 +327,12 @@ void icy::VisualRepresentation::SynchronizeValues()
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
             double val = s->getValue(SimParams::idx_Jp_inv)-1.;
-            double value = (val+0.1)/0.1;
-            double alpha = abs(val)/0.1;
+            double value = (val)/range + 0.5;
+            double alpha = abs(val)/range;
 
             int pt_idx = s->getValueInt(SimParams::integer_point_idx);
             uint32_t rgb = model->gpu.point_colors_rgb[pt_idx];
-            std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::SpecialJ, value);
+            std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, value);
             std::array<uint8_t, 3> c2 = colormap.mergeColors(rgb, c, alpha);
 
             for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(i*3+k), c2[k]);

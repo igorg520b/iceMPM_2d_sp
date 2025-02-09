@@ -63,7 +63,6 @@ private Q_SLOTS:
     void cameraReset_triggered();
     void comboboxIndexChanged_visualizations(int index);
     void limits_changed(double val);
-    void sliderValueChanged(int val);
 
     void open_frame_triggered();
     void render_frame_triggered();
@@ -74,7 +73,8 @@ private Q_SLOTS:
 
 private:
     FrameData frameData;
-    VTKVisualization representation;
+    GeneralGridData ggd;
+
 
     void updateGUI();
     void OpenSnapshot(QString fileName);
@@ -83,22 +83,17 @@ private:
     QComboBox *comboBox_visualizations;
     QDoubleSpinBox *qdsbValRange;   // high and low limits for value scale
     QSpinBox *qsbFrameFrom, *qsbFrameTo;
-    QSlider *slider1;
 
     // VTK
     vtkNew<vtkGenericOpenGLRenderWindow> renderWindow;
     QVTKOpenGLNativeWidget *qt_vtk_widget;
-    vtkNew<vtkRenderer> renderer;
 
     // other
     vtkNew<vtkInteractorStyleRubberBand2D> interactor;
 
-    // off-screen rendering
-    vtkNew<vtkRenderWindow> offscreenRenderWindow;
-    vtkNew<vtkWindowToImageFilter> windowToImageFilter;
-    vtkNew<vtkPNGWriter> writerPNG;
-    vtkNew<vtkRenderer> offscreenRenderer;
-    void offscreen_camera_reset();
-
+    std::string outputDirectoryP = "render/P";
+    std::string outputDirectoryQ = "render/Q";
+    std::string outputDirectoryColors = "render/colors";
+    std::string outputDirectoryJpinv = "render/Jp_inv";
 };
 #endif

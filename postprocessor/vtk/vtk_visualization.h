@@ -37,19 +37,23 @@
 #include <vtkGlyph2D.h>
 #include <vtkUniformGrid.h>
 
+#include <vtkWindowToImageFilter.h>
+#include <vtkPNGWriter.h>
+
 #include <Eigen/Core>
 
-#include "framedata.h"
 #include "colormap.h"
+
+struct FrameData;
 
 class VTKVisualization : public QObject
 {
     Q_OBJECT
 
 public:
-    FrameData &frameData;
+    FrameData *frameData;
 
-    VTKVisualization(FrameData& fd);
+    VTKVisualization();
 
     double wind_visualization_time;
 
@@ -84,5 +88,10 @@ private:
     vtkNew<vtkPoints> rectanglePoints;
     vtkNew<vtkCellArray> rectangleLines;
     vtkNew<vtkPolyDataMapper> rectangleMapper;
+
+    vtkNew<vtkWindowToImageFilter> windowToImageFilter;
+    vtkNew<vtkPNGWriter> writerPNG;
+    vtkNew<vtkRenderer> offscreenRenderer;
+
 };
 #endif

@@ -93,6 +93,9 @@ vtk_module_autoinit(
   MODULES ${VTK_LIBRARIES}
 )
 
+target_compile_options(pp PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
+target_link_libraries(pp PRIVATE gomp)
+
 endif()
 
 

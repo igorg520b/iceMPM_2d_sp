@@ -110,8 +110,9 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     const double &dt = gprms.InitialTimeStep;
     const double &cellsize = gprms.cellsize;
     const double &vmax = gprms.vmax;
-    const double &vmax_squared = gprms.vmax_squared;
     const int &gridXTotal = gprms.GridXTotal;
+    const double hsq = gprms.cellsize * gprms.cellsize;
+
 
     Vector2i gi(idx/gridY, idx%gridY);   // integer x-y index of the grid node
     GridVector2r gnpos = gi.cast<t_GridReal>()*cellsize;    // position of the grid node in the whole grid
@@ -141,27 +142,39 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 //        wvel *= 100;
 
 //        wvel *= (13+min(simulation_time/20000, 2.));
-        wvel *= (1+min(simulation_time/86400, 2.));
+        wvel *= (1+min(simulation_time/(3600*3), 3.));
 
 
         // quadratic term
-
-        t_GridReal hsq = gprms.cellsize * gprms.cellsize;
+/*
         GridVector2r vrel = wvel - velocity;
         const t_GridReal Density_coeff_A = gprms.currentDragCoeff_waterDensity * hsq;
         t_GridReal dragForce = vrel.squaredNorm() * Density_coeff_A;
         vrel.normalize();
-        vrel *= dragForce * dt / mass;
+//        vrel *= dragForce * dt / mass;
+        vrel *= dragForce * dt;
 
-        if(vrel.norm() > wvel.norm()*20) vrel = vrel.normalized()*wvel.norm()*20;
+        const double vmax2 = vmax*0.01;
+        if(vrel.norm() > vmax2) vrel = vrel.normalized()*vmax2;
 
-        const double coeff2 = 0.1;
-        velocity = (1-coeff2)*velocity + coeff2*(velocity+vrel);
-
+        velocity += vrel;
+*/
 
         // linear term
-        const double coeff = 0.00001;
+        const double coeff = 0.01;
         velocity = (1-coeff)*velocity + coeff*wvel;
+
+        GridVector2r wvel2 = wvel-velocity;
+        wvel2 = wvel2 * wvel2.norm();
+        const double coeff2 = 0.02;
+        velocity += coeff2*wvel2;
+
+        GridVector2r wvel3 = (wvel-velocity)*1000*hsq*dt/mass;
+        //wvel3 = wvel3 * wvel3.norm();
+        if(wvel3.norm() > vmax*0.1) wvel3 = wvel3.normalized()*vmax*0.1;
+        const double coeff3 = 0.01;
+//        velocity += coeff3*wvel3;
+
 
 
         //interpolation_coeff_w
@@ -171,7 +184,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 //        vWind = get_wind_vector(lat, lon, interpolation_coeff);
 
 
-
+/*
         // wind drag
         //t_GridReal hsq = gprms.cellsize * gprms.cellsize;
         vWind *= 10 * wvel.norm();
@@ -181,7 +194,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         vrel.normalize();
         vrel *= dragForce * dt / mass;
         velocity = (1-coeff2)*velocity + coeff2*(velocity+vrel);
-
+*/
 
     }
 
