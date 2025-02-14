@@ -293,13 +293,11 @@ void MainWindow::open_snapshot_triggered()
 
 void MainWindow::OpenSnapshot(QString fileName)
 {
-    /*
+
     model.snapshot.ReadSnapshot(fileName.toStdString());
     representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);
-
     updateGUI();
-*/
 }
 
 
@@ -418,6 +416,11 @@ void MainWindow::LoadParameterFile(QString qFileName)
     if(additionalFiles.count("InputCurrentData"))
     {
         model.fluent_interpolatror.PrepareFlowDataCache(additionalFiles["InputCurrentData"]);
+    }
+
+    if(model.prms.SaveSnapshots) {
+        spdlog::info("requesting to save snapshot 0");
+        model.SaveFrameRequest(model.prms.SimulationStep, model.prms.SimulationTime);
     }
 
     representation.SynchronizeTopology();

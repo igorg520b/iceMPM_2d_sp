@@ -100,10 +100,30 @@ endif()
 
 
 if(BUILD_CLI_VERSION)
+
+    find_package(VTK 9.4 HINTS "~/Projects-libraries/build-vtk/lib/cmake/vtk-9.4" REQUIRED COMPONENTS
+      CommonColor
+      CommonCore
+      FiltersSources
+      FiltersGeometry
+      InteractionStyle
+      RenderingContextOpenGL2
+      RenderingCore
+      RenderingFreeType
+      RenderingGL2PSOpenGL2
+      RenderingOpenGL2
+      IOGeometry
+      RenderingAnnotation
+      RenderingLabel
+      IOImage
+      ViewsQt
+    )
+
 # CLI version
 add_executable(cm2
     cli/main.cpp
 
+    # simulation
     simulation/parameters_sim.h
     simulation/parameters_sim.cpp
     simulation/model.cpp
@@ -116,16 +136,26 @@ add_executable(cm2
     simulation/gpu_implementation5.h
     simulation/gpu_implementation5.cpp
 
-    simulation/snapshotmanager.h
-    simulation/snapshotmanager.cpp
-    simulation/gpu_partition.h
-    simulation/gpu_partition.cpp
-    simulation/kernels.cuh
 
     simulation/hssoa/host_side_soa.h
     simulation/hssoa/host_side_soa.cpp
     simulation/hssoa/proxypoint2d.h
     simulation/hssoa/proxypoint2d.cpp
+
+    simulation/gpu_partition.h
+    simulation/gpu_partition.cpp
+    simulation/kernels.cuh
+
+    simulation/data_manager/snapshotmanager.h
+    simulation/data_manager/snapshotmanager.cpp
+    simulation/data_manager/windinterpolator.cpp
+    simulation/data_manager/windinterpolator.h
+    simulation/data_manager/fluentinterpolator.h
+    simulation/data_manager/fluentinterpolator.cpp
+    simulation/data_manager/poisson_disk_sampling.h
+
+    simulation/data_manager/vtkFLUENTCFFCustomReader.cxx
+    simulation/data_manager/vtkFLUENTCFFCustomReader.h
 )
 set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
 
@@ -134,11 +164,19 @@ set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_
 
 target_link_libraries(cm2 PRIVATE spdlog::spdlog)
 
-target_include_directories(cm2 PRIVATE simulation simulation/hssoa)
+target_include_directories(cm2 PRIVATE simulation simulation/hssoa simulation/data_manager External)
 target_link_libraries(cm2 PRIVATE Eigen3::Eigen)
 
 target_link_libraries(cm2 PRIVATE ${HDF5_LIBRARIES})
 target_include_directories(cm2 PRIVATE ${HDF5_INCLUDE_DIRS})
+
+target_link_libraries(cm2 PRIVATE ${VTK_LIBRARIES})
+
+
+vtk_module_autoinit(
+  TARGETS cm2
+  MODULES ${VTK_LIBRARIES}
+)
 
 endif()
 
@@ -172,7 +210,6 @@ FetchContent_MakeAvailable(PBrowser)
       RenderingLabel
       IOImage
       ViewsQt
-#      IOFLUENTCFF
     )
     find_package(Qt5 COMPONENTS Widgets REQUIRED)
     add_compile_definitions(QT_NO_KEYWORDS)

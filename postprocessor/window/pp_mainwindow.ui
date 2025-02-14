@@ -37,6 +37,7 @@
     <addaction name="action_camera_reset"/>
     <addaction name="actionRender_Frame"/>
     <addaction name="actionRender_All"/>
+    <addaction name="actionRender_All_2"/>
     <addaction name="actionGenerate_Script"/>
     <addaction name="actionShow_Wind"/>
    </widget>
@@ -121,6 +122,11 @@
    </property>
    <property name="text">
     <string>Show Wind</string>
+   </property>
+  </action>
+  <action name="actionRender_All_2">
+   <property name="text">
+    <string>Render All 2</string>
    </property>
   </action>
  </widget>

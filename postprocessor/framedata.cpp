@@ -92,10 +92,38 @@ void GeneralGridData::ScanDirectory(std::string frameFileName)
 
 //==========================================================================
 
+FrameData::FrameData(const FrameData &other)
+{
+    this->mutex = other.mutex;
+    representation.frameData = this;
+
+    offscreenRenderWindow->Initialize();
+
+    renderer->SetBackground(1.0,1.0,1.0);
+    offscreenRenderWindow->SetSize(1920, 1080);
+    offscreenRenderWindow->DoubleBufferOff();
+    offscreenRenderWindow->SetOffScreenRendering(true);
+
+    renderer->AddActor(representation.actor_grid_main);
+    renderer->AddActor(representation.actor_text);
+    renderer->AddActor(representation.scalarBar);
+    renderer->AddActor(representation.rectangleActor);
+    renderer->AddActor(representation.actor_text_title);
+
+    windowToImageFilter->SetInput(offscreenRenderWindow);
+    windowToImageFilter->SetScale(1); // image quality
+    windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
+    windowToImageFilter->ReadFrontBufferOn(); // read from the back buffer
+    writerPNG->SetInputConnection(windowToImageFilter->GetOutputPort());
+}
+
+
 
 FrameData::FrameData()
 {
     representation.frameData = this;
+
+    offscreenRenderWindow->Initialize();
 
     renderer->SetBackground(1.0,1.0,1.0);
     offscreenRenderWindow->SetSize(1920, 1080);
@@ -143,7 +171,7 @@ void FrameData::SetUpOffscreenRender(FrameData &guiFD, double data[10])
     offscreenRenderWindow->AddRenderer(renderer);
 }
 
-void FrameData::RenderFrame(VTKVisualization::VisOpt visopt, std::string outputDirectory)
+void FrameData::RenderFrame(VTKVisualization::VisOpt visopt, std::string_view outputDirectory)
 {
     spdlog::info("FrameData::RenderFrame");
     representation.ChangeVisualizationOption(visopt);
@@ -162,7 +190,9 @@ void FrameData::LoadHDF5Frame(int frameNumber)
 {
     spdlog::info("LoadHDF5Frame: {}", frameNumber);
     std::string fileName = fmt::format("{}/frame_{:05d}.h5", ggd->frameDirectory, frameNumber);
+    mutex->lock();
     LoadHDF5Frame(fileName);
+    mutex->unlock();
     this->frame = frameNumber;
 }
 

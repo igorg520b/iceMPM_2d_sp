@@ -18,23 +18,17 @@
 int main(int argc, char** argv)
 {
     icy::Model model;
-    icy::SnapshotManager snapshot;
-    std::string snapshot_directory = "cm_snapshots";
-    std::thread snapshot_thread;
     std::atomic<bool> request_terminate = false;
-    std::atomic<bool> request_full_snapshot = false;
 
 
     // initialize the model
 
-    model.Reset();
-    snapshot.model = &model;
 
     // parse options
     cxxopts::Options options("Ice MPM", "CLI version of MPM simulation");
 
     options.add_options()
-        ("file", "Configuration file", cxxopts::value<std::string>())
+        ("file", "Snapshot file", cxxopts::value<std::string>())
         ;
     options.parse_positional({"file"});
 
@@ -42,26 +36,22 @@ int main(int argc, char** argv)
 
     if(option_parse_result.count("file"))
     {
-        std::string params_file = option_parse_result["file"].as<std::string>();
-        std::string pointCloudFile = model.prms.ParseFile(params_file);
-        snapshot.LoadRawPoints(pointCloudFile);
+        std::string fileName = option_parse_result["file"].as<std::string>();
+        model.snapshot.ReadSnapshot(fileName);
+        model.Prepare();
+    }
+    else
+    {
+        spdlog::info("snapshot file must be provided");
+        throw std::runtime_error("no snapshot file");
     }
 
 
     model.gpu.transfer_completion_callback = [&](){
-        if(snapshot_thread.joinable()) snapshot_thread.join();
-        snapshot_thread = std::thread([&](){
-            int snapshot_number = model.prms.AnimationFrameNumber();
-            if(request_terminate) { model.UnlockCycleMutex(); std::cout << "snapshot aborted\n"; return; }
-            spdlog::info("cycle callback {}; ", snapshot_number);
-            //snapshot.SaveSnapshot(snapshot_directory);
-            model.UnlockCycleMutex();
-            spdlog::info("callback {} done", snapshot_number);
-        });
+        spdlog::info("cycle callback {}; ", model.prms.AnimationFrameNumber());
+        model.UnlockCycleMutex();
     };
     // ensure that the folder exists
-    std::filesystem::path outputFolder(snapshot_directory);
-    std::filesystem::create_directory(outputFolder);
 
     // start the simulation thread
     std::thread simulation_thread([&](){
@@ -78,21 +68,13 @@ int main(int argc, char** argv)
         std::string user_input;
         std::cin >> user_input;
 
-        if(user_input[0]=='s')
-        {
-            request_full_snapshot = true;
-            spdlog::critical("requested to save a full snapshot");
-        }
-        else if(user_input[0]=='q'){
+        if(user_input[0]=='q'){
             request_terminate = true;
-            request_full_snapshot = true;
             spdlog::critical("requested to save the snapshot and terminate");
         }
     } while(!request_terminate);
 
-    simulation_thread.join();
     model.gpu.synchronize();
-    snapshot_thread.join();
 
     std::cout << "cm done\n";
 

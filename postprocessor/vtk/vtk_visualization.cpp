@@ -11,6 +11,7 @@
 VTKVisualization::VTKVisualization()
 {
     colormap.populateLut(ColorMap::Palette::Pressure, lut_Pressure);
+    colormap.populateLut(ColorMap::Palette::P2, lut_P2);
 
     // text
     constexpr int fontSize = 20;
@@ -151,8 +152,8 @@ void VTKVisualization::SynchronizeValues()
 
     const double sim_time = frameData->SimulationTime;
     const double &h = prms.cellsize;
-    const double ox = h * prms.ModeledRegionOffsetX;
-    const double oy = h * prms.ModeledRegionOffsetY;
+//    const double ox = h * prms.ModeledRegionOffsetX;
+//    const double oy = h * prms.ModeledRegionOffsetY;
 
     double range = std::pow(10,ranges[VisualizingVariable]);
     double centerVal = 0;
@@ -193,7 +194,7 @@ void VTKVisualization::SynchronizeValues()
                     {
                         float coeff2 = std::clamp(std::abs(Jp_inv-1)/range, 0., 1.);
                         coeff2 = pow(coeff2, 2);
-                        float coeff1 = std::min(count/2.,1.); // how much water surface is obscured
+                        float coeff1 = 1;//std::min(count/2.,1.); // how much water surface is obscured
                         float val = (Jp_inv-1.)/range + 0.5;
                         if(Jp_inv>1.) coeff2 = std::clamp(std::abs(Jp_inv-1)*0.5/range, 0., 1.);
                         std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, val);
@@ -206,16 +207,15 @@ void VTKVisualization::SynchronizeValues()
                     }
                 }
             }
-
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(lut_Pressure);
         scalarBar->SetLabelFormat("%.1f");
         lut_Pressure->SetTableRange(1-range, 1+range);
-
     }
     else if(VisualizingVariable == VisOpt::colors)
     {
         spdlog::info("rendering colors");
+        scalarBar->VisibilityOff();
 
         for(int i=0;i<gx;i++)
             for(int j=0;j<gy;j++)
@@ -235,8 +235,81 @@ void VTKVisualization::SynchronizeValues()
                 }
             }
     }
+    else if(VisualizingVariable == VisOpt::P)
+    {
+        for(int i=0;i<gx;i++)
+            for(int j=0;j<gy;j++)
+            {
+                int idx2 = (j + gy*i);
+                if(frameData->ggd->grid_status_buffer[idx2])
+                {
+                    uint8_t count = frameData->count[idx2];
+                    float pressure = frameData->vis_P[idx2];
+                    std::array<uint8_t, 3> _rgb;
+                    for(int k=0;k<3;k++) _rgb[k] = frameData->rgb[idx2*3+k];
+
+                    if(count > 0)
+                    {
+                        float coeff2 = std::clamp(std::abs(pressure)/range, 0., 1.);
+                        coeff2 = pow(coeff2, 2);
+                        float coeff1 = 1;//std::min(count/2.,1.); // how much water surface is obscured
+                        float val = (pressure)/range + 0.5;
+                        std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, val);
+
+                        std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
+                        std::array<uint8_t, 3> c3 = ColorMap::mergeColors(seaWater, c2, coeff1);
+
+                        unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                        for(int k=0;k<3;k++) pixel[k] = c3[k];
+                    }
+                }
+            }
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(lut_Pressure);
+        scalarBar->SetLabelFormat("%.1e");
+        lut_Pressure->SetTableRange(-range, +range);
+    }
+    else if(VisualizingVariable == VisOpt::Q)
+    {
+        for(int i=0;i<gx;i++)
+            for(int j=0;j<gy;j++)
+            {
+                int idx2 = (j + gy*i);
+                if(frameData->ggd->grid_status_buffer[idx2])
+                {
+                    uint8_t count = frameData->count[idx2];
+                    float deviatoric_stress = frameData->vis_Q[idx2];
+                    std::array<uint8_t, 3> _rgb;
+                    for(int k=0;k<3;k++) _rgb[k] = frameData->rgb[idx2*3+k];
+
+                    if(count > 0)
+                    {
+                        float coeff2 = std::clamp(std::abs(deviatoric_stress)/range, 0., 1.);
+                        coeff2 = pow(coeff2, 2);
+                        float coeff1 = 1;//std::min(count/2.,1.); // how much water surface is obscured
+                        float val = (deviatoric_stress)/range;
+                        std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::P2, val);
+
+                        std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
+                        std::array<uint8_t, 3> c3 = ColorMap::mergeColors(seaWater, c2, coeff1);
+
+                        unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
+                        for(int k=0;k<3;k++) pixel[k] = c3[k];
+                    }
+                }
+            }
+        scalarBar->VisibilityOn();
+        scalarBar->SetLookupTable(lut_P2);
+        scalarBar->SetLabelFormat("%.1e");
+        lut_Pressure->SetTableRange(0, range);
+    }
+
+
+
+
+
     uniformGrid->Modified();
-        mapper_uniformgrid->Update();
+    mapper_uniformgrid->Update();
 
     int64_t display_date = (int64_t)sim_time + frameData->ggd->prms.SimulationStartUnixTime;
     std::time_t unix_time = display_date;

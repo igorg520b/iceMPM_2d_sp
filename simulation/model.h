@@ -45,6 +45,7 @@ public:
     void Prepare();        // invoked once, at simulation start
     bool Step();           // either invoked by Worker or via GUI
     void UnlockCycleMutex();
+    void SaveFrameRequest(int SimulationStep, double SimulationTime);
 
     SimParams prms;
     WindInterpolator wind_interpolator;
@@ -62,7 +63,6 @@ public:
 
 private:
     void SaveThread();
-    void SaveFrameRequest(int SimulationStep, double SimulationTime);
     std::thread saver_thread;
     std::mutex frame_mutex;
     std::condition_variable frame_cv;

@@ -186,11 +186,11 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
         {
             val |= 0x10000;     // crushed
             p.setValueInt(SimParams::idx_utility_data, val);
-            p.setValue(SimParams::idx_initial_strength, 0.3);
+            p.setValue(SimParams::idx_initial_strength, 0.8);
         }
         else
         {
-            p.setValue(SimParams::idx_initial_strength, interpValue*0.5+0.5);
+            p.setValue(SimParams::idx_initial_strength, interpValue*0.2+0.8);
         }
 
         p.setValue(SimParams::idx_Jp_inv, 1.f);
@@ -238,6 +238,8 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     model->gpu.allocate_arrays();
     model->gpu.transfer_to_device();
 
+
+
     spdlog::info("PreparePointsAndSetupGrid done\n");
 }
 
@@ -260,7 +262,7 @@ std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3
     float minDist = std::numeric_limits<float>::max();
     int bestInterval = -1;
     float bestPosition = 0.0f;
-    constexpr float openWaterThreshold = 0.05f;
+    constexpr float openWaterThreshold = 0.02f;
 
     for (int i = 0; i < colordata_OpenWater.size() - 1; ++i)
     {
@@ -377,6 +379,7 @@ float icy::SnapshotManager::projectPointOntoCurve(const Eigen::Vector3f& rgb, co
             totalLength += segment.norm();
         }
     }
+    if(std::isnan(relativePosition)) relativePosition = 1;
 
     return relativePosition; // Relative position in [0, 1]
 }
@@ -532,6 +535,113 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
 // =============================  READ AND WRITE SNAPSHOTS
 
 
+void icy::SnapshotManager::ReadSnapshot(std::string fileName)
+{
+
+    {
+        // Convert to std::filesystem::path for manipulation
+        std::filesystem::path snPath(fileName);
+        // Navigate to the target file by appending the relative path
+        std::filesystem::path gridAndWindPath = snPath.parent_path() / "_grid_and_wind.h5";
+        std::string grid_and_wid_Path = gridAndWindPath.string();
+
+        H5::H5File file(grid_and_wid_Path, H5F_ACC_RDONLY);
+
+        H5::DataSet gridDataset = file.openDataSet("grid");
+        model->prms.ReadParametersFromHDF5Attributes(gridDataset);
+
+        // Get the dataspace of the dataset
+        H5::DataSpace dataspace = gridDataset.getSpace();
+
+        // Get the dimensions of the dataset
+        hsize_t dims[2];
+        dataspace.getSimpleExtentDims(dims, nullptr);
+        size_t gridXTotal = dims[0];
+        size_t gridY = dims[1];
+
+        if(gridXTotal != model->prms.GridXTotal || gridY != model->prms.GridYTotal)
+            throw std::runtime_error("LoadHDF5Frame grid size mismatch");
+
+        model->gpu.allocate_host_arrays();
+
+        // Read the dataset into the vector
+        gridDataset.read(model->gpu.grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
+
+        H5::DataSet rgbDataset = file.openDataSet("colorImage");
+        rgbDataset.read(model->gpu.original_image_colors_rgb.data(), H5::PredType::NATIVE_UINT8);
+
+        // point colors
+        H5::DataSet ptcDataset = file.openDataSet("point_colors_rgb");
+        ptcDataset.getSpace().getSimpleExtentDims(dims, nullptr);
+        if(dims[0] != model->prms.nPtsInitial) throw std::runtime_error("restore snapshot: pts count mismatch");
+        ptcDataset.read(model->gpu.point_colors_rgb.data(), H5::PredType::NATIVE_UINT32);
+
+//        model->wind_interpolator.ReadFromOwnHDF5(file);
+        // fluid
+        if(model->prms.UseCurrentData)
+        {
+            H5::Attribute attribute = rgbDataset.openAttribute("CachedFileName");
+            H5::StrType str_type = attribute.getStrType();
+            std::string fileName;
+            attribute.read(str_type, fileName);
+
+            std::string cachedFile = std::string(snapshot_path) + "/" + fileName;
+            model->fluent_interpolatror.PrepareFromCachedFile(cachedFile);
+        }
+    }
+
+    // read state of the points
+    H5::H5File file(fileName, H5F_ACC_RDONLY);
+    H5::DataSet ds = file.openDataSet("pts_data");
+
+    ds.openAttribute("SimulationStep").read(H5::PredType::NATIVE_INT, &model->prms.SimulationStep);
+    ds.openAttribute("SimulationTime").read(H5::PredType::NATIVE_DOUBLE, &model->prms.SimulationTime);
+    ds.openAttribute("HSSOA_size").read(H5::PredType::NATIVE_UINT, &model->gpu.hssoa.size);
+
+    int nPtsArrays;
+    ds.openAttribute("nPtsArrays").read(H5::PredType::NATIVE_INT, &nPtsArrays);
+
+    // Get the dataspace of the dataset
+    H5::DataSpace dsp = ds.getSpace();
+    hsize_t dims[2];
+    dsp.getSimpleExtentDims(dims, nullptr);
+
+    if(dims[0] != SimParams::nPtsArrays || dims[1] != model->gpu.hssoa.size || nPtsArrays != dims[0])
+        throw std::runtime_error("icy::SnapshotManager::ReadSnapshot array size mismatch");
+
+    if(model->gpu.hssoa.capacity < dims[2])
+        throw std::runtime_error("somehow there is not enough space in hssoa");
+
+    // Define hyperslab
+    hsize_t dims_mem[2] = {SimParams::nPtsArrays, model->gpu.hssoa.capacity};
+    H5::DataSpace memspace(2, dims_mem);
+    hsize_t offset[2] = {0, 0};      // Start reading at the origin
+    hsize_t count[2] = {dims[0], dims[1]}; // Size of the data in the file
+    memspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+
+    H5::DataType dtype;
+    if constexpr(std::is_same_v<t_PointReal, float>) dtype = H5::PredType::NATIVE_FLOAT;
+    else dtype = H5::PredType::NATIVE_DOUBLE;
+
+    ds.read(model->gpu.hssoa.host_buffer, dtype, memspace, dsp);
+
+    // GPU
+
+    model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridYTotal); // this is actually for SpecialSelector2D
+
+    model->gpu.initialize();
+    model->gpu.split_hssoa_into_partitions();
+    model->gpu.allocate_arrays();
+    model->gpu.transfer_to_device();
+
+    //model->Prepare();
+
+
+    spdlog::info("icy::SnapshotManager::ReadSnapshot done");
+
+}
+
+
 
 void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTime)
 {
@@ -580,7 +690,14 @@ void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTim
             std::string fileName = pathObj.filename().string();
 
             std::string destinationPath = s_path + "/" + fileName;
-            std::filesystem::copy_file(sourcePath, destinationPath, std::filesystem::copy_options::overwrite_existing);
+            if(!std::filesystem::exists(destinationPath))
+            {
+                std::filesystem::copy_file(sourcePath, destinationPath, std::filesystem::copy_options::overwrite_existing);
+            }
+            else
+            {
+                spdlog::info("destination file exists {}", destinationPath);
+            }
 
             H5::StrType str_type(H5::PredType::C_S1, H5T_VARIABLE);
             dataset_image.createAttribute("CachedFileName", str_type, att_dspace).write(str_type, fileName);
@@ -736,13 +853,6 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
     H5::DataSet ds_vis_Q = file.createDataSet("vis_Q", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
     ds_vis_Q.write(vis_Q.data(), H5::PredType::NATIVE_FLOAT);
 
-//    H5::DataSet ds_vis_r = file.createDataSet("vis_r", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
-//    ds_vis_r.write(vis_r.data(), H5::PredType::NATIVE_FLOAT);
-//    H5::DataSet ds_vis_g = file.createDataSet("vis_g", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
-//    ds_vis_g.write(vis_g.data(), H5::PredType::NATIVE_FLOAT);
-//    H5::DataSet ds_vis_b = file.createDataSet("vis_b", H5::PredType::NATIVE_FLOAT, dataspace_grid, proplist);
-//    ds_vis_b.write(vis_b.data(), H5::PredType::NATIVE_FLOAT);
-
     H5::DataSet ds_count = file.createDataSet("count", H5::PredType::NATIVE_UINT8, dataspace_grid, proplist);
     ds_count.write(count.data(), H5::PredType::NATIVE_UINT8);
 
@@ -765,95 +875,3 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
 
 
 
-void icy::SnapshotManager::ReadSnapshot(std::string fileName)
-{
-    /*
-    {
-        // Convert to std::filesystem::path for manipulation
-        std::filesystem::path snPath(fileName);
-        // Navigate to the target file by appending the relative path
-        std::filesystem::path gridAndWindPath = snPath.parent_path() / "_grid_and_wind.h5";
-        std::string grid_and_wid_Path = gridAndWindPath.string();
-
-        H5::H5File file(grid_and_wid_Path, H5F_ACC_RDONLY);
-
-        H5::DataSet gridDataset = file.openDataSet("grid");
-        model->prms.ReadParametersFromHDF5Attributes(gridDataset);
-
-        // Get the dataspace of the dataset
-        H5::DataSpace dataspace = gridDataset.getSpace();
-
-        // Get the dimensions of the dataset
-        hsize_t dims[2];
-        dataspace.getSimpleExtentDims(dims, nullptr);
-        size_t gridXTotal = dims[0];
-        size_t gridY = dims[1];
-
-        if(gridXTotal != model->prms.GridXTotal || gridY != model->prms.GridY)
-            throw std::runtime_error("LoadHDF5Frame grid size mismatch");
-
-        model->gpu.hssoa.Allocate(model->prms.nPtsInitial, gridXTotal*gridY);
-
-        // Read the dataset into the vector
-        gridDataset.read(model->gpu.hssoa.grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
-
-
-        // point colors
-
-        H5::DataSet ptcDataset = file.openDataSet("point_colors_rgb");
-        ptcDataset.getSpace().getSimpleExtentDims(dims, nullptr);
-        if(dims[0] != model->prms.nPtsInitial) throw std::runtime_error("restore snapshot: pts count mismatch");
-        ptcDataset.read(model->gpu.hssoa.point_colors_rgb.data(), H5::PredType::NATIVE_UINT32);
-
-        model->wind_interpolator.ReadFromOwnHDF5(file);
-    }
-
-    // read state of the points
-    H5::H5File file(fileName, H5F_ACC_RDONLY);
-    H5::DataSet ds = file.openDataSet("pts_data");
-
-    ds.openAttribute("SimulationStep").read(H5::PredType::NATIVE_INT, &model->prms.SimulationStep);
-    ds.openAttribute("SimulationTime").read(H5::PredType::NATIVE_DOUBLE, &model->prms.SimulationTime);
-    ds.openAttribute("HSSOA_size").read(H5::PredType::NATIVE_UINT, &model->gpu.hssoa.size);
-
-    int nPtsArrays;
-    ds.openAttribute("nPtsArrays").read(H5::PredType::NATIVE_INT, &nPtsArrays);
-
-    // Get the dataspace of the dataset
-    H5::DataSpace dsp = ds.getSpace();
-    hsize_t dims[2];
-    dsp.getSimpleExtentDims(dims, nullptr);
-
-    if(dims[0] != SimParams::nPtsArrays || dims[1] != model->gpu.hssoa.size || nPtsArrays != dims[0])
-        throw std::runtime_error("icy::SnapshotManager::ReadSnapshot array size mismatch");
-
-    if(model->gpu.hssoa.capacity < dims[2])
-        throw std::runtime_error("somehow there is not enough space in hssoa");
-
-    // Define hyperslab
-    hsize_t dims_mem[2] = {SimParams::nPtsArrays, model->gpu.hssoa.capacity};
-    H5::DataSpace memspace(2, dims_mem);
-    hsize_t offset[2] = {0, 0};      // Start reading at the origin
-    hsize_t count[2] = {dims[0], dims[1]}; // Size of the data in the file
-    memspace.selectHyperslab(H5S_SELECT_SET, count, offset);
-
-    H5::DataType dtype;
-    if constexpr(std::is_same_v<t_PointReal, float>) dtype = H5::PredType::NATIVE_FLOAT;
-    else dtype = H5::PredType::NATIVE_DOUBLE;
-
-    ds.read(model->gpu.hssoa.host_buffer, dtype, memspace, dsp);
-
-    // GPU
-
-    model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY); // this is actually for SpecialSelector2D
-
-    model->gpu.initialize();
-    model->gpu.split_hssoa_into_partitions();
-    model->gpu.allocate_arrays();
-    model->gpu.transfer_to_device();
-
-    model->Prepare();
-
-    spdlog::info("icy::SnapshotManager::ReadSnapshot done");
-*/
-}

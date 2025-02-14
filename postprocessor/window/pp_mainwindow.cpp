@@ -57,6 +57,16 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     ui->toolBar->addWidget(qsbFrameFrom);
     ui->toolBar->addWidget(qsbFrameTo);
 
+
+    lbl = new QLabel();
+    lbl->setText("cpu:");
+//    ui->toolBar->addWidget(lbl);
+
+    qsbThreads = new QSpinBox();
+    qsbThreads->setRange(1,30);
+    qsbThreads->setValue(3);
+//    ui->toolBar->addWidget(qsbThreads);
+
     // populate combobox
     QMetaEnum qme = QMetaEnum::fromType<VTKVisualization::VisOpt>();
     for(int i=0;i<qme.keyCount();i++) comboBox_visualizations->addItem(qme.key(i));
@@ -113,9 +123,11 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     connect(ui->actionOpen_Frame, &QAction::triggered, this, &PPMainWindow::open_frame_triggered);
     connect(ui->action_camera_reset, &QAction::triggered, this, &PPMainWindow::cameraReset_triggered);
     connect(ui->actionRender_Frame, &QAction::triggered, this, &PPMainWindow::render_frame_triggered);
-    connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
     connect(ui->actionGenerate_Script, &QAction::triggered, this, &PPMainWindow::generate_script_triggered);
     connect(ui->actionShow_Wind, &QAction::triggered, this, &PPMainWindow::toggle_wind_visualization);
+    connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
+    connect(ui->actionRender_All_2, &QAction::triggered, this, &PPMainWindow::render_all2_triggered);
+
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PPMainWindow::limits_changed);
 
@@ -258,12 +270,21 @@ void PPMainWindow::render_frame_triggered()
     frameData.renderer->GetActiveCamera()->GetFocalPoint(&data[3]);
     data[6] = frameData.renderer->GetActiveCamera()->GetParallelScale();
 
-
     localFD.SetUpOffscreenRender(frameData, data);
     localFD.LoadHDF5Frame(ggd.countFrames/2);
-    localFD.RenderFrame(VTKVisualization::VisOpt::Jp_inv, outputDirectoryJpinv);
+    localFD.RenderFrame(frameData.representation.VisualizingVariable,
+                        getOutputDirectory(frameData.representation.VisualizingVariable));
 }
 
+
+std::string_view PPMainWindow::getOutputDirectory(VTKVisualization::VisOpt visopt)
+{
+    if(visopt == VTKVisualization::VisOpt::Jp_inv) return outputDirectoryJpinv;
+    else if(visopt == VTKVisualization::VisOpt::colors) return outputDirectoryColors;
+    else if(visopt == VTKVisualization::VisOpt::P) return outputDirectoryP;
+    else if(visopt == VTKVisualization::VisOpt::Q) return outputDirectoryQ;
+    else return "";
+}
 
 
 void PPMainWindow::render_all_triggered()
@@ -273,78 +294,64 @@ void PPMainWindow::render_all_triggered()
     const int frameTo = qsbFrameTo->value();
 
     std::mutex mutex;
+    int threads = qsbThreads->value();
 
-//    omp_set_num_threads(6);
+//    omp_set_num_threads(threads);
 
     double data[10];
     frameData.renderer->GetActiveCamera()->GetPosition(&data[0]);
     frameData.renderer->GetActiveCamera()->GetFocalPoint(&data[3]);
     data[6] = frameData.renderer->GetActiveCamera()->GetParallelScale();
 
+    FrameData localFD;
+    localFD.mutex = &mutex;
 
-#pragma omp parallel for schedule(dynamic, 1) num_threads(1)
+//
+#pragma omp parallel for schedule(dynamic, 5) firstprivate(localFD) num_threads(3)
     for(int frame=frameFrom; frame<=frameTo; frame++)
     {
-        FrameData localFD;
-        localFD.mutex = &mutex;
         localFD.SetUpOffscreenRender(frameData, data);
         localFD.LoadHDF5Frame(frame);
-        localFD.RenderFrame(VTKVisualization::VisOpt::Jp_inv, outputDirectoryJpinv);
+        localFD.RenderFrame(frameData.representation.VisualizingVariable,
+                            getOutputDirectory(frameData.representation.VisualizingVariable));
     }
+}
 
 
-    /*
+void PPMainWindow::render_all2_triggered()
+{
+    qDebug() << "PPMainWindow::render_all_triggered()";
+    const int frameFrom = qsbFrameFrom->value();
+    const int frameTo = qsbFrameTo->value();
 
+    std::mutex mutex;
+    int threads = qsbThreads->value();
 
-    renderWindow->RemoveRenderer(renderer);
-    offscreenRenderWindow->AddRenderer(renderer);
+    //    omp_set_num_threads(threads);
 
+    double data[10];
+    frameData.renderer->GetActiveCamera()->GetPosition(&data[0]);
+    frameData.renderer->GetActiveCamera()->GetFocalPoint(&data[3]);
+    data[6] = frameData.renderer->GetActiveCamera()->GetParallelScale();
 
+    FrameData localFD;
+    localFD.mutex = &mutex;
 
-
-
-
-        if(!frameData.availableFrames[frame]) continue;
-        qDebug() << "rendering frame " << frame;
-        frameData.LoadHDF5Frame(fileName, false);
-
-        std::string renderFileName;
-
-        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::Jp_inv);
-        offscreenRenderWindow->Render();
-        windowToImageFilter->Modified(); // this is extra important
-        renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryJpinv, frame);
-        writerPNG->SetFileName(renderFileName.c_str());
-        writerPNG->Write();
-
-
-        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::P);
-        offscreenRenderWindow->Render();
-        windowToImageFilter->Modified(); // this is extra important
-        std::string renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryP, frame);
-        writerPNG->SetFileName(renderFileName.c_str());
-        writerPNG->Write();
-
-        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::Q);
-        offscreenRenderWindow->Render();
-        windowToImageFilter->Modified(); // this is extra important
-        renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryQ, frame);
-        writerPNG->SetFileName(renderFileName.c_str());
-        writerPNG->Write();
-
-
-        representation.ChangeVisualizationOption(VTKVisualization::VisOpt::colors);
-        offscreenRenderWindow->Render();
-        windowToImageFilter->Modified(); // this is extra important
-        renderFileName = fmt::format("{}/{:05d}.png", outputDirectoryColors, frame);
-        writerPNG->SetFileName(renderFileName.c_str());
-        writerPNG->Write();
-
+//
+#pragma omp parallel for schedule(dynamic, 5) firstprivate(localFD) num_threads(10)
+    for(int frame=frameFrom; frame<=frameTo; frame++)
+    {
+        localFD.SetUpOffscreenRender(frameData, data);
+        localFD.LoadHDF5Frame(frame);
+        localFD.RenderFrame(VTKVisualization::VisOpt::Jp_inv,
+                            getOutputDirectory(VTKVisualization::VisOpt::Jp_inv));
+        localFD.RenderFrame(VTKVisualization::VisOpt::colors,
+                            getOutputDirectory(VTKVisualization::VisOpt::colors));
+        localFD.RenderFrame(VTKVisualization::VisOpt::P,
+                            getOutputDirectory(VTKVisualization::VisOpt::P));
+        localFD.RenderFrame(VTKVisualization::VisOpt::Q,
+                            getOutputDirectory(VTKVisualization::VisOpt::Q));
     }
-
-    offscreenRenderWindow->RemoveRenderer(renderer);
-    renderWindow->AddRenderer(renderer);
-*/
 }
 
 

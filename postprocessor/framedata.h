@@ -19,6 +19,7 @@
 #include <vtkWindowToImageFilter.h>
 #include <vtkPNGWriter.h>
 #include <vtkRenderer.h>
+#include <vtkOpenGLRenderWindow.h>
 #include <vtkCamera.h>
 
 struct GeneralGridData
@@ -36,13 +37,14 @@ struct GeneralGridData
 struct FrameData
 {
     FrameData();
+    FrameData(const FrameData &other);
 
     VTKVisualization representation;
 
     void SetUpOffscreenRender(FrameData &guiFD, double camData[10]);
     void LoadHDF5Frame(int frameNumber);
     void LoadHDF5Frame(std::string fileName);
-    void RenderFrame(VTKVisualization::VisOpt visopt, std::string outputDirectory);
+    void RenderFrame(VTKVisualization::VisOpt visopt, std::string_view outputDirectory);
 
     GeneralGridData *ggd = nullptr;
     bool dataLoaded = false;
@@ -55,6 +57,7 @@ struct FrameData
     std::vector<float> vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
     std::vector<uint8_t> rgb;
 
+//    vtkNew<vtkRenderWindow> offscreenRenderWindow;
     vtkNew<vtkRenderWindow> offscreenRenderWindow;
     vtkNew<vtkWindowToImageFilter> windowToImageFilter;
     vtkNew<vtkPNGWriter> writerPNG;

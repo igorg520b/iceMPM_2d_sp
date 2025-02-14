@@ -67,6 +67,7 @@ private Q_SLOTS:
     void open_frame_triggered();
     void render_frame_triggered();
     void render_all_triggered();
+    void render_all2_triggered();
     void generate_script_triggered();
 
     void toggle_wind_visualization(bool checked);
@@ -82,7 +83,8 @@ private:
     QString settingsFileName;       // includes current dir
     QComboBox *comboBox_visualizations;
     QDoubleSpinBox *qdsbValRange;   // high and low limits for value scale
-    QSpinBox *qsbFrameFrom, *qsbFrameTo;
+    QSpinBox *qsbFrameFrom, *qsbFrameTo, *qsbThreads;
+    QLabel *lbl;
 
     // VTK
     vtkNew<vtkGenericOpenGLRenderWindow> renderWindow;
@@ -91,9 +93,11 @@ private:
     // other
     vtkNew<vtkInteractorStyleRubberBand2D> interactor;
 
-    std::string outputDirectoryP = "render/P";
-    std::string outputDirectoryQ = "render/Q";
-    std::string outputDirectoryColors = "render/colors";
-    std::string outputDirectoryJpinv = "render/Jp_inv";
+    constexpr static std::string_view outputDirectoryP = "render/P";
+    constexpr static std::string_view outputDirectoryQ = "render/Q";
+    constexpr static std::string_view outputDirectoryColors = "render/colors";
+    constexpr static std::string_view outputDirectoryJpinv = "render/Jp_inv";
+
+    static std::string_view getOutputDirectory(VTKVisualization::VisOpt visopt);
 };
 #endif

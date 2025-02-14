@@ -46,6 +46,28 @@ void FluentInterpolator::LoadFrame(int frame, int slot)
     ds.read(ptr, H5::PredType::NATIVE_FLOAT, memspace, dsp);
 }
 
+void FluentInterpolator::PrepareFromCachedFile(std::string _cachedFile)
+{
+    this->cachedFileName = _cachedFile;
+    currentFrame = -1;
+    circularBufferIdx = -1;
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+    _data.resize(gx*gy*2*preloadedFrames); // storage to hold preloaded frames
+
+    // check if cached data is available
+    {
+        H5::H5File file(cachedFileName, H5F_ACC_RDONLY);
+        H5::DataSet ds = file.openDataSet("vx_vy");
+        ds.openAttribute("file_count").read(H5::PredType::NATIVE_INT, &file_count);
+        ds.openAttribute("interval_size").read(H5::PredType::NATIVE_INT, &interval_size);
+    }
+    spdlog::info("invokign SetTime(0) from PrepareFlowDataCache");
+    SetTime(0);
+    is_initialized = true;
+    return;
+}
+
 
 void FluentInterpolator::PrepareFlowDataCache(std::string fileName)
 {
@@ -124,7 +146,8 @@ void FluentInterpolator::PrepareFlowDataCache(std::string fileName)
     {
         size_t frameSize = gx*gy;
         spdlog::info("FluentInterpolator::ScanDirectory: loading frame {}",i);
-        ParseDataFrame(i+1, _data.data(), _data.data()+frameSize);
+//        ParseDataFrame(i+1, _data.data(), _data.data()+frameSize);
+        ParseDataFrame(file_count/2, _data.data(), _data.data()+frameSize);
 
         // define hyperslab
         hsize_t offset[3] = {(hsize_t)i*2, 0, 0};

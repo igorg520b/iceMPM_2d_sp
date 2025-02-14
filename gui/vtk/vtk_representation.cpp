@@ -182,6 +182,7 @@ void icy::VisualRepresentation::SynchronizeValues()
     const double ox = h * model->prms.ModeledRegionOffsetX;
     const double oy = h * model->prms.ModeledRegionOffsetY;
 
+    // points' coordinates
     const int nPts = model->gpu.hssoa.size;
     for(int i=0;i<nPts;i++)
     {
@@ -191,9 +192,12 @@ void icy::VisualRepresentation::SynchronizeValues()
     }
     points->Modified();
     actor_points->GetProperty()->SetPointSize(model->prms.ParticleViewSize);
+
+
     double range = std::pow(10,ranges[VisualizingVariable]);
     double centerVal = 0;
 
+    // background under points
     for(int i=0;i<gx;i++)
         for(int j=0;j<gy;j++)
         {
@@ -217,20 +221,32 @@ void icy::VisualRepresentation::SynchronizeValues()
     }
     else if(VisualizingVariable == VisOpt::status)
     {
-        scalarBar->VisibilityOn();
+        scalarBar->VisibilityOff();
         points_mapper->ScalarVisibilityOn();
-        points_mapper->SetColorModeToMapScalars();
-        points_mapper->UseLookupTableScalarRangeOn();
+
+        points_mapper->SetColorModeToDirectScalars();
+        points_mapper->Modified();
+
         for(int i=0;i<nPts;i++)
         {
-            float value = 1;
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            if(s->getDisabledStatus()) value = 3;
-            else if(s->getCrushedStatus()) value = 0;
-            else if(s->getWeakenedStatus()) value = 2;
+            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
+            int crushed = s->getCrushedStatus();
+            uint8_t r = 255;
+            uint8_t g = 0;
+            uint8_t b = 0;
+            if(crushed) {g=255; r=0;}
+            pts_colors->SetValue((vtkIdType)(i*3+0), r);
+            pts_colors->SetValue((vtkIdType)(i*3+1), g);
+            pts_colors->SetValue((vtkIdType)(i*3+2), b);
         }
-    }
+        points_polydata->GetPointData()->SetActiveScalars("pts_colors");
+        pts_colors->Modified();
 
+        points_polydata->Modified();
+        points_filter->Update();
+
+    }
     else if(VisualizingVariable == VisOpt::v_u)
     {
         actor_points->VisibilityOff();
@@ -270,7 +286,6 @@ void icy::VisualRepresentation::SynchronizeValues()
                     for(int k=0;k<3;k++) pixel[k] = c[k];
                 }
             }
-
     }
     else if(VisualizingVariable == VisOpt::v_norm)
     {
@@ -297,7 +312,6 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_mapper->ScalarVisibilityOn();
 
         points_mapper->SetColorModeToDirectScalars();
-//        points_mapper->UseLookupTableScalarRangeOff();
         points_mapper->Modified();
 
         for(int i=0;i<nPts;i++)
@@ -363,12 +377,30 @@ void icy::VisualRepresentation::SynchronizeValues()
         }
         points_polydata->GetPointData()->SetActiveScalars("pts_colors");
         pts_colors->Modified();
-        //        points_polydata->Modified();
         points_filter->Update();
     }
     else if(VisualizingVariable == VisOpt::Q)
     {
+        scalarBar->VisibilityOn();
+        points_mapper->ScalarVisibilityOn();
+        points_mapper->SetColorModeToDirectScalars();
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            double val = s->getValue(SimParams::idx_Q);
+            double value = (val)/range+0.5;
+            double alpha = abs(val)/range;
 
+            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
+            uint32_t rgb = model->gpu.point_colors_rgb[pt_idx];
+            std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::P2, value);
+            std::array<uint8_t, 3> c2 = colormap.mergeColors(rgb, c, alpha);
+
+            for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(i*3+k), c2[k]);
+        }
+        points_polydata->GetPointData()->SetActiveScalars("pts_colors");
+        pts_colors->Modified();
+        points_filter->Update();
     }
 
 

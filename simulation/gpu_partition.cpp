@@ -294,6 +294,12 @@ void GPU_Partition::record_timings(const bool enablePointTransfer)
     cudaSetDevice(Device);
     cudaError_t err;
     err = cudaStreamSynchronize(streamCompute);
+    if(err != cudaSuccess)
+    {
+        const char *errorString = cudaGetErrorString(err);
+        spdlog::error("error string: {}",errorString);
+        throw std::runtime_error("record_timings; cudaStreamSynchronize");
+    }
 
     err = cudaEventElapsedTime(&_gridResetAndHalo, event_10_cycle_start, event_20_grid_halo_sent);
     if(err != cudaSuccess)

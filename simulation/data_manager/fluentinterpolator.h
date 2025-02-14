@@ -44,6 +44,7 @@ public:
     double position;
 
     void PrepareFlowDataCache(std::string geometryFile);
+    void PrepareFromCachedFile(std::string cachedFile);
 
     void TestLoad(double scale, double ox, double oy);
 

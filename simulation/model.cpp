@@ -6,7 +6,7 @@
 
 bool icy::Model::Step()
 {
-    if(prms.SimulationStep == 0 && prms.SaveSnapshots) SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
+//    if(prms.SimulationStep == 0 && prms.SaveSnapshots) SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
 
     std::cout << '\n';
     spdlog::info("step {} ({}) started; sim_time {:>6.3}; host pts {}; cap {}",
@@ -28,12 +28,19 @@ bool icy::Model::Step()
         gpu.reset_grid();
         gpu.p2g();
 
-        if(prms.UseWindData && wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
-        if(prms.UseCurrentData && fluent_interpolatror.SetTime(simulation_time))
+//        if(prms.UseWindData && wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
+//        if(prms.UseCurrentData && fluent_interpolatror.SetTime(simulation_time))
+//            gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getFramePtr(0,0),
+ //                                                         fluent_interpolatror.getFramePtr(0,1),
+  //                                                        fluent_interpolatror.getFramePtr(1,0),
+  //                                                        fluent_interpolatror.getFramePtr(1,1));
+
+        if(prms.UseCurrentData && fluent_interpolatror.SetTime(0))
             gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getFramePtr(0,0),
                                                           fluent_interpolatror.getFramePtr(0,1),
                                                           fluent_interpolatror.getFramePtr(1,0),
                                                           fluent_interpolatror.getFramePtr(1,1));
+
 
         gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
         const bool isCycleStart = step % prms.UpdateEveryNthStep == 0;

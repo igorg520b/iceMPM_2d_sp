@@ -50,6 +50,8 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
             Bp(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Bp00 + i*SimParams::dim + j)];
         }
     }
+    t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
+    t_PointReal strength = buffer_pts[pt_idx + pitch_pts*SimParams::idx_initial_strength];
 
     const uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
     Eigen::Vector2i cell_i((int)(cell & 0xffff), (int)(cell >> 16));
@@ -57,7 +59,10 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
     PointMatrix2r PFt;
     PFt = KirchhoffStress_Wolper(Fe);
     // PFt = Water(buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv]);
-    PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv)*PFt;
+//    PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv)*PFt;
+
+    // version that accounts for surface density change
+    PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv*Jp_inv*strength)*PFt;
 
     PointArray2r ww[3];
     CalculateWeightCoeffs(pos, ww);
@@ -142,8 +147,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 //        wvel *= 100;
 
 //        wvel *= (13+min(simulation_time/20000, 2.));
-        wvel *= (1+min(simulation_time/(3600*3), 3.));
-
+        wvel *= (1+min(simulation_time/(3600*10), 3.));
 
         // quadratic term
 /*
@@ -161,19 +165,19 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 */
 
         // linear term
-        const double coeff = 0.01;
+        const double coeff = 0.005;
         velocity = (1-coeff)*velocity + coeff*wvel;
 
         GridVector2r wvel2 = wvel-velocity;
         wvel2 = wvel2 * wvel2.norm();
-        const double coeff2 = 0.02;
+        const double coeff2 = 0.01;
         velocity += coeff2*wvel2;
 
         GridVector2r wvel3 = (wvel-velocity)*1000*hsq*dt/mass;
         //wvel3 = wvel3 * wvel3.norm();
         if(wvel3.norm() > vmax*0.1) wvel3 = wvel3.normalized()*vmax*0.1;
         const double coeff3 = 0.01;
-//        velocity += coeff3*wvel3;
+        velocity += coeff3*wvel3;
 
 
 
@@ -199,7 +203,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     }
 
     // write the updated grid velocity back to memory
-    if(velocity.squaredNorm() > vmax*vmax) velocity = velocity.normalized()*vmax;
+    if(velocity.squaredNorm() > vmax*vmax*0.1*0.1) velocity.setZero();
     buffer_grid[1*pitch_grid + idx] = (t_GridReal)velocity[0];
     buffer_grid[2*pitch_grid + idx] = (t_GridReal)velocity[1];
 }
@@ -386,7 +390,7 @@ __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const
 {
     t_PointReal beta, M_sq, pmin, pmax, qmax, pmin2;
     GetParametersForGrain(grain, pmin, pmax, qmax, beta, M_sq, pmin2);
-    qmax *= strength;
+//    qmax *= strength;
 
     if(p<0)
     {
@@ -424,7 +428,8 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
     t_PointReal DP_threshold_p = gprms.DP_threshold_p;
 
     const double &pmax = gprms.IceCompressiveStrength;
-    const double &qmax = gprms.IceShearStrength;
+    double qmax = gprms.IceShearStrength;
+//    qmax *= initial_strength;
 
     DP_threshold_p *= Jp_inv;
 //    t_PointReal tan_phi = tan(gprms.DP_phi*initial_strength*SimParams::pi/180);
