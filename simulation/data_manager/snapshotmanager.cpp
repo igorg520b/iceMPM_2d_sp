@@ -262,7 +262,7 @@ std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3
     float minDist = std::numeric_limits<float>::max();
     int bestInterval = -1;
     float bestPosition = 0.0f;
-    constexpr float openWaterThreshold = 0.02f;
+    constexpr float openWaterThreshold = 0.05f;
 
     for (int i = 0; i < colordata_OpenWater.size() - 1; ++i)
     {
@@ -719,7 +719,8 @@ void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTim
     hsize_t chunk_size = (hsize_t)std::min((unsigned)256*1024, model->gpu.hssoa.size);
     hsize_t chunk_dims[2] = {SimParams::nPtsArrays, chunk_size};
     proplist.setChunk(2, chunk_dims);
-    proplist.setDeflate(5);
+    if(SimulationStep == 0) proplist.setDeflate(1);
+    else proplist.setDeflate(5);
 
     H5::DataType dtype;
     if constexpr(std::is_same_v<t_PointReal, float>) dtype = H5::PredType::NATIVE_FLOAT;

@@ -13,7 +13,7 @@
 class ColorMap {
 public:
     // Fast enum-based colormap selection
-    enum class Palette { SpecialJ, P2, Pressure, COUNT};
+    enum class Palette { SpecialJ, P2, Pressure, ANSYS, COUNT};
 
 private:
     // Store colormaps using std::vector for variable sizes

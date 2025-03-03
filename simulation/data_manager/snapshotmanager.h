@@ -44,12 +44,12 @@ private:
     static void generate_points(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
 
 
-    static constexpr std::array<std::array<float, 3>, 5> colordata_OpenWater = {{
+    static constexpr std::array<std::array<float, 3>, 4> colordata_OpenWater = {{
         {0,0,0},
+        {0x15/255.,0x1f/255.,0x2f/255.},
         {0x1d/255.,0x29/255.,0x3a/255.},
-        {0x28/255.,0x3b/255.,0x52/255.},
-        {0x4a/255.,0x4b/255.,0x4b/255.},
-        {0.32, 0.32, 0.32}
+        {0x28/255.,0x3b/255.,0x52/255.}//,
+//        {0x4a/255.,0x4b/255.,0x4b/255.}
     }};
 
     static constexpr std::array<std::array<float, 3>, 3> colordata_Solid = {{

@@ -182,9 +182,9 @@ void PPMainWindow::open_frame_triggered()
     frameData.LoadHDF5Frame(qFileName.toStdString());
     frameData.representation.SynchronizeTopology();
 
-    qsbFrameFrom->setRange(0, ggd.countFrames-1);
-    qsbFrameFrom->setValue(0);
-    qsbFrameTo->setRange(0, ggd.countFrames-1);
+    qsbFrameFrom->setRange(1, ggd.countFrames-1);
+    qsbFrameFrom->setValue(1);
+    qsbFrameTo->setRange(1, ggd.countFrames-1);
     qsbFrameTo->setValue(ggd.countFrames-1);
 
     updateGUI();
@@ -307,7 +307,7 @@ void PPMainWindow::render_all_triggered()
     localFD.mutex = &mutex;
 
 //
-#pragma omp parallel for schedule(dynamic, 5) firstprivate(localFD) num_threads(3)
+//#pragma omp parallel for schedule(dynamic, 5) firstprivate(localFD) num_threads(2)
     for(int frame=frameFrom; frame<=frameTo; frame++)
     {
         localFD.SetUpOffscreenRender(frameData, data);

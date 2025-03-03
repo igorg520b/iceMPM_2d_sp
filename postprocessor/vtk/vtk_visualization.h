@@ -75,7 +75,7 @@ public:
 private:
     ColorMap colormap;
 
-    vtkNew<vtkLookupTable> lut_Pressure, lut_P2;
+    vtkNew<vtkLookupTable> lut_Pressure, lut_P2, lut_ANSYS;
 
     // main grid
     // draw background grid as vtkImageData

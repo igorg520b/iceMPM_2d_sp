@@ -12,6 +12,7 @@ VTKVisualization::VTKVisualization()
 {
     colormap.populateLut(ColorMap::Palette::Pressure, lut_Pressure);
     colormap.populateLut(ColorMap::Palette::P2, lut_P2);
+    colormap.populateLut(ColorMap::Palette::ANSYS, lut_ANSYS);
 
     // text
     constexpr int fontSize = 20;
@@ -152,8 +153,6 @@ void VTKVisualization::SynchronizeValues()
 
     const double sim_time = frameData->SimulationTime;
     const double &h = prms.cellsize;
-//    const double ox = h * prms.ModeledRegionOffsetX;
-//    const double oy = h * prms.ModeledRegionOffsetY;
 
     double range = std::pow(10,ranges[VisualizingVariable]);
     double centerVal = 0;
@@ -285,10 +284,10 @@ void VTKVisualization::SynchronizeValues()
                     if(count > 0)
                     {
                         float coeff2 = std::clamp(std::abs(deviatoric_stress)/range, 0., 1.);
-                        coeff2 = pow(coeff2, 2);
+                        //coeff2 = pow(coeff2, 0.5);
                         float coeff1 = 1;//std::min(count/2.,1.); // how much water surface is obscured
                         float val = (deviatoric_stress)/range;
-                        std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::P2, val);
+                        std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, val);
 
                         std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
                         std::array<uint8_t, 3> c3 = ColorMap::mergeColors(seaWater, c2, coeff1);
@@ -299,7 +298,7 @@ void VTKVisualization::SynchronizeValues()
                 }
             }
         scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(lut_P2);
+        scalarBar->SetLookupTable(lut_ANSYS);
         scalarBar->SetLabelFormat("%.1e");
         lut_Pressure->SetTableRange(0, range);
     }
