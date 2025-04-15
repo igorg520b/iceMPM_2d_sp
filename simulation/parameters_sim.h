@@ -1,6 +1,10 @@
 #ifndef P_SIM_H
 #define P_SIM_H
 
+#define LOGR(fmtstr, ...) spdlog::info(fmt::format(fmt::runtime(fmtstr), __VA_ARGS__))
+#define LOGV(fmtstr) spdlog::info(fmtstr)
+
+
 #include <iostream>
 #include <string>
 #include <filesystem>

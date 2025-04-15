@@ -42,13 +42,13 @@ int main(int argc, char** argv)
     }
     else
     {
-        spdlog::info("snapshot file must be provided");
+        LOGV("snapshot file must be provided");
         throw std::runtime_error("no snapshot file");
     }
 
 
     model.gpu.transfer_completion_callback = [&](){
-        spdlog::info("cycle callback {}; ", model.prms.AnimationFrameNumber());
+        LOGR("cycle callback {}; ", model.prms.AnimationFrameNumber());
         model.UnlockCycleMutex();
     };
     // ensure that the folder exists
@@ -70,7 +70,7 @@ int main(int argc, char** argv)
 
         if(user_input[0]=='q'){
             request_terminate = true;
-            spdlog::critical("requested to save the snapshot and terminate");
+            LOGV("requested to save the snapshot and terminate");
         }
     } while(!request_terminate);
 

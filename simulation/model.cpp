@@ -9,7 +9,7 @@ bool icy::Model::Step()
 //    if(prms.SimulationStep == 0 && prms.SaveSnapshots) SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
 
     std::cout << '\n';
-    spdlog::info("step {} ({}) started; sim_time {:>6.3}; host pts {}; cap {}",
+    LOGR("step {} ({}) started; sim_time {:>6.3}; host pts {}; cap {}",
                  prms.SimulationStep, prms.AnimationFrameNumber(), prms.SimulationTime, gpu.hssoa.size, gpu.hssoa.capacity);
 
     int count_unupdated_steps = 0;
@@ -59,17 +59,17 @@ bool icy::Model::Step()
     accessing_point_data.lock();
 
     gpu.transfer_from_device();
-    spdlog::info("finished {} ({}); host pts {}; cap {}; windSpeed {}; windBearing {}", prms.SimulationEndTime,
+    LOGR("finished {} ({}); host pts {}; cap {}; windSpeed {}; windBearing {}", prms.SimulationEndTime,
                  prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity, spd_and_angle.first, spd_and_angle.second);
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
 
     // print out timings
-    spdlog::info("{:^3s} {:^8s} {:^8s} {:^7s} | {:^5s} {:^5s} {:^5s} | {:^5s} {:^5s} {:^5s} {:^5s} {:^5s} | {:^6s}",
+    LOGR("{:^3s} {:^8s} {:^8s} {:^7s} | {:^5s} {:^5s} {:^5s} | {:^5s} {:^5s} {:^5s} {:^5s} {:^5s} | {:^6s}",
                  "P-D",  "pts", "free", "dis",  "p2g",  "s2",  "S12",     "u",  "g2p", "psnt", "prcv","S36", "tot");
     GPU_Partition &p = gpu.partitions.front();
     p.normalize_timings(count_unupdated_steps);
-    spdlog::info("{:>1}-{:>1} {:>8} {:>8} {:>7} | {:>5.1f} {:>5.1f} {:>5.1f} | {:>5.1f} {:>5.1f} {:>5.1f} {:5.1f} {:5.1f} | {:>6.1f}",
+    LOGR("{:>1}-{:>1} {:>8} {:>8} {:>7} | {:>5.1f} {:>5.1f} {:>5.1f} | {:>5.1f} {:>5.1f} {:>5.1f} {:5.1f} {:5.1f} | {:>6.1f}",
                  p.PartitionID, p.Device, p.nPts_partition, (p.nPtsPitch-p.nPts_partition), p.disabled_points_count,
                  p.timing_10_P2GAndHalo, p.timing_20_acceptHalo, (p.timing_10_P2GAndHalo + p.timing_20_acceptHalo),
                  p.timing_30_updateGrid, p.timing_40_G2P, p.timing_60_ptsSent, p.timing_70_ptsAccepted,
@@ -79,12 +79,12 @@ bool icy::Model::Step()
     const float disabled_proportion = (float)p.disabled_points_count/p.nPts_partition;
     if(disabled_proportion > SimParams::disabled_pts_proportion_threshold)
     {
-        spdlog::info("Model::Step() squeezing and sorting HSSOA");
+        LOGV("Model::Step() squeezing and sorting HSSOA");
         gpu.hssoa.RemoveDisabledAndSort(prms.GridYTotal);
         gpu.split_hssoa_into_partitions();
         gpu.transfer_to_device();
         SyncTopologyRequired = true;
-        spdlog::info("Model::Step() rebalancing done");
+        LOGV("Model::Step() rebalancing done");
     }
 
     accessing_point_data.unlock();
@@ -116,7 +116,7 @@ icy::Model::Model() : frame_ready(false), done(false)
     gpu.model = this;
     GPU_Partition::prms = &this->prms;
     saver_thread = std::thread(&icy::Model::SaveThread, this);
-    spdlog::info("Model constructor");
+    LOGV("Model constructor");
 }
 
 
@@ -124,7 +124,7 @@ void icy::Model::SaveFrameRequest(int SimulationStep, double SimulationTime)
 {
     {
         std::lock_guard<std::mutex> lock(frame_mutex);
-        spdlog::info("icy::Model::SaveFrameRequest; step {}",SimulationStep);
+        LOGR("icy::Model::SaveFrameRequest; step {}",SimulationStep);
         saving_SimulationStep = SimulationStep;
         saving_SimulationTime = SimulationTime;
         frame_ready = true; // Indicate that a new frame is ready
@@ -184,7 +184,7 @@ void icy::Model::UnlockCycleMutex()
 
 void icy::Model::Prepare()
 {
-    spdlog::info("icy::Model::Prepare()");
+    LOGV("icy::Model::Prepare()");
     //abortRequested = false;
     gpu.update_constants();
 

@@ -62,7 +62,6 @@ void FluentInterpolator::PrepareFromCachedFile(std::string _cachedFile)
         ds.openAttribute("file_count").read(H5::PredType::NATIVE_INT, &file_count);
         ds.openAttribute("interval_size").read(H5::PredType::NATIVE_INT, &interval_size);
     }
-    spdlog::info("invokign SetTime(0) from PrepareFlowDataCache");
     SetTime(0);
     is_initialized = true;
     return;
@@ -93,13 +92,10 @@ void FluentInterpolator::PrepareFlowDataCache(std::string fileName)
             ds.openAttribute("file_count").read(H5::PredType::NATIVE_INT, &file_count);
             ds.openAttribute("interval_size").read(H5::PredType::NATIVE_INT, &interval_size);
         }
-        spdlog::info("invokign SetTime(0) from PrepareFlowDataCache");
         SetTime(0);
         is_initialized = true;
         return;
     }
-    spdlog::info("preparing cache file {}", cachedFileName);
-
     // generate and save HDF5 file with rasterized flow data
 
     std::regex filePattern(baseName + "-(\\d{5})\\.dat\\.h5");
@@ -145,7 +141,6 @@ void FluentInterpolator::PrepareFlowDataCache(std::string fileName)
     for(int i=0;i<file_count;i++)
     {
         size_t frameSize = gx*gy;
-        spdlog::info("FluentInterpolator::ScanDirectory: loading frame {}",i);
 //        ParseDataFrame(i+1, _data.data(), _data.data()+frameSize);
         ParseDataFrame(file_count/2, _data.data(), _data.data()+frameSize);
 
@@ -156,8 +151,6 @@ void FluentInterpolator::PrepareFlowDataCache(std::string fileName)
         dataset.write(_data.data(),H5::PredType::NATIVE_FLOAT,memspace,dataspace);
     }
 
-    spdlog::info("FluentInterpolator::ScanDirectory: files {}; interval {}; prefix {}",
-                 file_count, interval_size, geometryFilePrefix);
     is_initialized = true;
 
     SetTime(0);
@@ -188,10 +181,6 @@ void FluentInterpolator::ParseDataFrame(int frame, float *U, float *V)
     //    std::string dataFile1 = fmt::format("{}-{:05}.dat.h5", geometryFilePrefix, frame*interval);
     std::string dataFileName = fmt::format("{}-{:05}.dat.h5", geometryFilePrefix, frame*interval_size);
     std::string casFileName = fmt::format("{}.cas.h5", geometryFilePrefix);
-    spdlog::info("data file {}", dataFileName);
-    spdlog::info("cas file {}", casFileName);
-
-
 
     vtkNew<vtkFLUENTCFFCustomReader> fluentReader;
     vtkNew<vtkTransform> transform;
@@ -199,8 +188,6 @@ void FluentInterpolator::ParseDataFrame(int frame, float *U, float *V)
     vtkNew<vtkCellDataToPointData> filter_cd2pd;
     vtkNew<vtkImageData> imageData;
     vtkNew<vtkProbeFilter> probeFilter;
-
-
 
     fluentReader->SetDataFileName(dataFileName.c_str());  // Set the mesh file (.cas.h5)
     fluentReader->SetFileName(casFileName.c_str());  // Set the mesh file (.cas.h5)
@@ -237,7 +224,6 @@ void FluentInterpolator::ParseDataFrame(int frame, float *U, float *V)
 
 
     if (!dataArray) {
-        spdlog::error("Failed to extract SV_V from probedData");
         throw std::runtime_error("Failed to extract SV_V from probedData");
     }
     for(int i=0;i<gx;i++)
@@ -251,7 +237,6 @@ void FluentInterpolator::ParseDataFrame(int frame, float *U, float *V)
 
     dataArray = vtkDoubleArray::SafeDownCast(probedData->GetPointData()->GetScalars("SV_U"));
     if (!dataArray) {
-        spdlog::error("Failed to extract SV_U from probedData");
         throw std::runtime_error("Failed to extract SV_U from probedData");
     }
     for(int i=0;i<gx;i++)
@@ -288,7 +273,6 @@ Eigen::Vector2f FluentInterpolator::getInterpolation(int i, int j) const
 
 bool FluentInterpolator::SetTime(double t)
 {
-    //    spdlog::info("FluentInterpolator::SetTime {}", t);
     this->currentTime = t;
     const double frame_interval = interval_size * prms->FrameTimeInterval;
 
@@ -319,7 +303,7 @@ bool FluentInterpolator::SetTime(double t)
         }
 
         loadThread = std::thread([this, frameFrom]() {
-            spdlog::info("async loading of frame {}",(frameFrom + 2) % file_count);
+            LOGR("async loading of frame {}",(frameFrom + 2) % file_count);
             LoadFrame((frameFrom + 2) % file_count, (circularBufferIdx + 2) % preloadedFrames);
 
             {
@@ -337,7 +321,7 @@ bool FluentInterpolator::SetTime(double t)
         currentFrame = frameFrom;
         circularBufferIdx = 0;
         // reload circular buffer entirely
-        spdlog::info("complete reloading of frame buffer {}",currentFrame);
+        LOGR("complete reloading of frame buffer {}",currentFrame);
         for(int i=0;i<preloadedFrames;i++) LoadFrame((currentFrame+i)%file_count, i);
     }
     else
@@ -369,11 +353,6 @@ std::string FluentInterpolator::CachedFileName()
 
 FluentInterpolator::FluentInterpolator()
 {
-    spdlog::info("FluentInterpolator::FluentInterpolator()");
-    std::cout << "VTK Version: " << VTK_MAJOR_VERSION << "."
-              << VTK_MINOR_VERSION << "."
-              << VTK_BUILD_VERSION << std::endl;
-
     std::filesystem::path directory_path(flow_cache_path);
     if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
 }

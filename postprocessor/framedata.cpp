@@ -39,8 +39,8 @@ void GeneralGridData::ScanDirectory(std::string frameFileName)
     }
 
     countFrames = availableFrames.size();
-    spdlog::info("availableFrames size {}",availableFrames.size());
-    spdlog::info("frameDirectory {}", frameDirectory);
+    LOGR("availableFrames size {}",availableFrames.size());
+    LOGR("frameDirectory {}", frameDirectory);
 
     // Load grid data
 
@@ -54,7 +54,8 @@ void GeneralGridData::ScanDirectory(std::string frameFileName)
     std::string resultPath = gridAndWindPath.string();
 
     // open the initial data file
-    spdlog::info("LoadHDF5Frame resultPath = {}", resultPath);
+    LOGR("LoadHDF5Frame resultPath = {}", resultPath);
+
     H5::H5File file(resultPath, H5F_ACC_RDONLY);
 
     H5::DataSet gridDataset = file.openDataSet("grid");
@@ -84,7 +85,7 @@ void GeneralGridData::ScanDirectory(std::string frameFileName)
     H5::DataSet rgbDataset = file.openDataSet("colorImage");
     rgbDataset.read(original_image_colors_rgb.data(), H5::PredType::NATIVE_UINT8);
 
-    spdlog::info("GeneralGridData::ScanDirectory done");
+    LOGV("GeneralGridData::ScanDirectory done");
 }
 
 
@@ -173,12 +174,12 @@ void FrameData::SetUpOffscreenRender(FrameData &guiFD, double data[10])
 
 void FrameData::RenderFrame(VTKVisualization::VisOpt visopt, std::string_view outputDirectory)
 {
-    spdlog::info("FrameData::RenderFrame");
+    LOGV("FrameData::RenderFrame");
     representation.ChangeVisualizationOption(visopt);
     offscreenRenderWindow->Render();
     windowToImageFilter->Modified(); // this is extra important
     std::string renderFileName = fmt::format("{}/{:05d}.png", outputDirectory, frame);
-    spdlog::info("writing {}", renderFileName);
+    LOGR("writing {}", renderFileName);
     writerPNG->SetFileName(renderFileName.c_str());
     mutex->lock();
     writerPNG->Write();
@@ -188,7 +189,7 @@ void FrameData::RenderFrame(VTKVisualization::VisOpt visopt, std::string_view ou
 
 void FrameData::LoadHDF5Frame(int frameNumber)
 {
-    spdlog::info("LoadHDF5Frame: {}", frameNumber);
+    LOGR("LoadHDF5Frame: {}; ggd->frameDirectory {}", frameNumber, ggd->frameDirectory);
     std::string fileName = fmt::format("{}/frame_{:05d}.h5", ggd->frameDirectory, frameNumber);
     mutex->lock();
     LoadHDF5Frame(fileName);
@@ -199,7 +200,9 @@ void FrameData::LoadHDF5Frame(int frameNumber)
 
 void FrameData::LoadHDF5Frame(std::string fileName)
 {
+    LOGR("invoked LoadHDF5Frame(std::string fileName) {}", fileName);
     size_t gridSize = ggd->prms.GridXTotal*ggd->prms.GridYTotal;
+    LOGR("LoadHDF5Frame gridSize {}x{} = {}",ggd->prms.GridXTotal, ggd->prms.GridYTotal, gridSize );
     count.resize(gridSize);
     vis_vx.resize(gridSize);
     vis_vy.resize(gridSize);
@@ -229,6 +232,7 @@ void FrameData::LoadHDF5Frame(std::string fileName)
 
     file.openDataSet("rgb").read(rgb.data(), H5::PredType::NATIVE_UINT8);
     dataLoaded = true;
+    LOGV("LoadHDF5Frame done");
 }
 
 

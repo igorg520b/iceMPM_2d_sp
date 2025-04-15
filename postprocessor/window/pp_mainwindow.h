@@ -69,6 +69,7 @@ private Q_SLOTS:
     void render_all_triggered();
     void render_all2_triggered();
     void generate_script_triggered();
+    void load_selected_frame_triggered();
 
     void toggle_wind_visualization(bool checked);
 
@@ -83,7 +84,7 @@ private:
     QString settingsFileName;       // includes current dir
     QComboBox *comboBox_visualizations;
     QDoubleSpinBox *qdsbValRange;   // high and low limits for value scale
-    QSpinBox *qsbFrameFrom, *qsbFrameTo, *qsbThreads;
+    QSpinBox *qsbFrameFrom, *qsbFrameTo, *qsbThreads, *qsbLoadFrame;
     QLabel *lbl;
 
     // VTK

@@ -57,6 +57,8 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     ui->toolBar->addWidget(qsbFrameFrom);
     ui->toolBar->addWidget(qsbFrameTo);
 
+    qsbLoadFrame = new QSpinBox();
+    ui->toolBar->addWidget(qsbLoadFrame);
 
     lbl = new QLabel();
     lbl->setText("cpu:");
@@ -127,7 +129,7 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     connect(ui->actionShow_Wind, &QAction::triggered, this, &PPMainWindow::toggle_wind_visualization);
     connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
     connect(ui->actionRender_All_2, &QAction::triggered, this, &PPMainWindow::render_all2_triggered);
-
+    connect(ui->actionLoad_Selected_Frame, &QAction::triggered, this, &PPMainWindow::load_selected_frame_triggered);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PPMainWindow::limits_changed);
 
@@ -186,6 +188,7 @@ void PPMainWindow::open_frame_triggered()
     qsbFrameFrom->setValue(1);
     qsbFrameTo->setRange(1, ggd.countFrames-1);
     qsbFrameTo->setValue(ggd.countFrames-1);
+    qsbLoadFrame->setRange(1, ggd.countFrames-1);
 
     updateGUI();
 }
@@ -383,5 +386,17 @@ void PPMainWindow::generate_script_triggered()
 
 void PPMainWindow::toggle_wind_visualization(bool checked)
 {
+    updateGUI();
+}
+
+
+void PPMainWindow::load_selected_frame_triggered()
+{
+    std::mutex mutex;
+    frameData.mutex = &mutex;
+
+
+    frameData.LoadHDF5Frame(qsbLoadFrame->value());
+    frameData.representation.SynchronizeTopology();
     updateGUI();
 }

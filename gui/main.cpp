@@ -28,8 +28,9 @@ int main(int argc, char *argv[])
         w.LoadParameterFile(parameters_file);
     }
 
-    w.resize(1400,900);
-//    w.show();
-    w.showMaximized();
+    w.resize(1800,1000);
+    w.move(0,0);
+    w.show();
+//    w.showMaximized();
     return a.exec();
 }

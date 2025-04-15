@@ -40,6 +40,7 @@
     <addaction name="actionRender_All_2"/>
     <addaction name="actionGenerate_Script"/>
     <addaction name="actionShow_Wind"/>
+    <addaction name="actionLoad_Selected_Frame"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuTools_2"/>
@@ -127,6 +128,14 @@
   <action name="actionRender_All_2">
    <property name="text">
     <string>Render All 2</string>
+   </property>
+  </action>
+  <action name="actionLoad_Selected_Frame">
+   <property name="text">
+    <string>Load Selected Frame</string>
+   </property>
+   <property name="toolTip">
+    <string>Load Selected Frame</string>
    </property>
   </action>
  </widget>

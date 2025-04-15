@@ -49,14 +49,14 @@ void SimParams::Reset()
 
     ComputeLame();
     ComputeHelperVariables();
-    spdlog::info("SimParams reset; nPtsArrays {}", nPtsArrays);
+    spdlog::info("SimParams reset");
 }
 
 
 
 std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 {
-    spdlog::info("SimParams ParseFile {}",fileName);
+    LOGR("SimParams ParseFile {}",fileName);
     if(!std::filesystem::exists(fileName)) throw std::runtime_error("configuration file is not found");
     std::ifstream fileStream(fileName);
     std::string strConfigFile;
@@ -113,8 +113,8 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     }
     result["InputPNG"] = doc["InputPNG"].GetString();
     result["ModeledRegion"] = doc["ModeledRegion"].GetString();
-    spdlog::info("ParseFile; png map data {}", result["InputPNG"]);
-    spdlog::info("ModeledRegion png {}", result["ModeledRegion"]);
+//    spdlog::info("ParseFile; png map data {}", result["InputPNG"]);
+//    spdlog::info("ModeledRegion png {}", result["ModeledRegion"]);
 
     UseWindData = doc.HasMember("InputWindData");
     if(UseWindData)
@@ -124,8 +124,7 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 
         if (!std::filesystem::exists(strFileName))
         {
-            spdlog::critical("file does not exist: {}", strFileName);
-            throw std::runtime_error("file does not exist");
+            throw std::runtime_error("wind file does not exist");
         }
     }
 
@@ -272,39 +271,42 @@ void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset)
 
 void SimParams::Printout()
 {
-    spdlog::info("Simulation Parameters:");
-    spdlog::info("SimulationStartUnixTime: {}", SimulationStartUnixTime);
-    spdlog::info("InitialTimeStep: {}, SimulationEndTime: {}", InitialTimeStep, SimulationEndTime);
-    spdlog::info("AnimationFramesRequested: {}", AnimationFramesRequested);
-    spdlog::info("SimulationStep: {}", SimulationStep);
-    spdlog::info("SimulationTime: {}", SimulationTime);
-    spdlog::info("UpdateEveryNthStep: {}", UpdateEveryNthStep);
-    spdlog::info("UseWindData: {}", UseWindData);
-    spdlog::info("UseCurrentData: {}", UseCurrentData);
+    spdlog::info(fmt::format(fmt::runtime("Simulation Parameters:")));
+    spdlog::info(fmt::format(fmt::runtime("SimulationStartUnixTime: {}"), SimulationStartUnixTime));
+    spdlog::info(fmt::format(fmt::runtime("InitialTimeStep: {}, SimulationEndTime: {}"), InitialTimeStep, SimulationEndTime));
+    spdlog::info(fmt::format(fmt::runtime("AnimationFramesRequested: {}"), AnimationFramesRequested));
+    spdlog::info(fmt::format(fmt::runtime("SimulationStep: {}"), SimulationStep));
+    spdlog::info(fmt::format(fmt::runtime("SimulationTime: {}"), SimulationTime));
+    spdlog::info(fmt::format(fmt::runtime("UpdateEveryNthStep: {}"), UpdateEveryNthStep));
+    spdlog::info(fmt::format(fmt::runtime("UseWindData: {}"), UseWindData));
+    spdlog::info(fmt::format(fmt::runtime("UseCurrentData: {}"), UseCurrentData));
 
     // parameters
-    spdlog::info("\n");
-    spdlog::info("Parameters:");
-    spdlog::info("dt_vol_Dpinv: {}, vmax: {}", dt_vol_Dpinv, vmax);
-    spdlog::info("windDragCoeff_airDensity: {}", windDragCoeff_airDensity);
-    spdlog::info("lambda: {}, mu: {}, kappa: {}", lambda, mu, kappa);
-    spdlog::info("ParticleVolume: {}, ParticleViewSize: {}", ParticleVolume, ParticleViewSize);
-    spdlog::info("ParticleMass: {}", ParticleMass);
-    spdlog::info("DP_phi: {}, DP_threshold_p: {}", DP_phi, DP_threshold_p);
-    spdlog::info("SurfaceDensity: {}, PoissonsRatio: {}, YoungsModulus: {}", SurfaceDensity, PoissonsRatio, YoungsModulus);
-    spdlog::info("IceCompressiveStrength: {}, IceTensileStrength: {}, IceShearStrength: {}, IceTensileStrength2: {}",
-                 IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2);
+    spdlog::info("");
+    spdlog::info(fmt::format(fmt::runtime("Parameters:")));
+    spdlog::info(fmt::format(fmt::runtime("dt_vol_Dpinv: {}, vmax: {}"), dt_vol_Dpinv, vmax));
+    spdlog::info(fmt::format(fmt::runtime("windDragCoeff_airDensity: {}"), windDragCoeff_airDensity));
+    spdlog::info(fmt::format(fmt::runtime("lambda: {}, mu: {}, kappa: {}"), lambda, mu, kappa));
+    spdlog::info(fmt::format(fmt::runtime("ParticleVolume: {}, ParticleViewSize: {}"), ParticleVolume, ParticleViewSize));
+    spdlog::info(fmt::format(fmt::runtime("ParticleMass: {}"), ParticleMass));
+    spdlog::info(fmt::format(fmt::runtime("DP_phi: {}, DP_threshold_p: {}"), DP_phi, DP_threshold_p));
+    spdlog::info(fmt::format(fmt::runtime("SurfaceDensity: {}, PoissonsRatio: {}, YoungsModulus: {}"),
+                             SurfaceDensity, PoissonsRatio, YoungsModulus));
+    spdlog::info(fmt::format(fmt::runtime("IceCompressiveStrength: {}, IceTensileStrength: {}, IceShearStrength: {}, IceTensileStrength2: {}"),
+                             IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2));
 
     // points
-    spdlog::info("\n");
-    spdlog::info("Points:");
-    spdlog::info("nPtsInitial: {}", nPtsInitial);
+    spdlog::info("");
+    spdlog::info(fmt::format(fmt::runtime("Points:")));
+    spdlog::info(fmt::format(fmt::runtime("nPtsInitial: {}"), nPtsInitial));
 
     // grid
-    spdlog::info("\n");
-    spdlog::info("Grid:");
-    spdlog::info("cellsize: {}; cellsize*InitializationImageSizeX", cellsize, cellsize*InitializationImageSizeX);
-    spdlog::info("Sim grid: {} x {}", GridXTotal, GridYTotal);
-    spdlog::info("Original image: {} x {}", InitializationImageSizeX, InitializationImageSizeY);
-    spdlog::info("Offset of the modelled region: [{}, {}]", ModeledRegionOffsetX, ModeledRegionOffsetY);
+    spdlog::info("");
+    spdlog::info(fmt::format(fmt::runtime("Grid:")));
+    spdlog::info(fmt::format(fmt::runtime("cellsize: {}; cellsize*InitializationImageSizeX: {}"),
+                             cellsize, cellsize * InitializationImageSizeX));
+    spdlog::info(fmt::format(fmt::runtime("Sim grid: {} x {}"), GridXTotal, GridYTotal));
+    spdlog::info(fmt::format(fmt::runtime("Original image: {} x {}"), InitializationImageSizeX, InitializationImageSizeY));
+    spdlog::info(fmt::format(fmt::runtime("Offset of the modelled region: [{}, {}]"),
+                             ModeledRegionOffsetX, ModeledRegionOffsetY));
 }

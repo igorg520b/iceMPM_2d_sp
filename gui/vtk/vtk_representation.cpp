@@ -78,7 +78,7 @@ icy::VisualRepresentation::VisualRepresentation()
 
 void icy::VisualRepresentation::SynchronizeTopology()
 {
-    spdlog::info("SynchronizeTopology()");
+    LOGV("SynchronizeTopology()");
 
     const int nPts = model->gpu.hssoa.size;
     if(!nPts) return;
@@ -168,7 +168,6 @@ void icy::VisualRepresentation::SynchronizeTopology()
 
 void icy::VisualRepresentation::SynchronizeValues()
 {
-    //spdlog::info("SynchronizeValues()");
     const int &_ox = model->prms.ModeledRegionOffsetX;
     const int &_oy = model->prms.ModeledRegionOffsetY;
 

@@ -32,7 +32,7 @@ void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offse
         if(err != cudaSuccess)
         {
             const char *errorString = cudaGetErrorString(err);
-            spdlog::critical("error when copying points: {}", errorString);
+            LOGR("error when copying points: {}", errorString);
             throw std::runtime_error("transfer_from_device() cudaMemcpyAsync points");
         }
     }
@@ -64,7 +64,7 @@ void GPU_Partition::transfer_points_from_soa_to_device(HostSideSOA &hssoa, int p
         if(err != cudaSuccess)
         {
             const char* errorString = cudaGetErrorString(err);
-            spdlog::critical("PID {}; line {}; nPts_partition {}, cuda error: {}",PartitionID, i, nPts_partition, errorString);
+            LOGR("PID {}; line {}; nPts_partition {}, cuda error: {}",PartitionID, i, nPts_partition, errorString);
             throw std::runtime_error("transfer_points_from_soa_to_device");
         }
     }
@@ -120,7 +120,7 @@ GPU_Partition::~GPU_Partition()
     cudaFree(pts_array);
     cudaFree(grid_status_array);
     cudaFree(grid_water_current);
-    spdlog::info("Destructor invoked; partition {} on device {}", PartitionID, Device);
+    LOGR("Destructor invoked; partition {} on device {}", PartitionID, Device);
 }
 
 void GPU_Partition::initialize(int device, int partition)
@@ -144,7 +144,7 @@ void GPU_Partition::initialize(int device, int partition)
 
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, Device);
-    spdlog::info("Partition {}: initialized dev {}; compute {}.{}", PartitionID, Device,deviceProp.major, deviceProp.minor);
+    LOGR("Partition {}: initialized dev {}; compute {}.{}", PartitionID, Device,deviceProp.major, deviceProp.minor);
 }
 
 
@@ -152,7 +152,7 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
 {
     cudaError_t err;
     cudaSetDevice(Device);
-    spdlog::info("P{}-{} allocate", PartitionID, Device);
+    LOGR("P{}-{} allocate", PartitionID, Device);
 
     // grid
     const int &gy = prms->GridYTotal;
@@ -182,7 +182,7 @@ void GPU_Partition::allocate(int n_points_capacity, int gx)
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid array");
     gwcPitch /= sizeof(float); // assume that this divides without remainder
 
-    spdlog::info("allocate: P {}-{}:  GridPitch/Y {}; Pts {}; gx*gy {}; gwcPitch {}, total {:.2} Mb",
+    LOGR("allocate: P {}-{}:  GridPitch/Y {}; Pts {}; gx*gy {}; gwcPitch {}, total {:.2} Mb",
                  PartitionID, Device,
                  nGridPitch/prms->GridYTotal, nPtsPitch, gx*gy, gwcPitch,
                  (double)total_device/(1024*1024));
@@ -196,7 +196,7 @@ void GPU_Partition::update_constants()
     if(err != cudaSuccess) throw std::runtime_error("gpu_error_indicator initialization");
     err = cudaMemcpyToSymbol(gprms, prms, sizeof(SimParams));
     if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: gprms");
-    spdlog::info("Constant symbols copied to device {}; partition {}", Device, PartitionID);
+    LOGR("Constant symbols copied to device {}; partition {}", Device, PartitionID);
 }
 
 void GPU_Partition::update_wind_velocity_grid(float data[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4])
@@ -297,7 +297,7 @@ void GPU_Partition::record_timings(const bool enablePointTransfer)
     if(err != cudaSuccess)
     {
         const char *errorString = cudaGetErrorString(err);
-        spdlog::error("error string: {}",errorString);
+        LOGR("error string: {}", errorString);
         throw std::runtime_error("record_timings; cudaStreamSynchronize");
     }
 
@@ -305,7 +305,7 @@ void GPU_Partition::record_timings(const bool enablePointTransfer)
     if(err != cudaSuccess)
     {
         const char *errorString = cudaGetErrorString(err);
-        spdlog::error("error string: {}",errorString);
+        LOGR("error string: {}",errorString);
         throw std::runtime_error("record_timings 1");
     }
 

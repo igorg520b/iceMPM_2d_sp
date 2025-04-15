@@ -74,7 +74,7 @@ VTKVisualization::VTKVisualization()
 
 void VTKVisualization::SynchronizeTopology()
 {
-    spdlog::info("VTKVisualization::SynchronizeTopology()");
+    LOGV("VTKVisualization::SynchronizeTopology()");
     if(!frameData->dataLoaded) return;
 
     const SimParams &prms = frameData->ggd->prms;
@@ -90,8 +90,8 @@ void VTKVisualization::SynchronizeTopology()
     const int ox = prms.ModeledRegionOffsetX;
     const int oy = prms.ModeledRegionOffsetY;
 
-    spdlog::info("img size {}", frameData->ggd->original_image_colors_rgb.size());
-    spdlog::info("calculated size {}", imgx*imgy*3);
+    LOGR("img size {}", frameData->ggd->original_image_colors_rgb.size());
+    LOGR("calculated size {}", imgx*imgy*3);
 
     uniformGrid->SetDimensions(imgx, imgy, 1);
     uniformGrid->SetSpacing(h, h, 1.0);
@@ -156,7 +156,7 @@ void VTKVisualization::SynchronizeValues()
 
     double range = std::pow(10,ranges[VisualizingVariable]);
     double centerVal = 0;
-    spdlog::info("SynchronizeValues() {}; range {}", this->VisualizingVariable, range);
+    LOGR("SynchronizeValues() {}; range {}", this->VisualizingVariable, range);
 
     const std::array<uint8_t, 3>& seaWater {0x15, 0x1f, 0x2f};
 
@@ -177,7 +177,7 @@ void VTKVisualization::SynchronizeValues()
 
     if(VisualizingVariable == VisOpt::Jp_inv)
     {
-        spdlog::info("rendering Jp_inv");
+        LOGV("rendering Jp_inv");
         for(int i=0;i<gx;i++)
             for(int j=0;j<gy;j++)
             {
@@ -213,7 +213,7 @@ void VTKVisualization::SynchronizeValues()
     }
     else if(VisualizingVariable == VisOpt::colors)
     {
-        spdlog::info("rendering colors");
+        LOGV("rendering colors");
         scalarBar->VisibilityOff();
 
         for(int i=0;i<gx;i++)
@@ -300,7 +300,7 @@ void VTKVisualization::SynchronizeValues()
         scalarBar->VisibilityOn();
         scalarBar->SetLookupTable(lut_ANSYS);
         scalarBar->SetLabelFormat("%.1e");
-        lut_Pressure->SetTableRange(0, range);
+        lut_ANSYS->SetTableRange(0, range);
     }
 
 
@@ -322,7 +322,7 @@ void VTKVisualization::SynchronizeValues()
 
 void VTKVisualization::ChangeVisualizationOption(int option)
 {
-    spdlog::info("VTKVisualization::ChangeVisualizationOption {}", option);
+    LOGR("VTKVisualization::ChangeVisualizationOption {}", option);
     VisualizingVariable = (VisOpt)option;
     if(option == VisOpt::P)
     {

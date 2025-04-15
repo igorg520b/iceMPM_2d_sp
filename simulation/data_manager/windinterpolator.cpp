@@ -2,10 +2,11 @@
 #include <H5Cpp.h>
 #include <spdlog/spdlog.h>
 #include <iostream>
+#include "parameters_sim.h"
 
 WindInterpolator::WindInterpolator()
 {
-    spdlog::info("WindInterpolator compile-time data storage {} bytes",allocatedLonExtent*allocatedLatExtent*4*sizeof(float));
+    LOGR("WindInterpolator compile-time data storage {} bytes",allocatedLonExtent*allocatedLatExtent*4*sizeof(float));
 }
 
 void WindInterpolator::LoadWindData(std::string netCDF4FileName,
@@ -54,31 +55,31 @@ void WindInterpolator::LoadWindData(std::string netCDF4FileName,
         for (size_t i = 1; i < latitudes.size(); ++i) {
             double delta = latitudes[i - 1] - latitudes[i];
             if (std::abs(delta - gridCellSize) > 1e-9) {
-                spdlog::error("Latitude delta verification failed at index {}: delta = {}", i, delta);
+                LOGR("Latitude delta verification failed at index {}: delta = {}", i, delta);
                 throw std::runtime_error("Latitude delta verification failed");
             }
         }
-        spdlog::info("Latitude deltas verified successfully.");
+        LOGV("Latitude deltas verified successfully.");
 
         // Verify longitude deltas
         for (size_t i = 1; i < longitudes.size(); ++i) {
             double delta = longitudes[i] - longitudes[i - 1];
             if (std::abs(delta - gridCellSize) > 1e-9) {
-                spdlog::error("Longitude delta verification failed at index {}: delta = {}", i, delta);
+                LOGR("Longitude delta verification failed at index {}: delta = {}", i, delta);
                 throw std::runtime_error("Longitude delta verification failed");
             }
         }
-        spdlog::info("Longitude deltas verified successfully.");
+        LOGV("Longitude deltas verified successfully.");
 
         // Verify valid_time deltas
         for (size_t i = 1; i < valid_time.size(); ++i) {
             int64_t delta = valid_time[i] - valid_time[i - 1];
             if (delta != timeResolution) {
-                spdlog::error("Valid_time delta verification failed at index {}: delta = {}", i, delta);
+                LOGR("Valid_time delta verification failed at index {}: delta = {}", i, delta);
                 throw std::runtime_error("Valid_time delta verification failed");
             }
         }
-        spdlog::info("Valid_time deltas verified successfully.");
+        LOGV("Valid_time deltas verified successfully.");
     }
 
 
@@ -93,7 +94,7 @@ void WindInterpolator::LoadWindData(std::string netCDF4FileName,
         auto itLatMax = std::lower_bound(latitudes.begin(), latitudes.end(), LatMax, std::greater<double>());
         idxLatMax = std::distance(latitudes.begin(), itLatMax)-1;
         if (itLatMax == latitudes.end()) {
-            spdlog::error("No elements in the latitude vector are greater than or equal to LatMax ({})", LatMax);
+            LOGR("No elements in the latitude vector are greater than or equal to LatMax ({})", LatMax);
             throw std::runtime_error("No elements in the latitude vector are greater than or equal to LatMax");
         }
         else if(itLatMax == latitudes.begin())
@@ -105,24 +106,24 @@ void WindInterpolator::LoadWindData(std::string netCDF4FileName,
         idxLatMin = std::distance(latitudes.begin(), itLatMin);
 
         if (itLatMin == latitudes.end()) {
-            spdlog::error("No elements in the latitude vector are less than or equal to LatMin ({})", LatMin);
+            LOGR("No elements in the latitude vector are less than or equal to LatMin ({})", LatMin);
             throw std::runtime_error("No elements in the latitude vector are less than or equal to LatMin");
         }
 
         // Find indices for longitude (ascending order)
         auto itLonMin = std::lower_bound(longitudes.begin(), longitudes.end(), LonMin);
         if (itLonMin == longitudes.end()) {
-            spdlog::error("No elements in the longitude vector are greater than or equal to LonMin ({})", LonMin);
+            LOGR("No elements in the longitude vector are greater than or equal to LonMin ({})", LonMin);
             throw std::runtime_error("No elements in the longitude vector are greater than or equal to LonMin");
         } else if (itLonMin == longitudes.begin()) {
-            spdlog::error("No elements in the longitude vector are lower than LonMin ({})", LonMin);
+            LOGR("No elements in the longitude vector are lower than LonMin ({})", LonMin);
             throw std::runtime_error("Region cannot be covered");
         }
         idxLonMin = std::distance(longitudes.begin(), itLonMin) - 1;
 
         auto itLonMax = std::upper_bound(longitudes.begin(), longitudes.end(), LonMax);
         if (itLonMax == longitudes.end()) {
-            spdlog::error("No elements in the longitude vector are greater than LonMax ({})", LonMax);
+            LOGR("No elements in the longitude vector are greater than LonMax ({})", LonMax);
             throw std::runtime_error("No elements in the longitude vector are greater than LonMax");
         }
         idxLonMax = std::distance(longitudes.begin(), itLonMax);
@@ -130,7 +131,7 @@ void WindInterpolator::LoadWindData(std::string netCDF4FileName,
         // Ensure the identified region fully overlaps the defined region
         if (!(latitudes[idxLatMin] < LatMin && latitudes[idxLatMax] > LatMax &&
               longitudes[idxLonMin] < LonMin && longitudes[idxLonMax] > LonMax)) {
-            spdlog::error("The identified region does not fully overlap the defined region.");
+            LOGV("The identified region does not fully overlap the defined region.");
             throw std::runtime_error("The identified region does not fully overlap the defined region.");
         }
 
@@ -139,14 +140,14 @@ void WindInterpolator::LoadWindData(std::string netCDF4FileName,
         gridLatMin = latitudes[idxLatMin];
         gridLonMin = longitudes[idxLonMin];
 
-        spdlog::info("are of inerest origin; lat {:05.4f}; lon {:05.4f}", LatMin, LonMin);
-        spdlog::info("grid origin lat {:05.2f}; lon {:05.2f}", gridLatMin, gridLonMin);
-        spdlog::info("grid size (lat x lon) {} x {}", extentLat, extentLon);
-        spdlog::info("idxLatMin-Max [{}, {}]; idxLonMin-Max [{}, {}]", idxLatMin, idxLatMax, idxLonMin, idxLonMax);
+        LOGR("are of inerest origin; lat {:05.4f}; lon {:05.4f}", LatMin, LonMin);
+        LOGR("grid origin lat {:05.2f}; lon {:05.2f}", gridLatMin, gridLonMin);
+        LOGR("grid size (lat x lon) {} x {}", extentLat, extentLon);
+        LOGR("idxLatMin-Max [{}, {}]; idxLonMin-Max [{}, {}]", idxLatMin, idxLatMax, idxLonMin, idxLonMax);
 
         if(extentLat > allocatedLatExtent || extentLon > allocatedLonExtent)
         {
-            spdlog::error("wind grid extent exceeds the compile-time allocated space");
+            LOGV("wind grid extent exceeds the compile-time allocated space");
             throw std::runtime_error("wind grid extent exceeds the compile-time allocated space");
         }
     }
@@ -161,19 +162,19 @@ void WindInterpolator::LoadWindData(std::string netCDF4FileName,
         uSpace.getSimpleExtentDims(uDims, nullptr);
 
         if (uDims[1] != 1) {
-            spdlog::error("The mysterious dimension (probably pressure values) must have size 1, but found {}.", uDims[1]);
+            LOGR("The mysterious dimension (probably pressure values) must have size 1, but found {}.", uDims[1]);
             throw std::runtime_error("Invalid mysterious dimension size");
         }
 
         hsize_t offset[4] = {0, 0, (hsize_t)idxLatMax, (hsize_t)idxLonMin};
         hsize_t count[4] = {(hsize_t)nTimeIntervals, 1, (hsize_t)extentLat, (hsize_t)extentLon};
-        spdlog::info("count[4]: {}, {}, {}, {}", count[0], count[1], count[2], count[3]);
+        LOGR("count[4]: {}, {}, {}, {}", count[0], count[1], count[2], count[3]);
 
         H5::DataSpace memSpace(4, count);
         uSpace.selectHyperslab(H5S_SELECT_SET, count, offset);
 
         u_data.resize(count[0] * count[2] * count[3]);
-        spdlog::info("u_data size is now {}",u_data.size());
+        LOGR("u_data size is now {}",u_data.size());
         uDataset.read(u_data.data(), H5::PredType::NATIVE_FLOAT, memSpace, uSpace);
 
 
@@ -187,7 +188,7 @@ void WindInterpolator::LoadWindData(std::string netCDF4FileName,
     }
 
     isInitialized = true;
-    spdlog::info("WindInterpolator::LoadWindData done");
+    LOGV("WindInterpolator::LoadWindData done");
 }
 
 
@@ -207,7 +208,7 @@ bool WindInterpolator::setTime(const double simulation_time)
     {
         if(interval > nTimeIntervals-2 || interval < 0)
         {
-            spdlog::error("WindInterpolator::setTime selected time is out of range");
+            LOGV("WindInterpolator::setTime selected time is out of range");
             throw std::runtime_error("WindInteroplator time is out of range");
         }
         currentInterval = interval;
@@ -220,13 +221,7 @@ bool WindInterpolator::setTime(const double simulation_time)
                 grid[idxLat][idxLon][1] = v_data[getIndexInUV(interval, idxLat, idxLon)];
                 grid[idxLat][idxLon][2] = u_data[getIndexInUV(interval+1, idxLat, idxLon)];
                 grid[idxLat][idxLon][3] = v_data[getIndexInUV(interval+1, idxLat, idxLon)];
-
-//                gridv[idxLat][idxLon][0].x() = u_data[getIndexInUV(interval, idxLat, idxLon)];
-//                gridv[idxLat][idxLon][0].y() = v_data[getIndexInUV(interval, idxLat, idxLon)];
-//                gridv[idxLat][idxLon][1].x() = u_data[getIndexInUV(interval+1, idxLat, idxLon)];
-//                gridv[idxLat][idxLon][1].y() = v_data[getIndexInUV(interval+1, idxLat, idxLon)];
             }
-        //spdlog::info("UPDATE REQUIRED");
         return true;
     }
     return false;
@@ -315,7 +310,7 @@ void WindInterpolator::SaveToOwnHDF5(H5::H5File &file)
 
 void WindInterpolator::ReadFromOwnHDF5(H5::H5File &file)
 {
-    spdlog::info("WindInterpolator::ReadFromOwnHDF5");
+    LOGV("WindInterpolator::ReadFromOwnHDF5");
     H5::DataSet uDataset = file.openDataSet("u_data");
 
     uDataset.openAttribute("extentLat").read(H5::PredType::NATIVE_INT, &extentLat);
@@ -349,14 +344,14 @@ void WindInterpolator::ReadFromOwnHDF5(H5::H5File &file)
     isInitialized = true;
     currentInterval = -1;
 
-    spdlog::info("extentLat x extentLon: {} x {}", extentLat, extentLon);
-    spdlog::info("nTimeIntervals {}", nTimeIntervals);
-    spdlog::info("LatMin - LatMax: [{}; {}]", LatMin, LatMax);
-    spdlog::info("LonMin - LonMax: [{}; {}]", LonMin, LonMax);
-    spdlog::info("valid_time_front {}", valid_time_front);
-    spdlog::info("simulation_start_date {}", simulation_start_date);
-    spdlog::info("gridLatMin; gridLonMin [{},{}]",gridLatMin, gridLonMin);
-    spdlog::info("WindInterpolator::ReadFromOwnHDF5 done");
+    LOGR("extentLat x extentLon: {} x {}", extentLat, extentLon);
+    LOGR("nTimeIntervals {}", nTimeIntervals);
+    LOGR("LatMin - LatMax: [{}; {}]", LatMin, LatMax);
+    LOGR("LonMin - LonMax: [{}; {}]", LonMin, LonMax);
+    LOGR("valid_time_front {}", valid_time_front);
+    LOGR("simulation_start_date {}", simulation_start_date);
+    LOGR("gridLatMin; gridLonMin [{},{}]",gridLatMin, gridLonMin);
+    LOGV("WindInterpolator::ReadFromOwnHDF5 done");
 }
 
 

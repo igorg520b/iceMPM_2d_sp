@@ -321,7 +321,7 @@ void MainWindow::simulation_data_ready()
 
 void MainWindow::updateGUI()
 {
-    spdlog::info("updateGUI");
+    LOGV("updateGUI");
     labelStepCount->setText(QString::number(model.prms.SimulationStep));
     labelElapsedTime->setText(QString("%1 s").arg(model.prms.SimulationTime,0,'f',0));
 //    labelWindSpeed->setText(QString("%1 m/s").arg(model.windSpeed,0,'f',2));
@@ -419,7 +419,7 @@ void MainWindow::LoadParameterFile(QString qFileName)
     }
 
     if(model.prms.SaveSnapshots) {
-        spdlog::info("requesting to save snapshot 0");
+        LOGV("requesting to save snapshot 0");
         model.SaveFrameRequest(model.prms.SimulationStep, model.prms.SimulationTime);
     }
 
@@ -465,7 +465,7 @@ void MainWindow::read_fluent_data_triggered()
 
 void MainWindow::sliderValueChanged(int val)
 {
-    spdlog::info("sliderValueChanged {}", val);
+    LOGR("sliderValueChanged {}", val);
     model.fluent_interpolatror.SetTime((double)val);
     representation.SynchronizeValues();
     renderWindow->Render();

@@ -23,18 +23,15 @@ namespace fs = std::filesystem;
 
 void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::string fileNameModelledArea)
 {
-    spdlog::info("icy::SnapshotManager::PreparePointsAndSetupGrid {}",fileName);
-    spdlog::info("modeled area file: {}", fileNameModelledArea);
+    LOGR("icy::SnapshotManager::PreparePointsAndSetupGrid {}",fileName);
+    LOGR("modeled area file: {}", fileNameModelledArea);
 
     // load satellite photo
     int channels, imgx, imgy;
     unsigned char *png_data = stbi_load(fileName.c_str(), &imgx, &imgy, &channels, 4); // request 4 channels - RGBA
     if(!png_data || channels != 4)
     {
-        spdlog::error("filename {}", fileName);
-        spdlog::error("png_data {}", (void*)png_data);
-        spdlog::error("channels {}", channels);
-        spdlog::error("png1 not loaded");
+        LOGR("filename {}", fileName);
         throw std::runtime_error("png1 not loaded");
     }
     model->prms.InitializationImageSizeX = imgx;
@@ -45,7 +42,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     if(imgx != model->prms.InitializationImageSizeX || imgy != model->prms.InitializationImageSizeY
         || !png_data_modelled_region || channels != 4)
     {
-        spdlog::error("png2 not loaded: {}", fileNameModelledArea);
+        LOGR("png2 not loaded: {}", fileNameModelledArea);
         throw std::runtime_error("png2 not loaded");
     }
 
@@ -88,14 +85,14 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     const int gy = model->prms.GridYTotal = ymax-ymin+1;
     if(model->prms.GridXTotal < 0 || model->prms.GridYTotal < 0)
     {
-        spdlog::error("modeled area not found");
+        LOGV("modeled area not found");
         throw std::runtime_error("modeled area not found");
     }
 
-    spdlog::info("initialization image: {} x {}", model->prms.InitializationImageSizeX, model->prms.InitializationImageSizeY);
-    spdlog::info("grid size: {} x {}", model->prms.GridXTotal, model->prms.GridYTotal);
-    spdlog::info("modeled area offset: {}, {}", model->prms.ModeledRegionOffsetX, model->prms.ModeledRegionOffsetY);
-    spdlog::info("modeled area extent: [{}, {}] - [{}, {}]", xmin, ymin, xmax, ymax);
+    LOGR("initialization image: {} x {}", model->prms.InitializationImageSizeX, model->prms.InitializationImageSizeY);
+    LOGR("grid size: {} x {}", model->prms.GridXTotal, model->prms.GridYTotal);
+    LOGR("modeled area offset: {}, {}", model->prms.ModeledRegionOffsetX, model->prms.ModeledRegionOffsetY);
+    LOGR("modeled area extent: [{}, {}] - [{}, {}]", xmin, ymin, xmax, ymax);
 
     // either load or generate points
     std::vector<std::array<float, 2>> buffer;   // initial buffer for reading/generating points
@@ -128,7 +125,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     // allocate host-side arrays for points and grid
     model->gpu.allocate_host_arrays();
     model->gpu.hssoa.size = model->prms.nPtsInitial; // set the actual number of points stored in HSSOA
-    spdlog::info("PreparePointsAndSetupGrid: nPoints {}", model->prms.nPtsInitial);
+    LOGR("PreparePointsAndSetupGrid: nPoints {}", model->prms.nPtsInitial);
 
 
     // compute the X-dimension from lat/lon using haversineDistance()
@@ -139,17 +136,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     model->prms.ParticleVolume = h*h*gx*gy/ buffer.size();
     const double pointScale = (gx-1) * h;
 
-    spdlog::info("assumed horizontal scale: {}; cellsize {}", XScale, model->prms.cellsize);
-
-
-//    if(model->prms.DimensionHorizontal == 0)
-//    {
-//        XScale = haversineDistance((model->prms.LatMin + model->prms.LatMax)*0.5, model->prms.LonMin, model->prms.LonMax);
-//    }
-//    else
-//    {
- //       XScale = model->prms.DimensionHorizontal;
- //   }
+    LOGR("assumed horizontal scale: {}; cellsize {}", XScale, model->prms.cellsize);
 
     // compute cellsize
 
@@ -240,14 +227,8 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
 
 
 
-    spdlog::info("PreparePointsAndSetupGrid done\n");
+    LOGV("PreparePointsAndSetupGrid done\n");
 }
-
-
-
-
-
-
 
 
 std::string icy::SnapshotManager::prepare_file_name(int gx, int gy)
@@ -323,7 +304,7 @@ double icy::SnapshotManager::haversineDistance(double lat, double lon1, double l
 void icy::SnapshotManager::LoadWindData(std::string fileName)
 {
     /*
-    spdlog::info("icy::SnapshotManager::LoadWindData - {}", fileName);
+    LOGR("icy::SnapshotManager::LoadWindData - {}", fileName);
     model->prms.use_GFS_wind = true;
     model->wind_interpolator.LoadWindData(fileName,
                                           model->prms.LatMin,model->prms.LatMax,model->prms.LonMin,model->prms.LonMax,
@@ -405,20 +386,20 @@ void icy::SnapshotManager::generate_and_save(int gx, int gy, float points_per_ce
     constexpr float magic_constant = 0.6;
     const float kRadius = sqrt(magic_constant/(points_per_cell*gx*gx));
 
-    spdlog::info("generate_and_save: attempting to generate {} points in {}x{} grid", (points_per_cell*gx*gy), gx, gy);
+    LOGR("generate_and_save: attempting to generate {} points in {}x{} grid", (points_per_cell*gx*gy), gx, gy);
     buffer = thinks::PoissonDiskSampling(kRadius, kXMin, kXMax);
 
     const float result_ppc = (float)buffer.size()/(gx*gy);
-    spdlog::info("grid: {}x{}; generated pts {:>8}; density {:>7.4}",gx, gy, buffer.size(), result_ppc);
+    LOGR("grid: {}x{}; generated pts {:>8}; density {:>7.4}",gx, gy, buffer.size(), result_ppc);
 
     const float scale = sqrt(result_ppc/(points_per_cell*1.0005));
     if(scale<1.0)
     {
-        spdlog::critical("requested ppc {}; generated ppc {}", points_per_cell, result_ppc);
+        LOGR("requested ppc {}; generated ppc {}", points_per_cell, result_ppc);
         throw std::runtime_error("point generation error");
     }
 
-    spdlog::info("requested ppc {}; generated ppc {}; scale {}%", points_per_cell, result_ppc, 100*(scale-1.f));
+    LOGR("requested ppc {}; generated ppc {}; scale {}%", points_per_cell, result_ppc, 100*(scale-1.f));
 
     for(auto &pt : buffer)
     {
@@ -432,7 +413,7 @@ void icy::SnapshotManager::generate_and_save(int gx, int gy, float points_per_ce
     buffer.erase(result_it, buffer.end());
     size_t final_count = buffer.size();
     float final_ppc = (float)final_count/(gx*gy);
-    spdlog::info("grid: {}x{}; updated pts {:>8}; updated_density {:>7.4}",gx, gy, buffer.size(), final_ppc);
+    LOGR("grid: {}x{}; updated pts {:>8}; updated_density {:>7.4}",gx, gy, buffer.size(), final_ppc);
 
     // sort
     double hinv = (float)(gx-1);
@@ -446,20 +427,20 @@ void icy::SnapshotManager::generate_and_save(int gx, int gy, float points_per_ce
         return result_idx;
     };
 
-    spdlog::info("sorting started");
+    LOGV("sorting started");
     std::sort(buffer.begin(),buffer.end(),
               [&](std::array<float,2> &pt1, std::array<float,2> &pt2)
               {return computeIdx(pt1) < computeIdx(pt2);}
               );
 
-    spdlog::info("sorting finished; first point: {}, {}", buffer.front()[0], buffer.front()[1]);
+    LOGR("sorting finished; first point: {}, {}", buffer.front()[0], buffer.front()[1]);
 
     std::vector<int> grid_count(gx*gy,0);
     for(auto &pt : buffer) grid_count[computeIdx(pt)]++;
 
     auto [it_min, it_max] = std::minmax_element(grid_count.begin(),grid_count.end());
 
-    spdlog::info("grid fill min/max {} to {} ", *it_min, *it_max);
+    LOGR("grid fill min/max {} to {} ", *it_min, *it_max);
 
     std::vector<int> histogram(std::max((int)points_per_cell*3, *it_max), 0);
     for(int &count : grid_count) histogram[count]++;
@@ -470,7 +451,7 @@ void icy::SnapshotManager::generate_and_save(int gx, int gy, float points_per_ce
     std::filesystem::path directory_path(pts_cache_path);
     if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
     std::string fileName = prepare_file_name(gx, gy);
-    spdlog::info("saving file {}", fileName);
+    LOGR("saving file {}", fileName);
     H5::H5File file(fileName, H5F_ACC_TRUNC);
 
     const size_t nPts = buffer.size();
@@ -489,12 +470,12 @@ void icy::SnapshotManager::generate_and_save(int gx, int gy, float points_per_ce
 
 bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vector<std::array<float, 2>> &buffer)
 {
-    spdlog::info("attempting to load from cache");
+    LOGV("attempting to load from cache");
     std::string fileName = prepare_file_name(gx, gy);
     std::filesystem::path file_path(fileName);
     if (!std::filesystem::exists(file_path))
     {
-        spdlog::info("cached file does not exist");
+        LOGV("cached file does not exist");
         return false;
     }
 
@@ -504,7 +485,7 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
     hsize_t dims[2];
     dataset.getSpace().getSimpleExtentDims(dims,NULL);
     if(dims[1] != 2) {
-        spdlog::critical("something is wrong with cache file - dims[1] is {}",dims[1]);
+        LOGR("something is wrong with cache file - dims[1] is {}",dims[1]);
         return false;
     }
 
@@ -513,19 +494,18 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
     dataset.openAttribute("gy").read(H5::PredType::NATIVE_INT, &saved_gy);
     if(saved_gx != gx || saved_gy != gy)
     {
-        spdlog::critical("cache error - expected grid {}x{}; cached grid {}x{}",gx, gy, saved_gx, saved_gy);
+        LOGR("cache error - expected grid {}x{}; cached grid {}x{}",gx, gy, saved_gx, saved_gy);
         return false;
     }
 
     buffer.resize(dims[0]);
-    spdlog::info("reading {} points from file", dims[0]);
+    LOGR("reading {} points from file", dims[0]);
     dataset.read(buffer.data(), H5::PredType::NATIVE_FLOAT);
-    spdlog::info("attempt_to_fill_from_cache: finished reading from file; {} points", buffer.size());
-    spdlog::info("attempt_to_fill_from_cache: first point: {}, {}", buffer.front()[0], buffer.front()[1]);
+    LOGR("attempt_to_fill_from_cache: finished reading from file; {} points", buffer.size());
+    LOGR("attempt_to_fill_from_cache: first point: {}, {}", buffer.front()[0], buffer.front()[1]);
 
     return true;
 }
-
 
 
 
@@ -537,7 +517,6 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
 
 void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 {
-
     {
         // Convert to std::filesystem::path for manipulation
         std::filesystem::path snPath(fileName);
@@ -635,10 +614,7 @@ void icy::SnapshotManager::ReadSnapshot(std::string fileName)
     model->gpu.transfer_to_device();
 
     //model->Prepare();
-
-
-    spdlog::info("icy::SnapshotManager::ReadSnapshot done");
-
+    LOGV("icy::SnapshotManager::ReadSnapshot done");
 }
 
 
@@ -696,7 +672,7 @@ void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTim
             }
             else
             {
-                spdlog::info("destination file exists {}", destinationPath);
+                LOGR("destination file exists {}", destinationPath);
             }
 
             H5::StrType str_type(H5::PredType::C_S1, H5T_VARIABLE);

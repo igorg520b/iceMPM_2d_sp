@@ -106,13 +106,13 @@ void GPU_Implementation5::initialize()
 
 void GPU_Implementation5::split_hssoa_into_partitions()
 {
-    spdlog::info("split_hssoa_into_partitions() start");
+    LOGV("split_hssoa_into_partitions() start");
 
     GPU_Partition &p = partitions.front();
     p.nPts_partition = hssoa.size;
     p.GridX_partition = model->prms.GridXTotal;
     p.disabled_points_count = 0;
-    spdlog::info("split_hssoa_into_partitions() done");
+    LOGV("split_hssoa_into_partitions() done");
 }
 
 
@@ -132,29 +132,29 @@ void GPU_Implementation5::allocate_host_arrays()
     grid_status_buffer.resize(modeled_grid_total);
     original_image_colors_rgb.resize(3*initial_image_total);
 
-    spdlog::info("GPU_Implementation5::allocate_host_arrays() completed");
+    LOGV("GPU_Implementation5::allocate_host_arrays() completed");
 }
 
 
 
 void GPU_Implementation5::allocate_arrays()
 {
-    spdlog::info("GPU_Implementation5::allocate_arrays()");
+    LOGV("GPU_Implementation5::allocate_arrays()");
     int GridX_size = partitions.front().GridX_partition;
     partitions.front().allocate(model->prms.nPtsInitial, GridX_size);
-    spdlog::info("GPU_Implementation5::allocate_arrays() done");
+    LOGV("GPU_Implementation5::allocate_arrays() done");
 }
 
 
 
 void GPU_Implementation5::transfer_to_device()
 {
-    spdlog::info("GPU_Implementation: transfer_to_device()");
+    LOGV("GPU_Implementation: transfer_to_device()");
     int points_uploaded = 0;
     GPU_Partition &p = partitions.front();
     p.transfer_points_from_soa_to_device(hssoa, points_uploaded);
     points_uploaded += p.nPts_partition;
-    spdlog::info("transfer_to_device() done; transferred points {}", points_uploaded);
+    LOGR("transfer_to_device() done; transferred points {}", points_uploaded);
 
     p.transfer_grid_data_to_device(this);
 }
@@ -170,7 +170,7 @@ void GPU_Implementation5::transfer_from_device()
         int capacity_required = offset_pts + p.nPts_partition;
         if(capacity_required > hssoa.capacity)
         {
-            spdlog::error("transfer_from_device(): capacity {} exceeded ({}) when transferring P {}",
+            LOGR("transfer_from_device(): capacity {} exceeded ({}) when transferring P {}",
                              hssoa.capacity, capacity_required, p.PartitionID);
             throw std::runtime_error("transfer_from_device capacity exceeded");
         }
@@ -188,7 +188,7 @@ void GPU_Implementation5::transfer_from_device()
         cudaStreamSynchronize(p.streamCompute);
         if(p.error_code)
         {
-            spdlog::critical("P {}; error code {}", p.PartitionID, p.error_code);
+            LOGR("P {}; error code {}", p.PartitionID, p.error_code);
             throw std::runtime_error("error code");
         }
     }
@@ -221,7 +221,7 @@ void GPU_Implementation5::reset_timings()
 
 void GPU_Implementation5::update_wind_velocity_grid()
 {
-    spdlog::info("GPU_Implementation5::update_wind_velocity_grid()");
+    LOGV("GPU_Implementation5::update_wind_velocity_grid()");
     for(GPU_Partition &p : partitions) p.update_wind_velocity_grid(model->wind_interpolator.grid);
 }
 

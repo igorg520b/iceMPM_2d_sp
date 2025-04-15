@@ -39,21 +39,21 @@ void HostSideSOA::convertToIntegerCellFormat(t_PointReal h)
 
 void HostSideSOA::RemoveDisabledAndSort(int GridY)
 {
-    spdlog::info("RemoveDisabledAndSort; nPtsArrays {}", SimParams::nPtsArrays);
+    LOGR("RemoveDisabledAndSort; nPtsArrays {}", SimParams::nPtsArrays);
     unsigned size_before = size;
     SOAIterator it_result = std::remove_if(begin(), end(), [](ProxyPoint &p){return p.getDisabledStatus();});
     size = it_result.m_point.pos;
-    spdlog::info("RemoveDisabledAndSort: {} removed; new size {}", size_before-size, size);
+    LOGR("RemoveDisabledAndSort: {} removed; new size {}", size_before-size, size);
     std::sort(begin(), end(),
               [&](ProxyPoint &p1, ProxyPoint &p2)
               {return p1.getCellIndex(GridY)<p2.getCellIndex(GridY);});
-    spdlog::info("RemoveDisabledAndSort done");
+    LOGV("RemoveDisabledAndSort done");
 }
 
 
 void HostSideSOA::Allocate(int pts_capacity)
 {
-    spdlog::info("HostSideSOA::Allocate; pts {}", pts_capacity);
+    LOGR("HostSideSOA::Allocate; pts {}", pts_capacity);
     cudaFreeHost(host_buffer);
     this->capacity = pts_capacity;
     size_t allocation_size = sizeof(t_PointReal)*capacity*SimParams::nPtsArrays;
@@ -61,13 +61,13 @@ void HostSideSOA::Allocate(int pts_capacity)
     if(err != cudaSuccess)
     {
         const char *description = cudaGetErrorString(err);
-        spdlog::critical("allocating host buffer of size {}: {}",allocation_size,description);
+        LOGR("allocating host buffer of size {}: {}",allocation_size,description);
         throw std::runtime_error("allocating host buffer for points");
     }
     size = 0;
     memset(host_buffer, 0, allocation_size);
 
-    spdlog::info("HSSOA allocate capacity {} pt; toal {} Gb", capacity, (double)allocation_size/(1024.*1024.*1024.));
+    LOGR("HSSOA allocate capacity {} pt; toal {} Gb", capacity, (double)allocation_size/(1024.*1024.*1024.));
 }
 
 
@@ -87,36 +87,18 @@ void HostSideSOA::PrintOutNearestPoint(double x, double y, double gridSize, int 
 
     while(result!=end() && (*result).getCellIndex(GridY) == cellIdx)
     {
-        spdlog::info("Point index {}", (*result).getValueInt(SimParams::integer_point_idx));
-        spdlog::info("P: {}", (*result).getValue(SimParams::idx_P));
+        LOGR("Point index {}", (*result).getValueInt(SimParams::integer_point_idx));
+        LOGR("P: {}", (*result).getValue(SimParams::idx_P));
 
         PointMatrix2r Fe;
         for(int i=0; i<SimParams::dim; i++)
         for(int j=0; j<SimParams::dim; j++)
             Fe(i,j) = (*result).getValue(SimParams::Fe00 + i*SimParams::dim + j);
 
-        spdlog::info("Fe: [{},{}],[{},{}]",Fe(0,0), Fe(0,1), Fe(1,0), Fe(1,1));
-
-
-        spdlog::info("\n");
+        LOGR("Fe: [{},{}],[{},{}]\n",Fe(0,0), Fe(0,1), Fe(1,0), Fe(1,1));
         ++result;
     }
-
-
-    /*
-    std::sort(begin(), end(),
-              [&](ProxyPoint &p1, ProxyPoint &p2)
-              {return p1.getCellIndex(GridY)<p2.getCellIndex(GridY);});
-*/
-
-    //    uint32_t cell = (y_idx << 16) | x_idx;
-//    setValueInt(SimParams::integer_cell_idx, cell);
-
-//    x = x*hinv - (t_PointReal)x_idx;
-//    y = y*hinv - (t_PointReal)y_idx;
-
 }
-
 
 
 
