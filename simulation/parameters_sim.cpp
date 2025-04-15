@@ -69,16 +69,26 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     doc.Parse(strConfigFile.data());
     if(!doc.IsObject()) throw std::runtime_error("configuration file is not JSON");
 
+    // parse strings and save into "result"
+    std::map<std::string,std::string> result;
+    result["InputPNG"] = doc["InputPNG"].GetString();
+    result["InputMap"] = doc["InputMap"].GetString();
+    if(doc.HasMember("InputFlowVelocity")) result["InputFlowVelocity"] = doc["InputFlowVelocity"].GetString();
+
+    if(doc.HasMember("DimensionHorizontal")) DimensionHorizontal = doc["DimensionHorizontal"].GetDouble();
+    if(doc.HasMember("SurfaceDensity")) SurfaceDensity = doc["SurfaceDensity"].GetDouble();
+    if(doc.HasMember("SaveSnapshots")) SaveSnapshots = doc["SaveSnapshots"].GetBool();
+    if(doc.HasMember("UseCurrentData")) UseCurrentData = doc["UseCurrentData"].GetBool();
+
     if(doc.HasMember("SimulationStartUnixTime")) SimulationStartUnixTime = doc["SimulationStartUnixTime"].GetInt64();
+    if(doc.HasMember("SimulationEndTime")) SimulationEndTime = doc["SimulationEndTime"].GetDouble();
 
     if(doc.HasMember("InitialTimeStep")) InitialTimeStep = doc["InitialTimeStep"].GetDouble();
+    if(doc.HasMember("ParticleViewSize")) ParticleViewSize = doc["ParticleViewSize"].GetDouble();
     if(doc.HasMember("AnimationFramesRequested")) AnimationFramesRequested = doc["AnimationFramesRequested"].GetInt();
 
     if(doc.HasMember("YoungsModulus")) YoungsModulus = doc["YoungsModulus"].GetDouble();
-    if(doc.HasMember("ParticleViewSize")) ParticleViewSize = doc["ParticleViewSize"].GetDouble();
-    if(doc.HasMember("SimulationEndTime")) SimulationEndTime = doc["SimulationEndTime"].GetDouble();
     if(doc.HasMember("PoissonsRatio")) PoissonsRatio = doc["PoissonsRatio"].GetDouble();
-    if(doc.HasMember("SurfaceDensity")) SurfaceDensity = doc["SurfaceDensity"].GetDouble();
 
     if(doc.HasMember("IceCompressiveStrength")) IceCompressiveStrength = doc["IceCompressiveStrength"].GetDouble();
     if(doc.HasMember("IceTensileStrength")) IceTensileStrength = doc["IceTensileStrength"].GetDouble();
@@ -91,57 +101,6 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("tpb_P2G")) tpb_P2G = doc["tpb_P2G"].GetInt();
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();
     if(doc.HasMember("tpb_G2P")) tpb_G2P = doc["tpb_G2P"].GetInt();
-
-    if(doc.HasMember("FluentDataScale")) FluentDataScale = doc["FluentDataScale"].GetDouble();
-    if(doc.HasMember("FluentDataOffsetX")) FluentDataOffsetX = doc["FluentDataOffsetX"].GetDouble();
-    if(doc.HasMember("FluentDataOffsetY")) FluentDataOffsetY = doc["FluentDataOffsetY"].GetDouble();
-    if(doc.HasMember("FrameTimeInterval")) FrameTimeInterval = doc["FrameTimeInterval"].GetDouble();
-
-    if(doc.HasMember("currentDragCoeff_waterDensity")) currentDragCoeff_waterDensity = doc["currentDragCoeff_waterDensity"].GetDouble();
-
-
-
-    if(doc.HasMember("SaveSnapshots")) SaveSnapshots = doc["SaveSnapshots"].GetBool();
-
-
-    std::map<std::string,std::string> result;
-
-    if(!doc.HasMember("InputPNG") || !doc.HasMember("ModeledRegion"))
-    {
-        spdlog::critical("InputPNG and/or ModeledRegion entry is missing in JSON config file");
-        throw std::runtime_error("config parameter missing");
-    }
-    result["InputPNG"] = doc["InputPNG"].GetString();
-    result["ModeledRegion"] = doc["ModeledRegion"].GetString();
-//    spdlog::info("ParseFile; png map data {}", result["InputPNG"]);
-//    spdlog::info("ModeledRegion png {}", result["ModeledRegion"]);
-
-    UseWindData = doc.HasMember("InputWindData");
-    if(UseWindData)
-    {
-        std::string strFileName = doc["InputWindData"].GetString();
-        result["InputWindData"] = strFileName;
-
-        if (!std::filesystem::exists(strFileName))
-        {
-            throw std::runtime_error("wind file does not exist");
-        }
-    }
-
-    UseCurrentData = doc.HasMember("InputCurrentData");
-    if(UseCurrentData)
-    {
-        std::string strFileName = doc["InputCurrentData"].GetString();
-        result["InputCurrentData"] = strFileName;
-        if (!std::filesystem::exists(strFileName))
-        {
-            spdlog::critical("file does not exist: {}", strFileName);
-            throw std::runtime_error("file does not exist");
-        }
-    }
-
-    if(doc.HasMember("DimensionHorizontal")) DimensionHorizontal = doc["DimensionHorizontal"].GetDouble();
-    else DimensionHorizontal = 0;
 
     spdlog::info("SimParams::ParseFile done");
     return result;

@@ -9,7 +9,7 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
     QApplication::setApplicationName("iceMPM");
-    QApplication::setApplicationVersion("1.1");
+    QApplication::setApplicationVersion("1.2");
 
     QCommandLineParser parser;
     parser.setApplicationDescription("MPM simulation of ice with GUI");

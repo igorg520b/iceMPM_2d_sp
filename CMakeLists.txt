@@ -153,9 +153,6 @@ add_executable(cm2
     simulation/data_manager/fluentinterpolator.h
     simulation/data_manager/fluentinterpolator.cpp
     simulation/data_manager/poisson_disk_sampling.h
-
-    simulation/data_manager/vtkFLUENTCFFCustomReader.cxx
-    simulation/data_manager/vtkFLUENTCFFCustomReader.h
 )
 set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
 
@@ -261,8 +258,8 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/data_manager/fluentinterpolator.cpp
         simulation/data_manager/poisson_disk_sampling.h
 
-        simulation/data_manager/vtkFLUENTCFFCustomReader.cxx
-        simulation/data_manager/vtkFLUENTCFFCustomReader.h
+
+
 
         gui/vtk/SpecialSelector2D.cpp
         gui/vtk/SpecialSelector2D.h
