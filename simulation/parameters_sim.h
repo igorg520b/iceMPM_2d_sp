@@ -40,7 +40,7 @@ public:
     constexpr static float MPM_points_per_cell = 5.0;    // approximate average value
 
     constexpr static int dim = 2;
-    constexpr static int nGridArrays = 3; // mass, px, py
+    constexpr static int nGridArrays = 5; // mass, px, py, bc_normal_x, bc_normal_y
     constexpr static int snapshotFrequency = 25;
 
     // index of the corresponding array in SoA
@@ -55,8 +55,8 @@ public:
     constexpr static size_t velx = posx + 2;
     constexpr static size_t Fe00 = velx + 2;
     constexpr static size_t Bp00 = Fe00 + 4;
-    constexpr static size_t idx_initial_strength = Bp00 + 4;
-    constexpr static size_t nPtsArrays = idx_initial_strength + 1;
+    constexpr static size_t idx_thickness = Bp00 + 4;
+    constexpr static size_t nPtsArrays = idx_thickness + 1;
 
     int tpb_P2G, tpb_Upd, tpb_G2P;  // threads per block for each operation
 

@@ -32,6 +32,8 @@ public:
     std::vector<uint32_t> point_colors_rgb;     // rgb values of original point colors
     std::vector<uint8_t> grid_status_buffer;    // land (0), modeled area (>0)
     std::vector<uint8_t> original_image_colors_rgb;
+    std::vector<t_GridReal> grid_boundary_normals;
+
 
     void allocate_host_arrays();
 

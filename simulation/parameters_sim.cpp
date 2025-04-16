@@ -74,6 +74,8 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     result["InputPNG"] = doc["InputPNG"].GetString();
     result["InputMap"] = doc["InputMap"].GetString();
     if(doc.HasMember("InputFlowVelocity")) result["InputFlowVelocity"] = doc["InputFlowVelocity"].GetString();
+    if(doc.HasMember("SimulationTitle")) result["SimulationTitle"] = doc["SimulationTitle"].GetString();
+    else result["SimulationTitle"] = "sim1";
 
     if(doc.HasMember("DimensionHorizontal")) DimensionHorizontal = doc["DimensionHorizontal"].GetDouble();
     if(doc.HasMember("SurfaceDensity")) SurfaceDensity = doc["SurfaceDensity"].GetDouble();

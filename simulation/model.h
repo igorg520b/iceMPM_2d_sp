@@ -47,6 +47,7 @@ public:
     void UnlockCycleMutex();
     void SaveFrameRequest(int SimulationStep, double SimulationTime);
 
+    std::string SimulationTitle;
     SimParams prms;
     WindInterpolator wind_interpolator;
     FluentInterpolator fluent_interpolatror;

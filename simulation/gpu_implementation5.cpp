@@ -130,6 +130,7 @@ void GPU_Implementation5::allocate_host_arrays()
 
     // allocate grid arrays
     grid_status_buffer.resize(modeled_grid_total);
+    grid_boundary_normals.resize(2*modeled_grid_total);
     original_image_colors_rgb.resize(3*initial_image_total);
 
     LOGV("GPU_Implementation5::allocate_host_arrays() completed");

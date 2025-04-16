@@ -26,195 +26,177 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     LOGR("icy::SnapshotManager::PreparePointsAndSetupGrid {}",fileName);
     LOGR("modeled area file: {}", fileNameModelledArea);
 
-    // load satellite photo
-    int channels, imgx, imgy;
-    unsigned char *png_data = stbi_load(fileName.c_str(), &imgx, &imgy, &channels, 4); // request 4 channels - RGBA
-    if(!png_data || channels != 4)
-    {
-        LOGR("filename {}", fileName);
-        throw std::runtime_error("png1 not loaded");
-    }
-    model->prms.InitializationImageSizeX = imgx;
-    model->prms.InitializationImageSizeY = imgy;
 
-    // load highlighted modelling area
-    unsigned char *png_data_modelled_region = stbi_load(fileNameModelledArea.c_str(), &imgx, &imgy, &channels, 4); // request 4 channels - RGBA
-    if(imgx != model->prms.InitializationImageSizeX || imgy != model->prms.InitializationImageSizeY
-        || !png_data_modelled_region || channels != 4)
-    {
-        LOGR("png2 not loaded: {}", fileNameModelledArea);
-        throw std::runtime_error("png2 not loaded");
-    }
 
-    // function for obtaining index in png_data from the pixel's 2D index (i,j)
-    auto idxInPng = [&](int i, int j) -> int { return 4*((imgy - j - 1)*imgx + i); };
+    // (1) Load everything from HDF5
+    H5::H5File file(fileNameModelledArea, H5F_ACC_RDONLY);
+    int width, height, nPaths;
 
-    // function that determines whether (i,j) point at land in png_data_modelled_region
-    auto is_modeled_area = [&](int i, int j) -> bool {
-        unsigned char _a = png_data_modelled_region[idxInPng(i,j)+3];
-        unsigned char _b = png_data_modelled_region[idxInPng(i,j)+2];
-        return ((_a > 128) && (_b > 250));
-    };
+    H5::DataSet ds_path_indices = file.openDataSet("path_indices");
+    ds_path_indices.openAttribute("nPaths").read(H5::PredType::NATIVE_INT, &nPaths);
+    ds_path_indices.openAttribute("width").read(H5::PredType::NATIVE_INT, &model->prms.InitializationImageSizeX);
+    ds_path_indices.openAttribute("height").read(H5::PredType::NATIVE_INT, &model->prms.InitializationImageSizeY);
 
-    // determine the extent and offset of the highlighted (modeled) region
-    int xmin = imgx;
-    int xmax = -1;
-    int ymin = imgy;
-    int ymax = -1;
+    ds_path_indices.openAttribute("ModeledRegionOffsetX").read(H5::PredType::NATIVE_INT, &model->prms.ModeledRegionOffsetX);
+    ds_path_indices.openAttribute("ModeledRegionOffsetY").read(H5::PredType::NATIVE_INT, &model->prms.ModeledRegionOffsetY);
+    ds_path_indices.openAttribute("GridXTotal").read(H5::PredType::NATIVE_INT, &model->prms.GridXTotal);
+    ds_path_indices.openAttribute("GridYTotal").read(H5::PredType::NATIVE_INT, &model->prms.GridYTotal);
 
-    for(int i=0;i<imgx;i++)
-        for(int j=0;j<imgy;j++)
-        {
-            if(is_modeled_area(i,j))
-            {
-                xmin = std::min(xmin, i);
-                xmax = std::max(xmax, i);
-                ymin = std::min(ymin, j);
-                ymax = std::max(ymax, j);
-            }
-        }
-
-    xmin = std::max(0, xmin-2);
-    xmax = std::min(imgx-1, xmax+2);
-    ymin = std::max(0, ymin-2);
-    ymax = std::min(imgy-1, ymax+2);
-
-    const int ox = model->prms.ModeledRegionOffsetX = xmin;
-    const int oy = model->prms.ModeledRegionOffsetY = ymin;
-    const int gx = model->prms.GridXTotal = xmax-xmin+1;
-    const int gy = model->prms.GridYTotal = ymax-ymin+1;
-    if(model->prms.GridXTotal < 0 || model->prms.GridYTotal < 0)
-    {
-        LOGV("modeled area not found");
-        throw std::runtime_error("modeled area not found");
-    }
+    const int &width = model->prms.InitializationImageSizeX;
+    const int &height = model->prms.InitializationImageSizeY;
+    const int &ox = model->prms.ModeledRegionOffsetX;
+    const int &oy = model->prms.ModeledRegionOffsetY;
+    const int &gx = model->prms.GridXTotal;
+    const int &gy = model->prms.GridYTotal;
 
     LOGR("initialization image: {} x {}", model->prms.InitializationImageSizeX, model->prms.InitializationImageSizeY);
     LOGR("grid size: {} x {}", model->prms.GridXTotal, model->prms.GridYTotal);
     LOGR("modeled area offset: {}, {}", model->prms.ModeledRegionOffsetX, model->prms.ModeledRegionOffsetY);
-    LOGR("modeled area extent: [{}, {}] - [{}, {}]", xmin, ymin, xmax, ymax);
 
-    // either load or generate points
-    std::vector<std::array<float, 2>> buffer;   // initial buffer for reading/generating points
-    generate_points(gx, gy, SimParams::MPM_points_per_cell, buffer);
+    size_t sz = width*height;
+
+    // temporary buffers for HDF5 data
+    std::vector<Eigen::Vector2f> normals(sz);
+    std::vector<int> path_indices(sz);
+    std::vector<float> iceThickness(sz);    // quantitive measure of "thickness"
+    std::vector<uint8_t> iceStatus(sz);     // 0 for open water, 1 for crushed, 2 for "intact"
+
+    ds_path_indices.read(path_indices.data(), H5::PredType::NATIVE_INT);
+    file.openDataSet("normals").read(normals.data(), H5::PredType::NATIVE_FLOAT);
+    file.openDataSet("iceStatus").read(iceStatus.data(), H5::PredType::NATIVE_UINT8);
+    file.openDataSet("iceThickness").read(iceThickness.data(), H5::PredType::NATIVE_FLOAT);
+    file.close();
+
+
+
+
+    // (2) either load or generate points
+    std::vector<std::array<float, 2>> pt_buffer;   // initial buffer for reading/generating points
+    generate_points(gx, gy, SimParams::MPM_points_per_cell, pt_buffer);
+    size_t initial_pt_count = pt_buffer.size();
+
+    model->prms.cellsize = model->prms.DimensionHorizontal / (model->prms.InitializationImageSizeX-1);
+    model->prms.cellsize_inv = 1.0/model->prms.cellsize;
+    const t_PointReal &h = model->prms.cellsize;
+    model->prms.ParticleVolume = h*h*gx*gy/ initial_pt_count;
+
 
     // convert unscaled point coordinates to (i,j) pair on the grid
-    auto idxPt = [&](std::array<float,2> &pt) -> std::pair<int,int> {
-        return {(int)((double)pt[0]*(gx-1) + 0.5), (int)((double)pt[1]*(gx-1) + 0.5)};
+    auto idxPt = [&](const std::array<float,2> &pt) -> std::pair<int,int> {
+        const double scale = gx-1;
+        return {(int)(pt[0]*scale + 0.5), (int)(pt[1]*scale + 0.5)};
     };
 
-    // now that we have png_data, classify points and count those remaining (not land nor open water)
-    auto keepPoint = [&](std::array<float,2> &pt) -> bool {
+    // that tells whether a point becomes ice material
+    auto shouldRemove = [&](const std::array<float,2> &pt) -> bool {
         auto [i,j] = idxPt(pt);
-        if(i<=1 || j<=1 || i>= (gx-2) || j>= (gy-2)) return false; // exclude points right at the boundary
-        if(!is_modeled_area(i+ox, j+oy)) return false; // outside modelled region
+        if(i<=1 || j<=1 || i>= (gx-2) || j>= (gy-2)) return true; // exclude points right at the boundary
 
-        int idx_png = idxInPng(i+ox,j+oy);
-        unsigned char r = png_data[idx_png + 0];
-        unsigned char g = png_data[idx_png + 1];
-        unsigned char b = png_data[idx_png + 2];
-        Eigen::Vector3f rgb((float)r/255.,(float)g/255.,(float)b/255.);
-
-        auto [category, interpValue] = categorizeColor(rgb);
-        if(category <= 0) return false; // open water
-        else return true; // some sort of ice (keep it)
+        uint8_t status = iceStatus[(i+ox) + (j+oy)*width];
+        return (status != 1 && status != 2);
     };
 
-    model->prms.nPtsInitial = std::count_if(buffer.begin(), buffer.end(), keepPoint);
 
-    // allocate host-side arrays for points and grid
+//    auto new_end = std::remove_if(pt_buffer.begin(), pt_buffer.end(), shouldRemove);
+//    pt_buffer.erase(new_end, pt_buffer.end());
+
+    pt_buffer.erase_if(shouldRemove);       // C++ 20
+    model->prms.nPtsInitial = pt_buffer.size();
+
+
+
+    // (3) allocate host-side arrays (both points and grid)
     model->gpu.allocate_host_arrays();
     model->gpu.hssoa.size = model->prms.nPtsInitial; // set the actual number of points stored in HSSOA
     LOGR("PreparePointsAndSetupGrid: nPoints {}", model->prms.nPtsInitial);
 
 
-    // compute the X-dimension from lat/lon using haversineDistance()
-    const double XScale = model->prms.DimensionHorizontal;
-    model->prms.cellsize = model->prms.DimensionHorizontal / (model->prms.InitializationImageSizeX-1);
-    model->prms.cellsize_inv = 1.0/model->prms.cellsize;
-    const t_PointReal &h = model->prms.cellsize;
-    model->prms.ParticleVolume = h*h*gx*gy/ buffer.size();
-    const double pointScale = (gx-1) * h;
 
-    LOGR("assumed horizontal scale: {}; cellsize {}", XScale, model->prms.cellsize);
-
-    // compute cellsize
-
-    // sequentially transfer points from "buffer" to hssoa (only those counted), scale coordinates
-    uint32_t count = 0;
-    HostSideSOA &hssoa = model->gpu.hssoa;
-    for(std::array<float,2> &pt : buffer)
+    // (4) Load PNG image (only for rendering)
+    int channels, imgx, imgy;
+    unsigned char *png_data = stbi_load(fileName.c_str(), &imgx, &imgy, &channels, 3); // expect 3 channels - RGB
+    if(!png_data || channels != 3 || imgx != width || imgy != height)
     {
-        if(!keepPoint(pt)) continue;
-        if(count >= model->prms.nPtsInitial) throw std::runtime_error("when transferring from buffer to SOA - index error");
-
-        auto [i,j] = idxPt(pt);
-        int idx_png = idxInPng(i+ox, j+oy);
-
-        unsigned char r = png_data[idx_png + 0];
-        unsigned char g = png_data[idx_png + 1];
-        unsigned char b = png_data[idx_png + 2];
-        Eigen::Vector3f rgb((float)r/255.,(float)g/255.,(float)b/255.);
-        auto [category, interpValue] = categorizeColor(rgb);
-        if(category <= 0) continue; // either land or water (should not happen)
-
-        // write into SOA
-        SOAIterator it = hssoa.begin()+count;
-        ProxyPoint &p = *it;
-        p.setValue(SimParams::posx, pt[0]*pointScale);      // set point's x-position in SOA
-        p.setValue(SimParams::posx+1, pt[1]*pointScale);    // set point's y-position in SOA
-
-        uint32_t rgba = (static_cast<uint32_t>(r) << 16) |  (static_cast<uint32_t>(g) << 8) |  static_cast<uint32_t>(b);
-        model->gpu.point_colors_rgb[count] = rgba;
-        p.setValueInt(SimParams::integer_point_idx, count);
-
-        uint32_t val = 0;
-        if(category == 1)
-        {
-            val |= 0x10000;     // crushed
-            p.setValueInt(SimParams::idx_utility_data, val);
-            p.setValue(SimParams::idx_initial_strength, 0.8);
-        }
-        else
-        {
-            p.setValue(SimParams::idx_initial_strength, interpValue*0.2+0.8);
-        }
-
-        p.setValue(SimParams::idx_Jp_inv, 1.f);
-        p.setValue(SimParams::idx_Qp, 1.f);
-        for(int idx=0; idx<SimParams::dim; idx++)
-            p.setValue(SimParams::Fe00+idx*2+idx, 1.f);
-
-        count++;
+        LOGR("filename {} not loaded; channels {}", fileName, channels);
+        LOGR("png expected size {} x {}; actual size {} x {}", width, height, imgx, imgy);
+        throw std::runtime_error("png1 not loaded");
     }
 
-    // convert points to cell-based local coordinates
-    hssoa.convertToIntegerCellFormat(h);
+    // function for obtaining index in png_data from the pixel's 2D index (i,j)
+    auto idxInPng = [&](int i, int j) -> int { return 3*((height - j - 1)*width + i); };
 
+    // save original colors for the whole image
+    for(int i=0;i<width;i++)
+        for(int j=0;j<height;j++)
+            for(int k=0;k<3;k++)
+                model->gpu.original_image_colors_rgb[(i+j*width)*3+k] = png_data[idxInPng(i, j)+k];
+
+    stbi_image_free(png_data);
+    stbi_image_free(png_data_modelled_region);
+
+
+
+
+    // (5) Set grid normals and "status" byte
+    auto transformPathIdx = [](const int &idx) -> uint8_t {
+        if(idx < 1000) return (uint8_t)(idx + 1);
+        else return (uint8_t)(idx-900);
+    };
 
     // transfer / set grid land bit
     for(int i=0;i<gx;i++)
         for(int j=0;j<gy;j++)
         {
-            bool is_modeled = is_modeled_area(i+ox,j+oy);
-            int host_grid_idx = j + i*gy;
-            model->gpu.grid_status_buffer[host_grid_idx] = is_modeled ? 1 : 0;
-        }
-
-    // save original colors for the whole image
-    for(int i=0;i<imgx;i++)
-        for(int j=0;j<imgy;j++)
-        {
-            for(int k=0;k<3;k++)
-            {
-                model->gpu.original_image_colors_rgb[(i+j*imgx)*3+k] = png_data[idxInPng(i, j)+k];
-            }
+            size_t idx1 = (i+ox) + (j+oy)*width;
+            size_t idx_host = j + i*gy; // store as row-major
+            model->gpu.grid_status_buffer[idx_host] = transformPathIdx(path_indices[idx1]);
+            model->gpu.grid_boundary_normals[idx_host] = (t_GridReal)normals[idx1].x();
+            model->gpu.grid_boundary_normals[idx_host + gx*gy] = (t_GridReal)normals[idx1].y();
         }
 
 
-    //model->gpu.hssoa.RemoveDisabledAndSort(model->prms.GridY);
-    stbi_image_free(png_data);
-    stbi_image_free(png_data_modelled_region);
+
+    // (6) transfer points
+    const double pointScale = (gx-1) * h;
+
+    HostSideSOA &hssoa = model->gpu.hssoa;
+    for(size_t k = 0; k<pt_buffer.size(); k++)
+    {
+        std::array<float,2> &pt = pt_buffer[k];
+
+        auto [i,j] = idxPt(pt);
+
+        // write into SOA
+        SOAIterator it = hssoa.begin()+k;
+        ProxyPoint &p = *it;
+        p.setValue(SimParams::posx, pt[0]*pointScale);      // set point's x-position in SOA
+        p.setValue(SimParams::posx+1, pt[1]*pointScale);    // set point's y-position in SOA
+
+        uint32_t r = model->gpu.original_image_colors_rgb[(i+j*width)*3+0];
+        uint32_t g = model->gpu.original_image_colors_rgb[(i+j*width)*3+1];
+        uint32_t b = model->gpu.original_image_colors_rgb[(i+j*width)*3+2];
+        uint32_t rgba = (r << 16) | (g << 8) | b;
+        model->gpu.point_colors_rgb[k] = rgba;
+        p.setValueInt(SimParams::integer_point_idx, k);
+
+        // set ice type
+        int idx = (i+ox) + (j+oy)*width;
+        float thickness = iceThickness[idx];
+        p.setValue(SimParams::idx_thickness, thickness);
+
+        uint8_t status = iceStatus[idx]; // 1 - crushed; 2 - solid
+        uint32_t val = 0;
+        if(status == 1) val |= 0x10000;     // crushed
+        p.setValueInt(SimParams::idx_utility_data, val);
+
+        p.setValue(SimParams::idx_Jp_inv, 1.f);
+        p.setValue(SimParams::idx_Qp, 1.f);
+        for(int idx=0; idx<SimParams::dim; idx++)
+            p.setValue(SimParams::Fe00+idx*2+idx, 1.f);
+    }
+
+    // convert points to cell-based local coordinates
+    hssoa.convertToIntegerCellFormat(h);
 
     // particle volume and mass
     model->prms.ComputeHelperVariables();
@@ -314,56 +296,6 @@ void icy::SnapshotManager::LoadWindData(std::string fileName)
 */
 }
 
-
-
-// Function to project a point onto the curve
-float icy::SnapshotManager::projectPointOntoCurve(const Eigen::Vector3f& rgb, const std::array<std::array<float, 3>, 3>& curve)
-{
-    float minDistance = std::numeric_limits<float>::max();
-    float relativePosition = 0.0f;
-
-    // Total length of the curve
-    float totalLength = 0.0f;
-
-    // Loop through the segments
-    for (size_t i = 0; i < curve.size() - 1; ++i) {
-        // Define segment points
-        Eigen::Vector3f p0(curve[i][0], curve[i][1], curve[i][2]);
-        Eigen::Vector3f p1(curve[i+1][0], curve[i+1][1], curve[i+1][2]);
-
-        // Vector along the segment
-        Eigen::Vector3f segment = p1 - p0;
-
-        // Project rgb onto the infinite line
-        float t = (rgb - p0).dot(segment) / segment.squaredNorm();
-
-        // Clamp t to [0, 1] to stay on the segment
-        t = std::clamp(t, 0.0f, 1.0f);
-
-        // Compute the projected point
-        Eigen::Vector3f projection = p0 + t * segment;
-
-        // Compute the distance from rgb to the projection
-        float distance = (rgb - projection).norm();
-
-        // Update the closest segment if necessary
-        if (distance < minDistance) {
-            minDistance = distance;
-
-            // Compute relative position along the curve
-            float segmentLength = segment.norm();
-            float positionOnSegment = totalLength + t * segmentLength;
-            totalLength += segmentLength;
-
-            relativePosition = positionOnSegment / totalLength;
-        } else {
-            totalLength += segment.norm();
-        }
-    }
-    if(std::isnan(relativePosition)) relativePosition = 1;
-
-    return relativePosition; // Relative position in [0, 1]
-}
 
 
 
@@ -517,6 +449,7 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
 
 void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 {
+    /*
     {
         // Convert to std::filesystem::path for manipulation
         std::filesystem::path snPath(fileName);
@@ -615,6 +548,7 @@ void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 
     //model->Prepare();
     LOGV("icy::SnapshotManager::ReadSnapshot done");
+*/
 }
 
 

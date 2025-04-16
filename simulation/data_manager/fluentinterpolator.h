@@ -29,7 +29,6 @@
 
 #include <Eigen/Core>
 
-#include "vtkFLUENTCFFCustomReader.h"
 #include "parameters_sim.h"
 #include "gpu_implementation5.h"
 

@@ -407,16 +407,15 @@ void MainWindow::LoadParameterFile(QString qFileName)
     qDebug() << "MainWindow::LoadParameterFile" << qFileName;
     std::map<std::string,std::string> additionalFiles = model.prms.ParseFile(qFileName.toStdString());
 
-    model.snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"], additionalFiles["ModeledRegion"]);
+    model.SimulationTitle = additionalFiles["SimulationTitle"];
+    model.snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"], additionalFiles["InputMap"]);
     this->qLastParameterFile = qFileName;
     this->setWindowTitle(qLastParameterFile);
 
-    if(additionalFiles.count("InputWindData")) model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
+//    if(additionalFiles.count("InputWindData")) model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
 
-    if(additionalFiles.count("InputCurrentData"))
-    {
-        model.fluent_interpolatror.PrepareFlowDataCache(additionalFiles["InputCurrentData"]);
-    }
+//    if(additionalFiles.count("InputFlowVelocity"))
+//        model.fluent_interpolatror.PrepareFlowDataCache(additionalFiles["InputFlowVelocity"]);
 
     if(model.prms.SaveSnapshots) {
         LOGV("requesting to save snapshot 0");
