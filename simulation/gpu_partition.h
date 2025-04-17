@@ -81,12 +81,10 @@ struct GPU_Partition
 
     // preparation
     void initialize(int device, int partition);
-    void allocate(int n_points_capacity, int grid_x_capacity);
+    void allocate(const int n_points_capacity, const int grid_x_capacity);
     void transfer_points_from_soa_to_device(HostSideSOA &hssoa, int point_idx_offset);
     void transfer_grid_data_to_device(GPU_Implementation5* gpu);
     void update_constants();
-    void update_wind_velocity_grid(float data[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4]);
-    void update_water_flow_grid(float *v1u, float *v1v, float *v2u, float *v2v);
 
     void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset);
 
@@ -106,34 +104,21 @@ struct GPU_Partition
     int Device;
     static SimParams *prms;
 
-    int nPts_partition;    // actual number of points (including disabled)
+    int nPts_partition;    // number of points including disabled
     int GridX_partition;   // size of the portion of the grid for which this partition is "responsible"
 
     // stream and events
     cudaStream_t streamCompute;
 
-    cudaEvent_t event_10_cycle_start;
-    cudaEvent_t event_20_grid_halo_sent;
-    cudaEvent_t event_30_halo_accepted;
-    cudaEvent_t event_40_grid_updated;
-    cudaEvent_t event_50_g2p_completed;
-    cudaEvent_t event_70_pts_sent;
-    cudaEvent_t event_80_pts_accepted;
-
-    bool initialized = false;
     uint8_t error_code;             // set by kernels if there is something wrong
-    int disabled_points_count;      // counts how many points are marked as disabled in the simulation
+    int disabled_points_count;      // counts how many points are marked as disabled in the partition
 
     // pointers to device-side arrays
     t_PointReal *pts_array;
-    t_GridReal *grid_array;         // grid nodes: mass, vx, vy
+    t_GridReal *grid_array;         // floating-point grid data; see grid_idx_... in SimParams
     size_t nPtsPitch, nGridPitch; // in number of elements(!), for coalesced access on the device
 
-    constexpr static int grid_water_components = 4;
-    float *grid_water_current; // v1x, v1y, v2x, v2y (4 components)
-    size_t gwcPitch; // pitch (in elements) for grid_water_current
-
-    uint8_t *grid_status_array;     // boundary condition for grid nodes
+    uint8_t *grid_status_array;     // boundary indices and definition of modelling area
 
     // frame analysis
     float timing_10_P2GAndHalo;
@@ -143,6 +128,17 @@ struct GPU_Partition
     float timing_60_ptsSent;
     float timing_70_ptsAccepted;
     float timing_stepTotal;
+
+    cudaEvent_t event_10_cycle_start;
+    cudaEvent_t event_20_grid_halo_sent;
+    cudaEvent_t event_30_halo_accepted;
+    cudaEvent_t event_40_grid_updated;
+    cudaEvent_t event_50_g2p_completed;
+    cudaEvent_t event_70_pts_sent;
+    cudaEvent_t event_80_pts_accepted;
+
+private:
+    bool initialized = false;
 };
 
 

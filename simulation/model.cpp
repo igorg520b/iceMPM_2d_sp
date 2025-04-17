@@ -14,11 +14,7 @@ bool icy::Model::Step()
 
     int count_unupdated_steps = 0;
     gpu.reset_timings();
-    const float pp = 1000;
     const double st = prms.SimulationTime;
-    std::pair<float, float> spd_and_angle = {
-                                             10+(20+st/pp)*sin(SimParams::pi * st/pp),
-                                             370+10*sin(SimParams::pi * st/(10*60.))};
     double simulation_time;
     do
     {
@@ -29,11 +25,6 @@ bool icy::Model::Step()
         gpu.p2g();
 
 //        if(prms.UseWindData && wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
-//        if(prms.UseCurrentData && fluent_interpolatror.SetTime(simulation_time))
-//            gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getFramePtr(0,0),
- //                                                         fluent_interpolatror.getFramePtr(0,1),
-  //                                                        fluent_interpolatror.getFramePtr(1,0),
-  //                                                        fluent_interpolatror.getFramePtr(1,1));
 
         if(prms.UseCurrentData && fluent_interpolatror.SetTime(0))
             gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getFramePtr(0,0),

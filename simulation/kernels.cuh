@@ -11,14 +11,10 @@ constexpr t_PointReal coeff1 = 1.4142135623730950; // sqrt((6-d)/2.);
 constexpr t_PointReal coeff1_inv = 0.7071067811865475;
 constexpr uint32_t status_crushed = 0x10000;
 constexpr uint32_t status_disabled = 0x20000;
-constexpr uint32_t status_weakened = 0x40000;
 
 __device__ uint8_t gpu_error_indicator;
 __device__ int gpu_disabled_points_count;
 __constant__ SimParams gprms;
-__constant__ float wgrid[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4];    // wind data
-
-
 
 
 

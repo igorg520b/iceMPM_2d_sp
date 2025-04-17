@@ -148,44 +148,39 @@ void GPU_Partition::initialize(int device, int partition)
 }
 
 
-void GPU_Partition::allocate(int n_points_capacity, int gx)
+void GPU_Partition::allocate(const int n_points_capacity, const int gx)
 {
     cudaError_t err;
     cudaSetDevice(Device);
-    LOGR("P{}-{} allocate", PartitionID, Device);
+
+    const int &gy = prms->GridYTotal;
+    LOGR("P{}-{} allocate; sub-grid {} x {}; sub-pts", PartitionID, Device, gx, gy, n_points_capacity);
 
     // grid
-    const int &gy = prms->GridYTotal;
-
-    size_t total_device = 0;
+    size_t total_allocated = 0; // count what we allocated
     size_t grid_size_local_requested = sizeof(t_GridReal) * gy * gx;
     err = cudaMallocPitch (&grid_array, &nGridPitch, grid_size_local_requested, SimParams::nGridArrays);
-    total_device += nGridPitch * SimParams::nGridArrays;
+    total_allocated += nGridPitch * SimParams::nGridArrays;
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid array");
     nGridPitch /= sizeof(t_GridReal); // assume that this divides without remainder
 
     // grid status
     err = cudaMalloc(&grid_status_array, gx*gy*sizeof(uint8_t));
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid status array");
+    total_allocated += gx*gy;
 
     // points
     const size_t pts_buffer_requested = sizeof(t_PointReal) * n_points_capacity;
     err = cudaMallocPitch(&pts_array, &nPtsPitch, pts_buffer_requested, SimParams::nPtsArrays);
-    total_device += nPtsPitch * SimParams::nPtsArrays;
+    total_allocated += nPtsPitch * SimParams::nPtsArrays;
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate");
     nPtsPitch /= sizeof(t_PointReal);
 
-    // grid for water current data
-    size_t grid_current_size_requested = sizeof(float) * gy * gx;
-    err = cudaMallocPitch (&grid_water_current, &gwcPitch, grid_current_size_requested, grid_water_components);
-    total_device += gwcPitch * grid_water_components;
-    if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate grid array");
-    gwcPitch /= sizeof(float); // assume that this divides without remainder
-
-    LOGR("allocate: P {}-{}:  GridPitch/Y {}; Pts {}; gx*gy {}; gwcPitch {}, total {:.2} Mb",
+    LOGR("allocate: P {}-{}:  requested grid {} x {} = {}; gird pitch {}; Pts-req {}; pts-pitch; total alloc {:.2} Mb",
                  PartitionID, Device,
-                 nGridPitch/prms->GridYTotal, nPtsPitch, gx*gy, gwcPitch,
-                 (double)total_device/(1024*1024));
+                 gx, gy, gx*gy, nGridPitch,
+                 n_points_capacity, nPtsPitch,
+                 (double)total_allocated/(1024*1024));
 }
 
 
@@ -207,23 +202,6 @@ void GPU_Partition::update_wind_velocity_grid(float data[WindInterpolator::alloc
     if(err != cudaSuccess) throw std::runtime_error("update_wind_velocity_grid");
 }
 
-void GPU_Partition::update_water_flow_grid(float *v1u, float *v1v, float *v2u, float *v2v)
-{
-    cudaSetDevice(Device);
-    const int &gx = prms->GridXTotal;
-    const int &gy = prms->GridYTotal;
-
-    cudaDeviceSynchronize();
-    size_t data_size = gx*gy*sizeof(float);
-    cudaError_t err = cudaMemcpy(grid_water_current, v1u, data_size, cudaMemcpyHostToDevice);
-    if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
-    err = cudaMemcpy(grid_water_current+gwcPitch*1, v1v, data_size, cudaMemcpyHostToDevice);
-    if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
-    err = cudaMemcpy(grid_water_current+gwcPitch*2, v2u, data_size, cudaMemcpyHostToDevice);
-    if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
-    err = cudaMemcpy(grid_water_current+gwcPitch*3, v2v, data_size, cudaMemcpyHostToDevice);
-    if(err != cudaSuccess) throw std::runtime_error("update_water_flow_grid");
-}
 
 
 

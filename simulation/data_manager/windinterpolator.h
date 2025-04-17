@@ -13,6 +13,14 @@ class WindInterpolator
 public:
     WindInterpolator();
 
+
+
+
+
+
+
+
+
     void LoadWindData(std::string netCDF4FileName, double latMin, double latMax, double lonMin, double lonMax, int64_t sim_start_date);
 
     constexpr static int allocatedLatExtent = 10;
