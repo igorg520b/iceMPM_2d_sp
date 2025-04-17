@@ -20,8 +20,7 @@
 #include "parameters_sim.h"
 #include "point.h"
 #include "gpu_implementation5.h"
-#include "windinterpolator.h"
-#include "fluentinterpolator.h"
+#include "windandcurrentinterpolator.h"
 #include "snapshotmanager.h"
 
 #include <Eigen/Core>
@@ -42,6 +41,8 @@ public:
     Model();
     ~Model();
 
+    void LoadParameterFile(std::string fileName);   // initialize the simulation from a parameter file
+
     void Prepare();        // invoked once, at simulation start
     bool Step();           // either invoked by Worker or via GUI
     void UnlockCycleMutex();
@@ -49,8 +50,7 @@ public:
 
     std::string SimulationTitle;
     SimParams prms;
-    WindInterpolator wind_interpolator;
-    FluentInterpolator fluent_interpolatror;
+    WindAndCurrentInterpolator wac_interpolator;
     icy::SnapshotManager snapshot;
 
     GPU_Implementation5 gpu;
@@ -59,7 +59,6 @@ public:
     std::mutex processing_current_cycle_data; // locked until the current cycle results' are copied to host and processed
     std::mutex accessing_point_data;
 
-    // wind data from netCDF4 file
     int intentionalSlowdown = 0; // add delay after each computation step to unload GPU
 
 private:

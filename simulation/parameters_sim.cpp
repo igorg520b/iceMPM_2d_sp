@@ -42,11 +42,6 @@ void SimParams::Reset()
     tpb_Upd = 512;
     tpb_G2P = 128;
 
-    FluentDataScale = 3;
-    FluentDataOffsetX = 0;
-    FluentDataOffsetY = 0;
-    FrameTimeInterval = 1.0;
-
     ComputeLame();
     ComputeHelperVariables();
     spdlog::info("SimParams reset");
@@ -173,9 +168,6 @@ void SimParams::SaveParametersAsHDF5Attributes(H5::DataSet &dataset)
     dataset.createAttribute("ModeledRegionOffsetY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &ModeledRegionOffsetY);
     dataset.createAttribute("InitializationImageSizeX", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &InitializationImageSizeX);
     dataset.createAttribute("InitializationImageSizeY", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &InitializationImageSizeY);
-
-    // flow render / interpolator
-    dataset.createAttribute("FrameTimeInterval", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &FrameTimeInterval);
 }
 
 void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset)
@@ -218,9 +210,6 @@ void SimParams::ReadParametersFromHDF5Attributes(H5::DataSet &dataset)
     dataset.openAttribute("ModeledRegionOffsetY").read(H5::PredType::NATIVE_INT, &ModeledRegionOffsetY);
     dataset.openAttribute("InitializationImageSizeX").read(H5::PredType::NATIVE_INT, &InitializationImageSizeX);
     dataset.openAttribute("InitializationImageSizeY").read(H5::PredType::NATIVE_INT, &InitializationImageSizeY);
-
-    // flow render / interpolator
-    dataset.openAttribute("FrameTimeInterval").read(H5::PredType::NATIVE_DOUBLE, &FrameTimeInterval);
 
     tpb_P2G = 256;
     tpb_Upd = 512;

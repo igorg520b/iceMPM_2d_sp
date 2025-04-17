@@ -148,10 +148,9 @@ add_executable(cm2
 
     simulation/data_manager/snapshotmanager.h
     simulation/data_manager/snapshotmanager.cpp
-    simulation/data_manager/windinterpolator.cpp
-    simulation/data_manager/windinterpolator.h
-    simulation/data_manager/fluentinterpolator.h
-    simulation/data_manager/fluentinterpolator.cpp
+    simulation/data_manager/windandcurrentinterpolator.cpp
+    simulation/data_manager/windandcurrentinterpolator.h
+    
     simulation/data_manager/poisson_disk_sampling.h
 )
 set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
@@ -252,13 +251,9 @@ FetchContent_MakeAvailable(PBrowser)
         
         simulation/data_manager/snapshotmanager.h
         simulation/data_manager/snapshotmanager.cpp
-        simulation/data_manager/windinterpolator.cpp
-        simulation/data_manager/windinterpolator.h
-        simulation/data_manager/fluentinterpolator.h
-        simulation/data_manager/fluentinterpolator.cpp
+        simulation/data_manager/windandcurrentinterpolator.cpp
+        simulation/data_manager/windandcurrentinterpolator.h
         simulation/data_manager/poisson_disk_sampling.h
-
-
 
 
         gui/vtk/SpecialSelector2D.cpp

@@ -26,14 +26,7 @@ bool icy::Model::Step()
 
 //        if(prms.UseWindData && wind_interpolator.setTime(simulation_time)) gpu.update_wind_velocity_grid();
 
-        if(prms.UseCurrentData && fluent_interpolatror.SetTime(0))
-            gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getFramePtr(0,0),
-                                                          fluent_interpolatror.getFramePtr(0,1),
-                                                          fluent_interpolatror.getFramePtr(1,0),
-                                                          fluent_interpolatror.getFramePtr(1,1));
-
-
-        gpu.update_nodes(simulation_time, spd_and_angle.first, spd_and_angle.second);
+        gpu.update_nodes(simulation_time, 0, 0);
         const bool isCycleStart = step % prms.UpdateEveryNthStep == 0;
         gpu.g2p(isCycleStart, false, false);
         gpu.record_timings(false);
@@ -50,8 +43,8 @@ bool icy::Model::Step()
     accessing_point_data.lock();
 
     gpu.transfer_from_device();
-    LOGR("finished {} ({}); host pts {}; cap {}; windSpeed {}; windBearing {}", prms.SimulationEndTime,
-                 prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity, spd_and_angle.first, spd_and_angle.second);
+    LOGR("finished {} ({}); host pts {}; cap {}", prms.SimulationEndTime,
+                 prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity);
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
 
@@ -88,10 +81,8 @@ bool icy::Model::Step()
 
 
 
-icy::Model::Model() : frame_ready(false), done(false)
+icy::Model::Model() : frame_ready(false), done(false), wac_interpolator(prms)
 {
-    fluent_interpolatror.gpu = &gpu;
-    fluent_interpolatror.prms = &prms;
     snapshot.model = this;
     prms.SimulationStep = 0;
     prms.SimulationTime = 0;
@@ -179,9 +170,35 @@ void icy::Model::Prepare()
     //abortRequested = false;
     gpu.update_constants();
 
-    fluent_interpolatror.SetTime(prms.SimulationTime);
-    gpu.partitions.front().update_water_flow_grid(fluent_interpolatror.getFramePtr(0,0),
-                                                  fluent_interpolatror.getFramePtr(0,1),
-                                                  fluent_interpolatror.getFramePtr(1,0),
-                                                  fluent_interpolatror.getFramePtr(1,1));
+    wac_interpolator.SetTime(prms.SimulationTime);
+
+    gpu.transfer_wind_and_current_data_to_device();
 }
+
+
+
+void icy::Model::LoadParameterFile(std::string fileName)
+{
+    LOGR("icy::Model::LoadParameterFile {}", fileName);
+
+    std::map<std::string,std::string> additionalFiles = prms.ParseFile(fileName);
+
+    SimulationTitle = additionalFiles["SimulationTitle"];
+    snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"], additionalFiles["InputMap"]);
+
+    if(additionalFiles.count("InputFlowVelocity"))
+    {
+        prms.UseCurrentData = true;
+        wac_interpolator.OpenCustomHDF5(additionalFiles["InputFlowVelocity"]);
+    }
+
+
+    //    if(additionalFiles.count("InputWindData")) model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
+
+
+    if(prms.SaveSnapshots) {
+        LOGV("requesting to save snapshot 0");
+        SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
+    }
+}
+

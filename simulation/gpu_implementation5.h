@@ -44,12 +44,12 @@ public:
     void allocate_arrays();
     void split_hssoa_into_partitions();     // perform grid and point partitioning
     void transfer_to_device();
+    void transfer_wind_and_current_data_to_device();
 
     void transfer_from_device();
 
     void synchronize(); // call before terminating the main thread
     void update_constants();
-    void update_wind_velocity_grid();
     void reset_grid();
     void reset_timings();
 

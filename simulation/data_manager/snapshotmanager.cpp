@@ -30,7 +30,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
 
     // (1) Load everything from HDF5
     H5::H5File file(fileNameModelledArea, H5F_ACC_RDONLY);
-    int width, height, nPaths;
+    int nPaths;
 
     H5::DataSet ds_path_indices = file.openDataSet("path_indices");
     ds_path_indices.openAttribute("nPaths").read(H5::PredType::NATIVE_INT, &nPaths);
@@ -100,7 +100,7 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
 //    auto new_end = std::remove_if(pt_buffer.begin(), pt_buffer.end(), shouldRemove);
 //    pt_buffer.erase(new_end, pt_buffer.end());
 
-    pt_buffer.erase_if(shouldRemove);       // C++ 20
+    std::erase_if(pt_buffer, shouldRemove);  // C++ 20
     model->prms.nPtsInitial = pt_buffer.size();
 
 
@@ -132,8 +132,6 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
                 model->gpu.original_image_colors_rgb[(i+j*width)*3+k] = png_data[idxInPng(i, j)+k];
 
     stbi_image_free(png_data);
-    stbi_image_free(png_data_modelled_region);
-
 
 
 
@@ -172,9 +170,10 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
         p.setValue(SimParams::posx, pt[0]*pointScale);      // set point's x-position in SOA
         p.setValue(SimParams::posx+1, pt[1]*pointScale);    // set point's y-position in SOA
 
-        uint32_t r = model->gpu.original_image_colors_rgb[(i+j*width)*3+0];
-        uint32_t g = model->gpu.original_image_colors_rgb[(i+j*width)*3+1];
-        uint32_t b = model->gpu.original_image_colors_rgb[(i+j*width)*3+2];
+        const size_t idx_in_image = ((i+ox) + (j+oy)*width)*3;
+        uint32_t r = model->gpu.original_image_colors_rgb[idx_in_image+0];
+        uint32_t g = model->gpu.original_image_colors_rgb[idx_in_image+1];
+        uint32_t b = model->gpu.original_image_colors_rgb[idx_in_image+2];
         uint32_t rgba = (r << 16) | (g << 8) | b;
         model->gpu.point_colors_rgb[k] = rgba;
         p.setValueInt(SimParams::integer_point_idx, k);
@@ -198,6 +197,8 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     // convert points to cell-based local coordinates
     hssoa.convertToIntegerCellFormat(h);
 
+    //hssoa.RemoveDisabledAndSort(model->prms.GridYTotal);
+
     // particle volume and mass
     model->prms.ComputeHelperVariables();
 
@@ -205,6 +206,8 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     model->gpu.initialize();
     model->gpu.split_hssoa_into_partitions();
     model->gpu.allocate_arrays();
+
+
     model->gpu.transfer_to_device();
 
 
@@ -218,42 +221,6 @@ std::string icy::SnapshotManager::prepare_file_name(int gx, int gy)
     return fmt::format("{}/point_cache_{:05d}_{:05d}.h5", pts_cache_path, gx, gy);
 }
 
-
-std::pair<int, float> icy::SnapshotManager::categorizeColor(const Eigen::Vector3f& rgb)
-{
-    // check if open water
-    float minDist = std::numeric_limits<float>::max();
-    int bestInterval = -1;
-    float bestPosition = 0.0f;
-    constexpr float openWaterThreshold = 0.05f;
-
-    for (int i = 0; i < colordata_OpenWater.size() - 1; ++i)
-    {
-        // Convert std::array<float, 3> to Eigen::Vector3f
-        Eigen::Vector3f p0 = arrayToEigen(colordata_OpenWater[i]);
-        Eigen::Vector3f p1 = arrayToEigen(colordata_OpenWater[i + 1]);
-
-        Eigen::Vector3f diff = p1 - p0;
-        float segmentLengthSq = diff.squaredNorm();
-
-        if (segmentLengthSq == 0.0f) continue; // Skip degenerate segments
-
-        Eigen::Vector3f v = rgb - p0;
-        Eigen::Vector3f proj = p0 + diff * v.dot(diff)/diff.squaredNorm();
-        float dist = (rgb - proj).norm();
-
-        if (dist < minDist) {
-            minDist = dist;
-            bestInterval = i;
-        }
-    }
-    if(minDist < openWaterThreshold) return {0, 0.f};
-
-    // check if crushed
-    float result = projectPointOntoCurve(rgb, colordata_Solid);
-
-    return {2,result};
-}
 
 
 
@@ -555,6 +522,7 @@ void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 
 void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTime)
 {
+    /*
     //snapshot_path
     std::string s_path(snapshot_path);
     std::filesystem::path directory_path(snapshot_path);
@@ -591,29 +559,6 @@ void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTim
         // save parameters and wind data
         model->prms.SaveParametersAsHDF5Attributes(dataset);
 
-        // copy the flow data file
-        if(model->prms.UseCurrentData)
-        {
-            std::string sourcePath = model->fluent_interpolatror.cachedFileName;
-
-            fs::path pathObj(sourcePath);
-            std::string fileName = pathObj.filename().string();
-
-            std::string destinationPath = s_path + "/" + fileName;
-            if(!std::filesystem::exists(destinationPath))
-            {
-                std::filesystem::copy_file(sourcePath, destinationPath, std::filesystem::copy_options::overwrite_existing);
-            }
-            else
-            {
-                LOGR("destination file exists {}", destinationPath);
-            }
-
-            H5::StrType str_type(H5::PredType::C_S1, H5T_VARIABLE);
-            dataset_image.createAttribute("CachedFileName", str_type, att_dspace).write(str_type, fileName);
-        }
-
-//        model->wind_interpolator.SaveToOwnHDF5(file);
     }
 
     // save current state
@@ -652,12 +597,14 @@ void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTim
     dataset_pts.createAttribute("HSSOA_size", H5::PredType::NATIVE_UINT, att_dspace).write(H5::PredType::NATIVE_UINT, &model->gpu.hssoa.size);
     int nPtsArrays = SimParams::nPtsArrays;
     dataset_pts.createAttribute("nPtsArrays", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &nPtsArrays);
+*/
 }
 
 
 
 void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
 {
+    /*
     const int gridSize = model->prms.GridXTotal*model->prms.GridYTotal;
     count.assign(gridSize,0); // in case we render a 3-channel image
     vis_vx.assign(gridSize,0);
@@ -781,6 +728,8 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
     H5::DataSpace att_dspace(H5S_SCALAR);
     ds_count.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &SimulationStep);
     ds_count.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
+
+*/
 }
 
 

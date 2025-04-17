@@ -246,8 +246,9 @@ void icy::VisualRepresentation::SynchronizeValues()
         points_filter->Update();
 
     }
-    else if(VisualizingVariable == VisOpt::v_u)
+/*    else if(VisualizingVariable == VisOpt::v_u)
     {
+
         actor_points->VisibilityOff();
         for(int i=0;i<gx;i++)
             for(int j=0;j<gy;j++)
@@ -265,9 +266,11 @@ void icy::VisualRepresentation::SynchronizeValues()
                     for(int k=0;k<3;k++) pixel[k] = c[k];
                 }
             }
+
     }
     else if(VisualizingVariable == VisOpt::v_v)
     {
+        /*
         actor_points->VisibilityOff();
         for(int i=0;i<gx;i++)
             for(int j=0;j<gy;j++)
@@ -285,9 +288,11 @@ void icy::VisualRepresentation::SynchronizeValues()
                     for(int k=0;k<3;k++) pixel[k] = c[k];
                 }
             }
+
     }
     else if(VisualizingVariable == VisOpt::v_norm)
     {
+        /*
         actor_points->VisibilityOff();
         for(int i=0;i<gx;i++)
             for(int j=0;j<gy;j++)
@@ -304,7 +309,8 @@ void icy::VisualRepresentation::SynchronizeValues()
                     for(int k=0;k<3;k++) pixel[k] = c[k];
                 }
             }
-    }
+
+    }*/
     else if(VisualizingVariable == VisOpt::color)
     {
         scalarBar->VisibilityOff();

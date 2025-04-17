@@ -1,7 +1,6 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "parameters_sim.h"
-#include "windinterpolator.h"
 
 
 using namespace Eigen;
@@ -16,6 +15,8 @@ __device__ uint8_t gpu_error_indicator;
 __device__ int gpu_disabled_points_count;
 __constant__ SimParams gprms;
 
+// device-side parameters that are typically reused in kernels
+__device__ t_PointReal *dev_buffer_pts;
 
 
 __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
@@ -47,7 +48,7 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
         }
     }
     t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
-    t_PointReal strength = buffer_pts[pt_idx + pitch_pts*SimParams::idx_initial_strength];
+    t_PointReal strength = buffer_pts[pt_idx + pitch_pts*SimParams::idx_thickness];
 
     const uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
     Eigen::Vector2i cell_i((int)(cell & 0xffff), (int)(cell >> 16));
@@ -93,20 +94,18 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
                                               t_GridReal *buffer_grid,
                                               t_PointReal simulation_time, const uint8_t *grid_status,
-                                              GridVector2r vWind, const float interpolation_coeff_w,
-                                              const float *grid_water_current,
-                                              const size_t gwcPitch)
+                                              GridVector2r vWind, const float interpolation_coeff_w)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= nNodes) return;
 
     const int &gridY = gprms.GridYTotal;
 
-    t_GridReal mass = buffer_grid[idx];
+    t_GridReal mass = buffer_grid[SimParams::grid_idx_mass*pitch_grid + idx];
     if(mass == 0) return;
 
-    t_GridReal vx = buffer_grid[1*pitch_grid + idx];
-    t_GridReal vy = buffer_grid[2*pitch_grid + idx];
+    t_GridReal vx = buffer_grid[SimParams::grid_idx_px*pitch_grid + idx];
+    t_GridReal vy = buffer_grid[SimParams::grid_idx_px*pitch_grid + idx];
 
     const double &dt = gprms.InitialTimeStep;
     const double &cellsize = gprms.cellsize;
@@ -132,17 +131,10 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     {
         //grid_water_current
 
-        const float v1u = grid_water_current[idx];
-        const float v1v = grid_water_current[idx + gwcPitch*1];
-        const float v2u = grid_water_current[idx + gwcPitch*2];
-        const float v2v = grid_water_current[idx + gwcPitch*3];
+        t_GridReal vcx = buffer_grid[SimParams::grid_idx_current_vx*pitch_grid + idx];
+        t_GridReal vcy = buffer_grid[SimParams::grid_idx_current_vy*pitch_grid + idx];
 
-        const float _vx = v1u*(1-interpolation_coeff_w) + v2u*interpolation_coeff_w;
-        const float _vy = v1v*(1-interpolation_coeff_w) + v2v*interpolation_coeff_w;
-        GridVector2r wvel(_vx, _vy);
-//        wvel *= 100;
-
-//        wvel *= (13+min(simulation_time/20000, 2.));
+        GridVector2r wvel(vcx, vcy);
         wvel *= (1+min(simulation_time/(3600*10), 3.));
 
         // quadratic term
@@ -162,8 +154,9 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 
         // linear term
         const double coeff = 0.005;
-        velocity = (1-coeff)*velocity + coeff*wvel;
+//        velocity = (1-coeff)*velocity + coeff*wvel;
 
+        /*
         GridVector2r wvel2 = wvel-velocity;
         wvel2 = wvel2 * wvel2.norm();
         const double coeff2 = 0.01;
@@ -174,7 +167,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
         if(wvel3.norm() > vmax*0.1) wvel3 = wvel3.normalized()*vmax*0.1;
         const double coeff3 = 0.01;
         velocity += coeff3*wvel3;
-
+*/
 
 
         //interpolation_coeff_w
@@ -237,7 +230,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
             Fe(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)];
         }
     }
-    t_PointReal initial_strength = buffer_pts[pt_idx + pitch_pts*SimParams::idx_initial_strength];
+    t_PointReal initial_thickness = buffer_pts[pt_idx + pitch_pts*SimParams::idx_thickness];
     t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
     t_PointReal qp = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Qp];
     uint16_t grain = (uint16_t) (utility_data & 0xffff);
@@ -299,11 +292,11 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     PointVector2r vSigma, vSigmaSquared, v_s_hat_tr;
     ComputeSVD(Fe, U, vSigma, V, vSigmaSquared, v_s_hat_tr, kappa, mu, Je_tr);
 
-    if(!(utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(utility_data, grain, p_tr, q_tr, initial_strength);
+    if(!(utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(utility_data, grain, p_tr, q_tr, initial_thickness);
     if(utility_data & status_crushed)
     {
 
-        Wolper_Drucker_Prager(initial_strength, p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
+        Wolper_Drucker_Prager(initial_thickness, p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
     }
 //    else if(applyGlensLaw)
 //    {
@@ -414,7 +407,7 @@ __device__ t_PointReal smoothstep(t_PointReal x)
 
 
 
-__device__ void Wolper_Drucker_Prager(const t_PointReal &initial_strength,
+__device__ void Wolper_Drucker_Prager(const t_PointReal &initial_thickness,
                                       const t_PointReal &p_tr, const t_PointReal &q_tr, const t_PointReal &Je_tr,
 const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquared, const PointVector2r &v_s_hat_tr,
                                       PointMatrix2r &Fe, t_PointReal &Jp_inv)

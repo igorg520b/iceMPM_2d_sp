@@ -30,9 +30,9 @@ MainWindow::MainWindow(QWidget *parent)
     renderer->SetBackground(1.0,1.0,1.0);
     renderWindow->AddRenderer(renderer);
 //    renderWindow->GetInteractor()->SetInteractorStyle(interactor);
-    renderWindow->GetInteractor()->SetInteractorStyle(specialSelector2D);
-    specialSelector2D->mw = this;
-    renderer->AddActor(specialSelector2D->actor);
+    renderWindow->GetInteractor()->SetInteractorStyle(interactorStyle);
+    //specialSelector2D->mw = this;
+    //renderer->AddActor(specialSelector2D->actor);
 
     // property browser
     pbrowser = new ObjectPropertyBrowser(this);
@@ -184,7 +184,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::open_snapshot_triggered);
     connect(ui->actionStart_Pause, &QAction::triggered, this, &MainWindow::simulation_start_pause);
     connect(ui->actionLoad_Parameters, &QAction::triggered, this, &MainWindow::load_parameter_triggered);
-    connect(ui->actionLoad_FLUENT_Result, &QAction::triggered, this, &MainWindow::read_fluent_data_triggered);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MainWindow::limits_changed);
     connect(qsbIntentionalSlowdown,QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::spinbox_slowdown_value_changed);
@@ -232,7 +231,6 @@ void MainWindow::quit_triggered()
 
     settings.setValue("vis_option", comboBox_visualizations->currentIndex());
 
-    if(!qLastParameterFile.isEmpty()) settings.setValue("lastParameterFile", qLastParameterFile);
 
     QList<int> szs = splitter->sizes();
     settings.setValue("splitter_size_0", szs[0]);
@@ -405,22 +403,10 @@ void MainWindow::screenshot()
 void MainWindow::LoadParameterFile(QString qFileName)
 {
     qDebug() << "MainWindow::LoadParameterFile" << qFileName;
-    std::map<std::string,std::string> additionalFiles = model.prms.ParseFile(qFileName.toStdString());
+    model.LoadParameterFile(qFileName.toStdString());
 
-    model.SimulationTitle = additionalFiles["SimulationTitle"];
-    model.snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"], additionalFiles["InputMap"]);
-    this->qLastParameterFile = qFileName;
-    this->setWindowTitle(qLastParameterFile);
+    this->setWindowTitle(qFileName);
 
-//    if(additionalFiles.count("InputWindData")) model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
-
-//    if(additionalFiles.count("InputFlowVelocity"))
-//        model.fluent_interpolatror.PrepareFlowDataCache(additionalFiles["InputFlowVelocity"]);
-
-    if(model.prms.SaveSnapshots) {
-        LOGV("requesting to save snapshot 0");
-        model.SaveFrameRequest(model.prms.SimulationStep, model.prms.SimulationTime);
-    }
 
     representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);
@@ -434,40 +420,13 @@ void MainWindow::spinbox_slowdown_value_changed(int val)
 }
 
 
-void MainWindow::read_fluent_data_triggered()
-{
-    qDebug() << "MainWindow::read_fluent_data_triggered()";
-
-    model.fluent_interpolatror.TestLoad(model.prms.FluentDataScale, model.prms.FluentDataOffsetX, model.prms.FluentDataOffsetY);
-//    renderer->AddActor(model.fluent_interpolatror.actor);
-    renderer->AddActor(model.fluent_interpolatror.actor_original);
-    renderWindow->Render();
-
-
-
-    /*
-    QString defaultPath = QDir::currentPath() + "/_fluent";
-
-    // Fall back to the current path if the default directory does not exist
-    if (!QDir(defaultPath).exists()) defaultPath = QDir::currentPath();
-
-    QString qFileName = QFileDialog::getOpenFileName(this, "Open FLUENT data", defaultPath, "FLUENT Files (*.cas.h5)");
-    if(qFileName.isNull())return;
-    model.fluent_interpolatror.ScanDirectory(qFileName.toStdString());
-
-    slider1->setMinimum(0);
-    slider1->setMaximum(model.fluent_interpolatror.file_count-1);
-
-*/
-}
-
 
 void MainWindow::sliderValueChanged(int val)
 {
     LOGR("sliderValueChanged {}", val);
-    model.fluent_interpolatror.SetTime((double)val);
-    representation.SynchronizeValues();
-    renderWindow->Render();
+//    model.fluent_interpolatror.SetTime((double)val);
+//    representation.SynchronizeValues();
+//    renderWindow->Render();
 
     //model.fluent_interpolatror.LoadDataFrame(val);
 

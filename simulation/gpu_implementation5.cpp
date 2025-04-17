@@ -42,7 +42,7 @@ void GPU_Implementation5::p2g()
 void GPU_Implementation5::update_nodes(float simulation_time, float windSpeed, float windAngle)
 {
 //    float interpolation_coeff = model->wind_interpolator.interpolationCoeffFromTime(simulation_time);
-    float interpolation_coeff_w = model->fluent_interpolatror.position;
+    float interpolation_coeff_w = 0;
 
 //    float windSpeed = std::min(0+simulation_time*(40./5.e5), 40.0);
     float alphaRad = (windAngle + 180.0) * M_PI / 180.0;
@@ -70,8 +70,6 @@ void GPU_Implementation5::g2p(const bool recordPQ, const bool enablePointTransfe
         if(err != cudaSuccess) throw std::runtime_error("g2p cudaEventRecord");
     }
 }
-
-
 
 
 void GPU_Implementation5::record_timings(const bool enablePointTransfer)
@@ -220,11 +218,13 @@ void GPU_Implementation5::reset_timings()
     }
 }
 
-void GPU_Implementation5::update_wind_velocity_grid()
+
+
+void GPU_Implementation5::transfer_wind_and_current_data_to_device()
 {
-    LOGV("GPU_Implementation5::update_wind_velocity_grid()");
-    for(GPU_Partition &p : partitions) p.update_wind_velocity_grid(model->wind_interpolator.grid);
+    // todo: unfinished
 }
+
 
 
 

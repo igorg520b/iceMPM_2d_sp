@@ -37,7 +37,10 @@
 
 #include <vtkWindowToImageFilter.h>
 #include <vtkPNGWriter.h>
-#include <vtkInteractorStyleRubberBand2D.h>
+#include <vtkInteractorStyleImage.h>
+
+//#include "SpecialSelector2D.h"
+
 
 #include "objectpropertybrowser.h"
 #include "vtk_representation.h"
@@ -45,7 +48,6 @@
 #include "parameters_wrapper.h"
 #include "backgroundworker.h"
 #include "snapshotmanager.h"
-#include "SpecialSelector2D.h"
 
 #include <fstream>
 #include <iomanip>
@@ -82,7 +84,6 @@ private Q_SLOTS:
     void cameraReset_triggered();
     void open_snapshot_triggered();
     void load_parameter_triggered();
-    void read_fluent_data_triggered();
 
     void comboboxIndexChanged_visualizations(int index);
     void limits_changed(double val);
@@ -121,9 +122,10 @@ private:
     vtkNew<vtkRenderer> renderer;
 
     // other
-    QString qLastParameterFile;
     const std::string outputDirectory = "default_output";
-    vtkNew<vtkInteractorStyleRubberBand2D> interactor;
+//    vtkNew<SpecialSelector2D> specialSelector2D;
+    vtkNew<vtkInteractorStyleImage> interactorStyle;
+
 
     // screenshots
     const std::string screenshot_directory = "screenshots";
@@ -131,7 +133,6 @@ private:
     vtkNew<vtkPNGWriter> writerPNG;
     void screenshot();
 
-    vtkNew<SpecialSelector2D> specialSelector2D;
     friend class SpecialSelector2D;
 
 };

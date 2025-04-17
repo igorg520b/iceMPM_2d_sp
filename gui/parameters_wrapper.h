@@ -120,23 +120,6 @@ public:
     double getCellsize() {return prms->cellsize;}
 
 
-    Q_PROPERTY(double fl_Scale READ getFluentDataScale WRITE setFluentDataScale NOTIFY propertyChanged)
-    double getFluentDataScale() {return prms->FluentDataScale;}
-    void setFluentDataScale(double val) {prms->FluentDataScale=val;}
-
-    Q_PROPERTY(double fl_OX READ getFluentDataOffsetX WRITE setFluentDataOffsetX NOTIFY propertyChanged)
-    double getFluentDataOffsetX() {return prms->FluentDataOffsetX;}
-    void setFluentDataOffsetX(double val) {prms->FluentDataOffsetX=val;}
-
-    Q_PROPERTY(double fl_OY READ getFluentDataOffsetY WRITE setFluentDataOffsetY NOTIFY propertyChanged)
-    double getFluentDataOffsetY() {return prms->FluentDataOffsetY;}
-    void setFluentDataOffsetY(double val) {prms->FluentDataOffsetY=val;}
-
-    Q_PROPERTY(double fl_FrameTimeInterval READ getFrameTimeInterval WRITE setFrameTimeInterval NOTIFY propertyChanged)
-    double getFrameTimeInterval() {return prms->FrameTimeInterval;}
-    void setFrameTimeInterval(double val) {prms->FrameTimeInterval=val;}
-
-
 
 public:
     ParamsWrapper(SimParams *p)

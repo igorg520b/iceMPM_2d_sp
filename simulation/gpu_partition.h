@@ -14,7 +14,6 @@
 #include "parameters_sim.h"
 #include "point.h"
 #include "host_side_soa.h"
-#include "windinterpolator.h"
 
 
 // kernels
@@ -26,9 +25,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
                                               t_GridReal *_buffer_grid,
                                               t_PointReal simulation_time, const uint8_t *grid_status,
                                               const GridVector2r vWind,
-                                              const float interpolation_coeff,
-                                              const float *grid_water_current,
-                                              const size_t gwcPitch);
+                                              const float interpolation_coeff);
 
 __global__ void partition_kernel_g2p(const bool recordPQ,
                                      const int pitch_grid,

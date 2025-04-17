@@ -99,7 +99,6 @@ GPU_Partition::GPU_Partition()
     pts_array = nullptr;
     grid_array = nullptr;
     grid_status_array = nullptr;
-    grid_water_current = nullptr;
 }
 
 GPU_Partition::~GPU_Partition()
@@ -119,7 +118,6 @@ GPU_Partition::~GPU_Partition()
     cudaFree(grid_array);
     cudaFree(pts_array);
     cudaFree(grid_status_array);
-    cudaFree(grid_water_current);
     LOGR("Destructor invoked; partition {} on device {}", PartitionID, Device);
 }
 
@@ -176,9 +174,10 @@ void GPU_Partition::allocate(const int n_points_capacity, const int gx)
     if(err != cudaSuccess) throw std::runtime_error("GPU_Partition allocate");
     nPtsPitch /= sizeof(t_PointReal);
 
-    LOGR("allocate: P {}-{}:  requested grid {} x {} = {}; gird pitch {}; Pts-req {}; pts-pitch; total alloc {:.2} Mb",
+    LOGR("allocate: P {}-{}:  requested grid {} x {} = {}; gird pitch {}; Pts-req {}; pts-pitch {}; total alloc {:.2} Mb",
                  PartitionID, Device,
-                 gx, gy, gx*gy, nGridPitch,
+                 gx, gy, gx*gy,
+                 nGridPitch,
                  n_points_capacity, nPtsPitch,
                  (double)total_allocated/(1024*1024));
 }
@@ -191,17 +190,14 @@ void GPU_Partition::update_constants()
     if(err != cudaSuccess) throw std::runtime_error("gpu_error_indicator initialization");
     err = cudaMemcpyToSymbol(gprms, prms, sizeof(SimParams));
     if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: gprms");
+
+    err = cudaMemcpyToSymbol(dev_buffer_pts, &pts_array, sizeof(t_PointReal*));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants");
+
+    //dev_buffer_pts
+
     LOGR("Constant symbols copied to device {}; partition {}", Device, PartitionID);
 }
-
-void GPU_Partition::update_wind_velocity_grid(float data[WindInterpolator::allocatedLatExtent][WindInterpolator::allocatedLonExtent][4])
-{
-    cudaSetDevice(Device);
-    size_t data_size = sizeof(float)*WindInterpolator::allocatedLatExtent*WindInterpolator::allocatedLonExtent*4;
-    cudaError_t err = cudaMemcpyToSymbolAsync(wgrid, data, data_size,0,cudaMemcpyHostToDevice, streamCompute);
-    if(err != cudaSuccess) throw std::runtime_error("update_wind_velocity_grid");
-}
-
 
 
 
@@ -240,8 +236,7 @@ void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind
     partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(nGridNodes,
                                                                       nGridPitch, grid_array,
                                                                       simulation_time, grid_status_array, vWind,
-                                                                      interpolation_coeff,
-                                                                      grid_water_current, gwcPitch);
+                                                                      interpolation_coeff);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
 }
 
