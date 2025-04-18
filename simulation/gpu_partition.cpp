@@ -81,12 +81,57 @@ void GPU_Partition::transfer_grid_data_to_device(GPU_Implementation5* gpu)
     cudaError_t err;
     err = cudaSetDevice(Device);
     if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
+
+    // transfer status array (distinguishes between modelled area and land)
     size_t grid_array_size = prms->GridXTotal * prms->GridYTotal * sizeof(uint8_t);
 
     err = cudaMemcpyAsync(grid_status_array, gpu->grid_status_buffer.data(),
                           grid_array_size, cudaMemcpyHostToDevice,streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device");
+
+
+    // transfer boundary normals (for slip collisions)
+    const int &gxp = GridX_partition;
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+
+    const size_t transfer_size = gxp*gy*sizeof(t_GridReal);
+    err = cudaMemcpyAsync(grid_array + nGridPitch * SimParams::grid_idx_bc_normal_nx,
+                          gpu->grid_boundary_normals.data(),
+                          transfer_size, cudaMemcpyHostToDevice, streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device bc nx");
+
+    err = cudaMemcpyAsync(grid_array + nGridPitch * SimParams::grid_idx_bc_normal_ny,
+                          gpu->grid_boundary_normals.data() + gx*gy,
+                          transfer_size, cudaMemcpyHostToDevice, streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device bc ny");
 }
+
+
+void GPU_Partition::update_current_field(const WindAndCurrentInterpolator &wac)
+{
+    // transfer current velocity field from wac to device
+
+    cudaError_t err;
+    err = cudaSetDevice(Device);
+    if(err != cudaSuccess) throw std::runtime_error("update_current_field");
+
+    const int &gxp = GridX_partition;
+    const int &gx = prms->GridXTotal;
+    const int &gy = prms->GridYTotal;
+
+    const size_t transfer_size = gxp*gy*sizeof(t_GridReal);
+    err = cudaMemcpyAsync(grid_array + nGridPitch * SimParams::grid_idx_current_vx,
+                          wac.current_flow_data.data(),
+                          transfer_size, cudaMemcpyHostToDevice, streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("update_current_field current vx");
+
+    err = cudaMemcpyAsync(grid_array + nGridPitch * SimParams::grid_idx_current_vy,
+                          wac.current_flow_data.data() + gx*gy,
+                          transfer_size, cudaMemcpyHostToDevice, streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("update_current_field current vy");
+}
+
 
 
 GPU_Partition::GPU_Partition()
@@ -207,7 +252,8 @@ void GPU_Partition::reset_grid()
 {
     cudaError_t err;
     cudaSetDevice(Device);
-    size_t gridArraySize = nGridPitch * SimParams::nGridArrays * sizeof(t_GridReal);
+    const size_t arrays_to_clear = 3;   // mass, px, py
+    size_t gridArraySize = nGridPitch * arrays_to_clear * sizeof(t_GridReal);
     err = cudaMemsetAsync(grid_array, 0, gridArraySize, streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("cuda_reset_grid error");
 }

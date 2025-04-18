@@ -25,6 +25,8 @@
 #include <vtkScalarBarActor.h>
 #include <vtkTextProperty.h>
 #include <vtkTextActor.h>
+#include <vtkPlaneSource.h>
+#include <vtkTexture.h>
 
 #include <vtkRegularPolygonSource.h>
 #include <vtkCylinderSource.h>
@@ -60,8 +62,9 @@ public:
     void ChangeVisualizationOption(int option);  // invoked from GUI/main thread
 
     vtkNew<vtkActor> actor_points;
-    vtkNew<vtkActor> actor_grid;
-    vtkNew<vtkActor> actor_uniformgrid;
+    vtkNew<vtkActor> raster_actor;
+    vtkNew<vtkActor> testing_actor;
+
     vtkNew<vtkScalarBarActor> scalarBar;
     vtkNew<vtkTextActor> actorText;
 
@@ -72,17 +75,25 @@ private:
     vtkNew<vtkPoints> points;
     vtkNew<vtkPolyData> points_polydata;
     vtkNew<vtkPolyDataMapper> points_mapper;
-
     vtkNew<vtkVertexGlyphFilter> points_filter;
     vtkNew<vtkUnsignedCharArray> pts_colors;    // for color visualization per point
 
-    // draw background grid as vtkImageData
-    vtkNew<vtkUniformGrid> uniformGrid;
-    vtkNew<vtkDataSetMapper> mapper_uniformgrid;
+    // background image
+    std::vector<uint8_t> renderedImage;
+    vtkNew<vtkImageData> raster_imageData;
+    vtkNew<vtkUnsignedCharArray> raster_scalars;
+    vtkNew<vtkPlaneSource> raster_plane;
+    vtkNew<vtkTexture> raster_texture;
+    vtkNew<vtkPolyDataMapper> raster_mapper;
 
-    // background grid
-    vtkNew<vtkStructuredGrid> structuredGrid;
-    vtkNew<vtkDataSetMapper> grid_mapper;
-    vtkNew<vtkPoints> grid_points;
+
+    // one point per cell (in the center) for testing
+    vtkNew<vtkPoints> testing_points;
+    vtkNew<vtkPolyData> testing_points_polydata;
+    vtkNew<vtkPolyDataMapper> testing_points_mapper;
+    vtkNew<vtkVertexGlyphFilter> testing_points_filter;
+
+
+    static constexpr uint8_t waterColor[3] = {0x15, 0x1f, 0x2f};
 };
 #endif

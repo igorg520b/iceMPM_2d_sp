@@ -17,7 +17,7 @@ void WindAndCurrentInterpolator::OpenCustomHDF5(std::string fileName)
 
 void WindAndCurrentInterpolator::ReadStaticFlowData()
 {
-
+    LOGV("WindAndCurrentInterpolator::ReadStaticFlowData");
     const int &width = prms.InitializationImageSizeX;
     const int &height = prms.InitializationImageSizeY;
     const int &ox = prms.ModeledRegionOffsetX;

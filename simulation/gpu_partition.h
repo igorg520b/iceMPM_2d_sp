@@ -14,6 +14,7 @@
 #include "parameters_sim.h"
 #include "point.h"
 #include "host_side_soa.h"
+#include "windandcurrentinterpolator.h"
 
 
 // kernels
@@ -83,9 +84,11 @@ struct GPU_Partition
     void transfer_grid_data_to_device(GPU_Implementation5* gpu);
     void update_constants();
 
+    void update_current_field(const WindAndCurrentInterpolator &wac);
+
     void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset);
 
-    // calculation
+    // simulation cycle
     void reset_grid();
     void p2g();
     void update_nodes(float simulation_time, const GridVector2r vWind, const float interpolation_coeff);

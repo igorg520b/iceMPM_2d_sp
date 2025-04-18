@@ -222,7 +222,11 @@ void GPU_Implementation5::reset_timings()
 
 void GPU_Implementation5::transfer_wind_and_current_data_to_device()
 {
-    // todo: unfinished
+    LOGV("GPU_Implementation5::transfer_wind_and_current_data_to_device()");
+    for(GPU_Partition &p : partitions)
+    {
+        p.update_current_field(model->wac_interpolator);
+    }
 }
 
 

@@ -105,7 +105,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     if(mass == 0) return;
 
     t_GridReal vx = buffer_grid[SimParams::grid_idx_px*pitch_grid + idx];
-    t_GridReal vy = buffer_grid[SimParams::grid_idx_px*pitch_grid + idx];
+    t_GridReal vy = buffer_grid[SimParams::grid_idx_py*pitch_grid + idx];
 
     const double &dt = gprms.InitialTimeStep;
     const double &cellsize = gprms.cellsize;
@@ -119,11 +119,10 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 
     GridVector2r velocity(vx, vy);
     velocity /= mass;
-//    velocity[1] -= gprms.dt_Gravity;
 
     uint8_t is_modeled_area = grid_status[idx];
     t_GridReal intensity = (t_GridReal)is_modeled_area/255.f;
-    if(!is_modeled_area)
+    if(is_modeled_area != 100)
     {
         velocity.setZero();
     }
@@ -136,6 +135,8 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 
         GridVector2r wvel(vcx, vcy);
         wvel *= (1+min(simulation_time/(3600*10), 3.));
+//        wvel.x() = 0.1;
+//        wvel.y() = -0.1;
 
         // quadratic term
 /*
@@ -153,8 +154,9 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 */
 
         // linear term
-        const double coeff = 0.005;
-//        velocity = (1-coeff)*velocity + coeff*wvel;
+//        const double coeff = 0.005;
+        const double coeff = 0.05;
+        velocity = (1-coeff)*velocity + coeff*wvel;
 
         /*
         GridVector2r wvel2 = wvel-velocity;
@@ -193,8 +195,8 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 
     // write the updated grid velocity back to memory
     if(velocity.squaredNorm() > vmax*vmax*0.1*0.1) velocity.setZero();
-    buffer_grid[1*pitch_grid + idx] = (t_GridReal)velocity[0];
-    buffer_grid[2*pitch_grid + idx] = (t_GridReal)velocity[1];
+    buffer_grid[SimParams::grid_idx_px*pitch_grid + idx] = (t_GridReal)velocity[0];
+    buffer_grid[SimParams::grid_idx_py*pitch_grid + idx] = (t_GridReal)velocity[1];
 }
 
 
