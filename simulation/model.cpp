@@ -183,8 +183,11 @@ void icy::Model::LoadParameterFile(std::string fileName)
 
     std::map<std::string,std::string> additionalFiles = prms.ParseFile(fileName);
 
-    SimulationTitle = additionalFiles["SimulationTitle"];
-    snapshot.PreparePointsAndSetupGrid(additionalFiles["InputPNG"], additionalFiles["InputMap"]);
+    snapshot.SimulationTitle = additionalFiles["SimulationTitle"];
+
+    snapshot.PrepareGrid(additionalFiles["InputPNG"], additionalFiles["InputMap"]);
+    snapshot.PopulatePoints(additionalFiles["InputMap"]);
+    snapshot.SplitIntoPartitionsAndTransferToDevice();
 
     if(additionalFiles.count("InputFlowVelocity"))
     {

@@ -94,6 +94,5 @@ private:
     vtkNew<vtkVertexGlyphFilter> testing_points_filter;
 
 
-    static constexpr uint8_t waterColor[3] = {0x15, 0x1f, 0x2f};
 };
 #endif

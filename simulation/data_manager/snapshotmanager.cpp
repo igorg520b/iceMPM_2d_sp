@@ -5,7 +5,10 @@
 
 #include <spdlog/spdlog.h>
 #include <fmt/format.h>
+#include <fmt/std.h>
 #include <H5Cpp.h>
+
+
 
 #include <filesystem>
 #include <string>
@@ -21,14 +24,13 @@
 
 namespace fs = std::filesystem;
 
-void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::string fileNameModelledArea)
+
+void icy::SnapshotManager::PrepareGrid(std::string fileNamePNG, std::string fileNameModelledArea)
 {
-    LOGR("icy::SnapshotManager::PreparePointsAndSetupGrid {}",fileName);
+    LOGR("icy::SnapshotManager::PrepareGrid {}", fileNamePNG);
     LOGR("modeled area file: {}", fileNameModelledArea);
 
-
-
-    // (1) Load everything from HDF5
+    // (1) Load from HDF5: attributes, normals and path_indices
     H5::H5File file(fileNameModelledArea, H5F_ACC_RDONLY);
     int nPaths;
 
@@ -48,76 +50,37 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     const int &oy = model->prms.ModeledRegionOffsetY;
     const int &gx = model->prms.GridXTotal;
     const int &gy = model->prms.GridYTotal;
+    model->prms.cellsize = model->prms.DimensionHorizontal / (model->prms.InitializationImageSizeX-1);
+    model->prms.cellsize_inv = 1.0/model->prms.cellsize;
+
 
     LOGR("initialization image: {} x {}", model->prms.InitializationImageSizeX, model->prms.InitializationImageSizeY);
     LOGR("grid size: {} x {}", model->prms.GridXTotal, model->prms.GridYTotal);
     LOGR("modeled area offset: {}, {}", model->prms.ModeledRegionOffsetX, model->prms.ModeledRegionOffsetY);
 
-    size_t sz = width*height;
+    const size_t sz = width*height;
 
     // temporary buffers for HDF5 data
     std::vector<Eigen::Vector2f> normals(sz);
     std::vector<int> path_indices(sz);
-    std::vector<float> iceThickness(sz);    // quantitive measure of "thickness"
-    std::vector<uint8_t> iceStatus(sz);     // 0 for open water, 1 for crushed, 2 for "intact"
 
     ds_path_indices.read(path_indices.data(), H5::PredType::NATIVE_INT);
     file.openDataSet("normals").read(normals.data(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("iceStatus").read(iceStatus.data(), H5::PredType::NATIVE_UINT8);
-    file.openDataSet("iceThickness").read(iceThickness.data(), H5::PredType::NATIVE_FLOAT);
     file.close();
 
 
 
-
-    // (2) either load or generate points
-    std::vector<std::array<float, 2>> pt_buffer;   // initial buffer for reading/generating points
-    generate_points(gx, gy, SimParams::MPM_points_per_cell, pt_buffer);
-    size_t initial_pt_count = pt_buffer.size();
-
-    model->prms.cellsize = model->prms.DimensionHorizontal / (model->prms.InitializationImageSizeX-1);
-    model->prms.cellsize_inv = 1.0/model->prms.cellsize;
-    const t_PointReal &h = model->prms.cellsize;
-    model->prms.ParticleVolume = h*h*gx*gy/ initial_pt_count;
-
-
-    // convert unscaled point coordinates to (i,j) pair on the grid
-    auto idxPt = [&](const std::array<float,2> &pt) -> std::pair<int,int> {
-        const double scale = gx-1;
-        return {(int)(pt[0]*scale + 0.5), (int)(pt[1]*scale + 0.5)};
-    };
-
-    // that tells whether a point becomes ice material
-    auto shouldRemove = [&](const std::array<float,2> &pt) -> bool {
-        auto [i,j] = idxPt(pt);
-        if(i<=1 || j<=1 || i>= (gx-2) || j>= (gy-2)) return true; // exclude points right at the boundary
-
-        uint8_t status = iceStatus[(i+ox) + (j+oy)*width];
-        return (status != 1 && status != 2);
-    };
-
-
-//    auto new_end = std::remove_if(pt_buffer.begin(), pt_buffer.end(), shouldRemove);
-//    pt_buffer.erase(new_end, pt_buffer.end());
-
-    std::erase_if(pt_buffer, shouldRemove);  // C++ 20
-    model->prms.nPtsInitial = pt_buffer.size();
+    // (2) allocate grid arrays host-side
+    model->gpu.allocate_host_arrays_grid();
 
 
 
-    // (3) allocate host-side arrays (both points and grid)
-    model->gpu.allocate_host_arrays();
-    model->gpu.hssoa.size = model->prms.nPtsInitial; // set the actual number of points stored in HSSOA
-    LOGR("PreparePointsAndSetupGrid: nPoints {}", model->prms.nPtsInitial);
-
-
-
-    // (4) Load PNG image (only for rendering)
+    // (3) Load PNG image (only for rendering)
     int channels, imgx, imgy;
-    unsigned char *png_data = stbi_load(fileName.c_str(), &imgx, &imgy, &channels, 3); // expect 3 channels - RGB
+    unsigned char *png_data = stbi_load(fileNamePNG.c_str(), &imgx, &imgy, &channels, 3); // expect 3 channels - RGB
     if(!png_data || channels != 3 || imgx != width || imgy != height)
     {
-        LOGR("filename {} not loaded; channels {}", fileName, channels);
+        LOGR("filename {} not loaded; channels {}", fileNamePNG, channels);
         LOGR("png expected size {} x {}; actual size {} x {}", width, height, imgx, imgy);
         throw std::runtime_error("png1 not loaded");
     }
@@ -135,11 +98,12 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
 
 
 
-    // (5) Set grid normals and "status" byte
+    // (4) Set grid normals and "status" byte
     auto transformPathIdx = [](const int &idx) -> uint8_t {
         if(idx < 1000) return (uint8_t)(idx + 1);
         else return (uint8_t)(idx-900);
     };
+
 
     // transfer / set grid land bit
     for(int i=0;i<gx;i++)
@@ -152,6 +116,68 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
             model->gpu.grid_boundary_normals[idx_host + gx*gy] = (t_GridReal)normals[idx1].y();
         }
 
+}
+
+
+
+void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5)
+{
+    LOGR("icy::SnapshotManager::PopulatePoints: {}", fileNameModelledAreaHDF5);
+
+    // (0) params
+    const int &width = model->prms.InitializationImageSizeX;
+    const int &height = model->prms.InitializationImageSizeY;
+    const int &ox = model->prms.ModeledRegionOffsetX;
+    const int &oy = model->prms.ModeledRegionOffsetY;
+    const int &gx = model->prms.GridXTotal;
+    const int &gy = model->prms.GridYTotal;
+    const size_t sz = width*height;
+    const t_PointReal &h = model->prms.cellsize;
+
+    std::vector<uint8_t> iceStatus(sz);     // 0 for open water, 1 for crushed, 2 for "intact"
+    std::vector<float> iceThickness(sz);    // quantitive measure of "thickness"
+
+    // (1) load iceStatus from HDF5
+    H5::H5File file(fileNameModelledAreaHDF5, H5F_ACC_RDONLY);
+    file.openDataSet("iceStatus").read(iceStatus.data(), H5::PredType::NATIVE_UINT8);
+    file.openDataSet("iceThickness").read(iceThickness.data(), H5::PredType::NATIVE_FLOAT);
+    file.close();
+
+
+    // (2) generate points (or load from cache)
+    std::vector<std::array<float, 2>> pt_buffer;   // initial buffer for reading/generating points
+    generate_points(gx, gy, SimParams::MPM_points_per_cell, pt_buffer);
+    const size_t initial_pt_count = pt_buffer.size();
+    model->prms.ParticleVolume = h*h*gx*gy/ initial_pt_count;
+
+
+    // convert unscaled point coordinates to (i,j) pair on the grid
+    auto idxPt = [&](const std::array<float,2> &pt) -> std::pair<int,int> {
+        const double scale = gx-1;
+        return {(int)(pt[0]*scale + 0.5), (int)(pt[1]*scale + 0.5)};
+    };
+
+
+    // return true if the underlying cell is land or open water
+    auto shouldRemove = [&](const std::array<float,2> &pt) -> bool {
+        auto [i,j] = idxPt(pt);
+        if(i<=1 || j<=1 || i>= (gx-2) || j>= (gy-2)) return true; // exclude points right at the boundary
+
+        uint8_t status = iceStatus[(i+ox) + (j+oy)*width];
+        return (status != 1 && status != 2);    // 1 - crushed, 2 - intact ice
+    };
+
+
+    std::erase_if(pt_buffer, shouldRemove);  // C++ 20
+    model->prms.nPtsInitial = pt_buffer.size();
+
+
+    // (3) allocate host-side array for points
+    // allocate space for points on hssoa
+    model->gpu.allocate_host_arrays_points();
+
+    model->gpu.hssoa.size = model->prms.nPtsInitial; // set the actual number of points stored in HSSOA
+    LOGR("icy::SnapshotManager::PopulatePoints: allocated {} points on HSSOA", model->prms.nPtsInitial);
 
 
     // (6) transfer points
@@ -193,12 +219,40 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
         for(int idx=0; idx<SimParams::dim; idx++)
             p.setValue(SimParams::Fe00+idx*2+idx, 1.f);
     }
+    LOGV("Points transferred to HSSOA");
 
     // convert points to cell-based local coordinates
     hssoa.convertToIntegerCellFormat(h);
 
-    //hssoa.RemoveDisabledAndSort(model->prms.GridYTotal);
+    // we no longer need the original color in the sattelite photo
+    FillModelledAreaWithBlueColor();
+}
 
+
+
+void icy::SnapshotManager::FillModelledAreaWithBlueColor()
+{
+    const int &width = model->prms.InitializationImageSizeX;
+    const int &height = model->prms.InitializationImageSizeY;
+    const int &ox = model->prms.ModeledRegionOffsetX;
+    const int &oy = model->prms.ModeledRegionOffsetY;
+    const int &gx = model->prms.GridXTotal;
+    const int &gy = model->prms.GridYTotal;
+
+    for(int i=0;i<gx;i++)
+        for(int j=0;j<gy;j++)
+        {
+            uint8_t status = model->gpu.grid_status_buffer[j + i*gy];
+            if(status == 100)
+            {
+                for(int k=0;k<3;k++)
+                    model->gpu.original_image_colors_rgb[((i+ox)+(j+oy)*width)*3+k] = waterColor[k];
+            }
+        }
+}
+
+void icy::SnapshotManager::SplitIntoPartitionsAndTransferToDevice()
+{
     // particle volume and mass
     model->prms.ComputeHelperVariables();
 
@@ -206,14 +260,138 @@ void icy::SnapshotManager::PreparePointsAndSetupGrid(std::string fileName, std::
     model->gpu.initialize();
     model->gpu.split_hssoa_into_partitions();
     model->gpu.allocate_arrays();
-
-
     model->gpu.transfer_to_device();
-
-
-
-    LOGV("PreparePointsAndSetupGrid done\n");
 }
+
+
+
+
+
+
+
+
+void icy::SnapshotManager::ReadPointsFromSnapshot(std::string fileNameSnapshotHDF5)
+{
+    // instead of generating the points, read them from the provided HDF5 (snapshot) file
+
+
+
+
+    FillModelledAreaWithBlueColor();
+}
+
+
+void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTime)
+{
+    // ensure that the output directory exists
+    fs::path outputDir = "output";
+    fs::path snapshotsDir = "snapshots";
+    fs::path targetPath = outputDir / SimulationTitle / snapshotsDir;
+    fs::create_directories(targetPath);
+
+    // save current state
+    const int frame = SimulationStep / model->prms.UpdateEveryNthStep;
+    std::string baseName = fmt::format(fmt::runtime("s{:05d}.h5"), frame);
+    fs::path fullPath = targetPath / baseName;
+
+
+    H5::H5File file(fullPath.string(), H5F_ACC_TRUNC);
+
+    // points
+    hsize_t dims_points[2] = {SimParams::nPtsArrays, model->gpu.hssoa.size};
+    H5::DataSpace dataspace_points(2, dims_points);
+
+    // We are zipping the data, so using chunks
+    H5::DSetCreatPropList proplist;
+    hsize_t chunk_size = (hsize_t)std::min((unsigned)256*1024, model->gpu.hssoa.size);
+    hsize_t chunk_dims[2] = {SimParams::nPtsArrays, chunk_size};
+    proplist.setChunk(2, chunk_dims);
+    if(SimulationStep == 0) proplist.setDeflate(1);
+    else proplist.setDeflate(5);
+
+    H5::DataType dtype;
+    if constexpr(std::is_same_v<t_PointReal, float>) dtype = H5::PredType::NATIVE_FLOAT;
+    else dtype = H5::PredType::NATIVE_DOUBLE;
+
+    // Define the hyperslab in the memory space
+    hsize_t mem_dims[2] = {SimParams::nPtsArrays, model->gpu.hssoa.capacity};
+    H5::DataSpace memspace(2, mem_dims);
+    hsize_t mem_offset[2] = {0, 0};  // Start at the beginning of the memory array
+    hsize_t mem_count[2] = {SimParams::nPtsArrays, model->gpu.hssoa.size};  // Number of elements to select
+    memspace.selectHyperslab(H5S_SELECT_SET, mem_count, mem_offset);
+
+    // Write the data to the dataset
+    H5::DataSet dataset_pts = file.createDataSet("pts_data", dtype, dataspace_points, proplist);
+    dataset_pts.write(model->gpu.hssoa.host_buffer, dtype, memspace, dataspace_points);
+
+    H5::DataSpace att_dspace(H5S_SCALAR);
+    dataset_pts.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &SimulationStep);
+    dataset_pts.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
+    dataset_pts.createAttribute("HSSOA_size", H5::PredType::NATIVE_UINT, att_dspace).write(H5::PredType::NATIVE_UINT, &model->gpu.hssoa.size);
+    int nPtsArrays = SimParams::nPtsArrays;
+    dataset_pts.createAttribute("nPtsArrays", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &nPtsArrays);
+}
+
+
+
+
+
+
+
+
+
+/*
+void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTime)
+{
+
+    //snapshot_path
+    std::filesystem::path directory_path(snapshot_path);
+    if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
+
+    if(frame == 0)
+    {
+        // save wind data, grid/land, and point colors
+        std::string fileName = s_path + "/_grid_and_wind.h5";
+        H5::H5File file(fileName, H5F_ACC_TRUNC);
+
+        // save grid/land data
+        // (1) initial colored image
+        hsize_t dims_colorImage[3] = {(hsize_t)model->prms.InitializationImageSizeY,
+                                      (hsize_t)model->prms.InitializationImageSizeX, 3};
+        H5::DataSpace dataspace_colorImage(3, dims_colorImage);
+        H5::DataSet dataset_image = file.createDataSet("colorImage", H5::PredType::NATIVE_UINT8, dataspace_colorImage);
+        dataset_image.write(model->gpu.original_image_colors_rgb.data(), H5::PredType::NATIVE_UINT8);
+
+        // (2) save status (land or water) buffer
+        hsize_t dims_grid[2] = {(hsize_t)model->prms.GridXTotal, (hsize_t)model->prms.GridYTotal};
+        H5::DataSpace dataspace_grid(2, dims_grid);
+        H5::DataSet dataset = file.createDataSet("grid", H5::PredType::NATIVE_UINT8, dataspace_grid);
+        dataset.write(model->gpu.grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
+
+        // (3) point colors (used for visualization)
+        hsize_t dims_points[1] = {model->gpu.point_colors_rgb.size()};
+        H5::DataSpace dataspace_points(1, dims_points);
+        H5::DataSet dataset_pt_colors = file.createDataSet("point_colors_rgb", H5::PredType::NATIVE_UINT32, dataspace_points);
+        dataset_pt_colors.write(model->gpu.point_colors_rgb.data(), H5::PredType::NATIVE_UINT32);
+
+        // save parameters and wind data
+        model->prms.SaveParametersAsHDF5Attributes(dataset);
+
+    }
+
+
+}
+*/
+
+
+
+
+
+
+
+
+
+
 
 
 std::string icy::SnapshotManager::prepare_file_name(int gx, int gy)
@@ -249,10 +427,9 @@ double icy::SnapshotManager::haversineDistance(double lat, double lon1, double l
 }
 
 
-
+/*
 void icy::SnapshotManager::LoadWindData(std::string fileName)
 {
-    /*
     LOGR("icy::SnapshotManager::LoadWindData - {}", fileName);
     model->prms.use_GFS_wind = true;
     model->wind_interpolator.LoadWindData(fileName,
@@ -260,9 +437,8 @@ void icy::SnapshotManager::LoadWindData(std::string fileName)
                                           model->prms.SimulationStartUnixTime);
     model->prms.gridLatMin = model->wind_interpolator.gridLatMin;
     model->prms.gridLonMin = model->wind_interpolator.gridLonMin;
-*/
 }
-
+*/
 
 
 
@@ -413,10 +589,10 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
 
 // =============================  READ AND WRITE SNAPSHOTS
 
-
+/*
 void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 {
-    /*
+
     {
         // Convert to std::filesystem::path for manipulation
         std::filesystem::path snPath(fileName);
@@ -515,91 +691,9 @@ void icy::SnapshotManager::ReadSnapshot(std::string fileName)
 
     //model->Prepare();
     LOGV("icy::SnapshotManager::ReadSnapshot done");
-*/
+
 }
-
-
-
-void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTime)
-{
-    /*
-    //snapshot_path
-    std::string s_path(snapshot_path);
-    std::filesystem::path directory_path(snapshot_path);
-    if (!std::filesystem::exists(directory_path)) std::filesystem::create_directories(directory_path);
-    H5::DataSpace att_dspace(H5S_SCALAR);
-
-    int frame = SimulationStep / model->prms.UpdateEveryNthStep;
-    if(frame == 0)
-    {
-        // save wind data, grid/land, and point colors
-        std::string fileName = s_path + "/_grid_and_wind.h5";
-        H5::H5File file(fileName, H5F_ACC_TRUNC);
-
-        // save grid/land data
-        // (1) initial colored image
-        hsize_t dims_colorImage[3] = {(hsize_t)model->prms.InitializationImageSizeY,
-                                      (hsize_t)model->prms.InitializationImageSizeX, 3};
-        H5::DataSpace dataspace_colorImage(3, dims_colorImage);
-        H5::DataSet dataset_image = file.createDataSet("colorImage", H5::PredType::NATIVE_UINT8, dataspace_colorImage);
-        dataset_image.write(model->gpu.original_image_colors_rgb.data(), H5::PredType::NATIVE_UINT8);
-
-        // (2) save status (land or water) buffer
-        hsize_t dims_grid[2] = {(hsize_t)model->prms.GridXTotal, (hsize_t)model->prms.GridYTotal};
-        H5::DataSpace dataspace_grid(2, dims_grid);
-        H5::DataSet dataset = file.createDataSet("grid", H5::PredType::NATIVE_UINT8, dataspace_grid);
-        dataset.write(model->gpu.grid_status_buffer.data(), H5::PredType::NATIVE_UINT8);
-
-        // (3) point colors (used for visualization)
-        hsize_t dims_points[1] = {model->gpu.point_colors_rgb.size()};
-        H5::DataSpace dataspace_points(1, dims_points);
-        H5::DataSet dataset_pt_colors = file.createDataSet("point_colors_rgb", H5::PredType::NATIVE_UINT32, dataspace_points);
-        dataset_pt_colors.write(model->gpu.point_colors_rgb.data(), H5::PredType::NATIVE_UINT32);
-
-        // save parameters and wind data
-        model->prms.SaveParametersAsHDF5Attributes(dataset);
-
-    }
-
-    // save current state
-    std::string fileName = fmt::format("{}/snapshot_{:05d}.h5", s_path, frame);
-    H5::H5File file(fileName, H5F_ACC_TRUNC);
-
-    // points
-    hsize_t dims_points[2] = {SimParams::nPtsArrays, model->gpu.hssoa.size};
-    H5::DataSpace dataspace_points(2, dims_points);
-
-    // We are zipping the data, so using chunks
-    H5::DSetCreatPropList proplist;
-    hsize_t chunk_size = (hsize_t)std::min((unsigned)256*1024, model->gpu.hssoa.size);
-    hsize_t chunk_dims[2] = {SimParams::nPtsArrays, chunk_size};
-    proplist.setChunk(2, chunk_dims);
-    if(SimulationStep == 0) proplist.setDeflate(1);
-    else proplist.setDeflate(5);
-
-    H5::DataType dtype;
-    if constexpr(std::is_same_v<t_PointReal, float>) dtype = H5::PredType::NATIVE_FLOAT;
-    else dtype = H5::PredType::NATIVE_DOUBLE;
-
-    // Define the hyperslab in the memory space
-    hsize_t mem_dims[2] = {SimParams::nPtsArrays, model->gpu.hssoa.capacity};
-    H5::DataSpace memspace(2, mem_dims);
-    hsize_t mem_offset[2] = {0, 0};  // Start at the beginning of the memory array
-    hsize_t mem_count[2] = {SimParams::nPtsArrays, model->gpu.hssoa.size};  // Number of elements to select
-    memspace.selectHyperslab(H5S_SELECT_SET, mem_count, mem_offset);
-
-    // Write the data to the dataset
-    H5::DataSet dataset_pts = file.createDataSet("pts_data", dtype, dataspace_points, proplist);
-    dataset_pts.write(model->gpu.hssoa.host_buffer, dtype, memspace, dataspace_points);
-
-    dataset_pts.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &SimulationStep);
-    dataset_pts.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
-    dataset_pts.createAttribute("HSSOA_size", H5::PredType::NATIVE_UINT, att_dspace).write(H5::PredType::NATIVE_UINT, &model->gpu.hssoa.size);
-    int nPtsArrays = SimParams::nPtsArrays;
-    dataset_pts.createAttribute("nPtsArrays", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &nPtsArrays);
 */
-}
-
 
 
 void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)

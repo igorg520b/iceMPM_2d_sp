@@ -134,8 +134,8 @@ void icy::VisualRepresentation::SynchronizeTopology()
                 }
                 else
                 {
-                    for(int k=0;k<3;k++)
-                        renderedImage[((i+ox) + (j+oy)*width)*3+k] = waterColor[k];
+//                    for(int k=0;k<3;k++)
+//                        renderedImage[((i+ox) + (j+oy)*width)*3+k] = waterColor[k];
                 }
             }
         }

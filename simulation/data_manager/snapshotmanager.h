@@ -18,15 +18,26 @@ class icy::SnapshotManager
 {
 public:
     icy::Model *model;
+    std::string SimulationTitle;
 
-    void PreparePointsAndSetupGrid(std::string fileName, std::string fileNameModelledArea);   // use PNG image files
-    void LoadWindData(std::string fileName);    // netCDF4 data
+
+    void PrepareGrid(std::string fileNamePNG, std::string fileNameModelledAreaHDF5);
+    void PopulatePoints(std::string fileNameModelledAreaHDF5);
+    void ReadPointsFromSnapshot(std::string fileNameSnapshotHDF5);
+    void SplitIntoPartitionsAndTransferToDevice();
+
+
     void SaveSnapshot(int SimulationStep, double SimulationTime);
+
     void SaveFrame(int SimulationStep, double SimulationTime);
 
-    void ReadSnapshot(std::string fileName);    // custom HDF5 file
+
+
+//    void LoadWindData(std::string fileName);    // netCDF4 data
+//    void ReadSnapshot(std::string fileName);    // custom HDF5 file
 
 private:
+
     std::vector<uint8_t> count;   // used for counting points per cell and image generation
     std::vector<uint8_t> rgb;
     std::vector<float> vis_r, vis_g, vis_b, vis_alpha, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
@@ -42,6 +53,9 @@ private:
     static bool attempt_to_fill_from_cache(int gx, int gy, std::vector<std::array<float, 2>> &buffer);
     static void generate_and_save(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
     static void generate_points(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
+
+    static constexpr uint8_t waterColor[3] = {0x15, 0x1f, 0x2f};
+    void FillModelledAreaWithBlueColor();
 };
 
 #endif // SNAPSHOTWRITER_H

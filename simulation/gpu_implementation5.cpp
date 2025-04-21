@@ -114,14 +114,8 @@ void GPU_Implementation5::split_hssoa_into_partitions()
 }
 
 
-void GPU_Implementation5::allocate_host_arrays()
+void GPU_Implementation5::allocate_host_arrays_grid()
 {
-    // allocate space for points on hssoa
-    model->gpu.hssoa.Allocate(model->prms.nPtsInitial);
-
-    // points' colors (never copied to device)
-    point_colors_rgb.resize(model->prms.nPtsInitial);
-
     // grid sizes
     const int modeled_grid_total = model->prms.GridXTotal * model->prms.GridYTotal;
     const int initial_image_total = model->prms.InitializationImageSizeX * model->prms.InitializationImageSizeY;
@@ -134,6 +128,12 @@ void GPU_Implementation5::allocate_host_arrays()
     LOGV("GPU_Implementation5::allocate_host_arrays() completed");
 }
 
+
+void GPU_Implementation5::allocate_host_arrays_points()
+{
+    hssoa.Allocate(model->prms.nPtsInitial);
+    point_colors_rgb.resize(model->prms.nPtsInitial);
+}
 
 
 void GPU_Implementation5::allocate_arrays()

@@ -48,7 +48,6 @@ public:
     void UnlockCycleMutex();
     void SaveFrameRequest(int SimulationStep, double SimulationTime);
 
-    std::string SimulationTitle;
     SimParams prms;
     WindAndCurrentInterpolator wac_interpolator;
     icy::SnapshotManager snapshot;

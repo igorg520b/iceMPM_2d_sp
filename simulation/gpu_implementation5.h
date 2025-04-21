@@ -35,7 +35,8 @@ public:
     std::vector<t_GridReal> grid_boundary_normals;
 
 
-    void allocate_host_arrays();
+    void allocate_host_arrays_grid();
+    void allocate_host_arrays_points();
 
 
     std::function<void()> transfer_completion_callback; // currently not used

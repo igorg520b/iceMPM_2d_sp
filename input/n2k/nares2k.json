@@ -1,4 +1,5 @@
 {
+"SimulationTitle":"n2k",
 "InputPNG":"input/n2k/combined2_2000.png",
 "InputMap":"input/n2k/map.h5",
 "InputFlowVelocity":"input/n2k/flow_velocities.h5",
