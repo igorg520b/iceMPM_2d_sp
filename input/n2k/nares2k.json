@@ -10,11 +10,11 @@
 "SaveSnapshots":true,
 
 "SimulationStartUnixTime":1717988400,
-"SimulationEndTime":1100000,
+"SimulationEndTime":10000,
+"AnimationFramesRequested":100,
 
 "InitialTimeStep":0.17,
 "ParticleViewSize":1.0,
-"AnimationFramesRequested":10000,
 
 "YoungsModulus":5.0e8,
 "PoissonsRatio":0.3,

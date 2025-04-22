@@ -7,76 +7,53 @@
 #include <chrono>
 
 #include <cxxopts.hpp>
-#include <spdlog/spdlog.h>
-
 #include "model.h"
-#include "snapshotmanager.h"
-#include "gpu_partition.h"
-
 
 
 int main(int argc, char** argv)
 {
+    // parse options
+    std::string parameter_filename;
+    std::string resume_filename; // Defaults to empty
+
+    cxxopts::Options options("Ice MPM", "CLI version of MPM simulation");
+    options.add_options()
+        // Define options and link them to variables
+        ("parameter", "Parameter file (JSON, required)", cxxopts::value<std::string>(parameter_filename))
+        ("r,resume", "Resume from snapshot file <filename>", cxxopts::value<std::string>(resume_filename));
+
+    // Mark 'parameter' as the positional argument
+    options.parse_positional({"parameter"});
+    auto result = options.parse(argc, argv); // Parse arguments
+
+    // Check if required parameter file was provided
+    if (!result.count("parameter")) {
+        LOGV("Error: Parameter file argument is required."); // Minimal error output
+        throw std::runtime_error("Parameter file is required."); // Still need to signal failure
+    }
+
     icy::Model model;
     std::atomic<bool> request_terminate = false;
 
 
-    // initialize the model
-
-
-    // parse options
-    cxxopts::Options options("Ice MPM", "CLI version of MPM simulation");
-
-    options.add_options()
-        ("file", "Snapshot file", cxxopts::value<std::string>())
-        ;
-    options.parse_positional({"file"});
-
-    auto option_parse_result = options.parse(argc, argv);
-
-    if(option_parse_result.count("file"))
-    {
-        std::string fileName = option_parse_result["file"].as<std::string>();
-        model.snapshot.ReadSnapshot(fileName);
-        model.Prepare();
-    }
-    else
-    {
-        LOGV("snapshot file must be provided");
-        throw std::runtime_error("no snapshot file");
-    }
+    model.LoadParameterFile(parameter_filename, resume_filename);
+    model.Prepare();
 
 
     model.gpu.transfer_completion_callback = [&](){
         LOGR("cycle callback {}; ", model.prms.AnimationFrameNumber());
         model.UnlockCycleMutex();
     };
-    // ensure that the folder exists
 
-    // start the simulation thread
-    std::thread simulation_thread([&](){
-        bool result;
-        do
-        {
-            result = model.Step();
-        } while(!request_terminate && result);
-    });
 
-    // accept console input
+    bool step_result;
     do
     {
-        std::string user_input;
-        std::cin >> user_input;
+        step_result = model.Step();
+    } while(step_result);
 
-        if(user_input[0]=='q'){
-            request_terminate = true;
-            LOGV("requested to save the snapshot and terminate");
-        }
-    } while(!request_terminate);
 
     model.gpu.synchronize();
-
     std::cout << "cm done\n";
-
     return 0;
 }

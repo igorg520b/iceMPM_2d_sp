@@ -16,6 +16,7 @@
 #include <thread>
 #include <condition_variable>
 #include <atomic>
+#include <filesystem>
 
 #include "parameters_sim.h"
 #include "point.h"
@@ -41,7 +42,7 @@ public:
     Model();
     ~Model();
 
-    void LoadParameterFile(std::string fileName);   // initialize the simulation from a parameter file
+    void LoadParameterFile(std::string fileName, std::string resumeSnapshotFileName);   // initialize the simulation from a parameter file
 
     void Prepare();        // invoked once, at simulation start
     bool Step();           // either invoked by Worker or via GUI
@@ -69,7 +70,6 @@ private:
     std::atomic<bool> done;
     int saving_SimulationStep = -1;
     double saving_SimulationTime;
-
 };
 
 #endif

@@ -14,8 +14,8 @@ bool icy::Model::Step()
 
     int count_unupdated_steps = 0;
     gpu.reset_timings();
-    const double st = prms.SimulationTime;
     double simulation_time;
+
     do
     {
         const int step = prms.SimulationStep + count_unupdated_steps;
@@ -73,7 +73,6 @@ bool icy::Model::Step()
 
     accessing_point_data.unlock();
     if(prms.SaveSnapshots) SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
-
 
     return (prms.SimulationTime < prms.SimulationEndTime);
 }
@@ -177,7 +176,7 @@ void icy::Model::Prepare()
 
 
 
-void icy::Model::LoadParameterFile(std::string fileName)
+void icy::Model::LoadParameterFile(std::string fileName, std::string resumeSnapshotFileName)
 {
     LOGR("icy::Model::LoadParameterFile {}", fileName);
 
@@ -186,7 +185,25 @@ void icy::Model::LoadParameterFile(std::string fileName)
     snapshot.SimulationTitle = additionalFiles["SimulationTitle"];
 
     snapshot.PrepareGrid(additionalFiles["InputPNG"], additionalFiles["InputMap"]);
-    snapshot.PopulatePoints(additionalFiles["InputMap"]);
+
+    if(resumeSnapshotFileName.empty())
+    {
+        snapshot.PopulatePoints(additionalFiles["InputMap"]);
+    }
+    else
+    {
+        std::filesystem::path inputPath(resumeSnapshotFileName);
+        if (!inputPath.has_parent_path())
+        {
+            std::filesystem::path outputDir = "output";
+            std::filesystem::path snapshotsDir = "snapshots";
+            std::filesystem::path targetPath = outputDir / snapshot.SimulationTitle / snapshotsDir / resumeSnapshotFileName;
+            resumeSnapshotFileName = targetPath.string();
+        }
+
+        // try to load snapshot file
+        snapshot.ReadPointsFromSnapshot(resumeSnapshotFileName);
+    }
     snapshot.SplitIntoPartitionsAndTransferToDevice();
 
     if(additionalFiles.count("InputFlowVelocity"))
@@ -195,13 +212,6 @@ void icy::Model::LoadParameterFile(std::string fileName)
         wac_interpolator.OpenCustomHDF5(additionalFiles["InputFlowVelocity"]);
     }
 
-
     //    if(additionalFiles.count("InputWindData")) model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
-
-
-    if(prms.SaveSnapshots) {
-        LOGV("requesting to save snapshot 0");
-        SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
-    }
 }
 

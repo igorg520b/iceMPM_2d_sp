@@ -113,8 +113,6 @@ public:
     void ComputeHelperVariables();
     int AnimationFrameNumber() { return SimulationStep / UpdateEveryNthStep;}
 
-    void SaveParametersAsHDF5Attributes(H5::DataSet &dataset);
-    void ReadParametersFromHDF5Attributes(H5::DataSet &dataset);
     void Printout();    // for testing
 };
 

@@ -41,11 +41,9 @@ private:
     std::vector<uint8_t> count;   // used for counting points per cell and image generation
     std::vector<uint8_t> rgb;
     std::vector<float> vis_r, vis_g, vis_b, vis_alpha, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
+    void PrepareFrameArrays(); // invoked from SaveFrame
 
     constexpr static std::string_view pts_cache_path = "_data/point_cache";
-    constexpr static std::string_view snapshot_path = "_data/snapshots";
-    constexpr static std::string_view frame_path = "_data/frames";
-    constexpr static std::string_view image_path = "_data/images";
 
     static constexpr double degreesToRadians(double degrees) { return degrees * M_PI / 180.0; }
     static double haversineDistance(double lat, double lon1, double lon2);
@@ -56,6 +54,9 @@ private:
 
     static constexpr uint8_t waterColor[3] = {0x15, 0x1f, 0x2f};
     void FillModelledAreaWithBlueColor();
+    void SavePointColors();
+    void ReadPointColors();
+
 };
 
 #endif // SNAPSHOTWRITER_H

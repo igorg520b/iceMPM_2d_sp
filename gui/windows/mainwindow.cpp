@@ -29,10 +29,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     renderer->SetBackground(1.0,1.0,1.0);
     renderWindow->AddRenderer(renderer);
-//    renderWindow->GetInteractor()->SetInteractorStyle(interactor);
     renderWindow->GetInteractor()->SetInteractorStyle(interactorStyle);
-    //specialSelector2D->mw = this;
-    //renderer->AddActor(specialSelector2D->actor);
 
     // property browser
     pbrowser = new ObjectPropertyBrowser(this);
@@ -183,6 +180,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::open_snapshot_triggered);
     connect(ui->actionStart_Pause, &QAction::triggered, this, &MainWindow::simulation_start_pause);
     connect(ui->actionLoad_Parameters, &QAction::triggered, this, &MainWindow::load_parameter_triggered);
+    connect(ui->actionPrint_Camera_Params, &QAction::triggered, this, &MainWindow::print_camera_params);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MainWindow::limits_changed);
     connect(qsbIntentionalSlowdown,QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::spinbox_slowdown_value_changed);
@@ -191,7 +189,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(worker, SIGNAL(stepCompleted()), SLOT(simulation_data_ready()));
 
     connect(params, SIGNAL(propertyChanged()), SLOT(parameters_updated()));
-
 
     pbrowser->setActiveObject(params);
     qDebug() << "MainWindow constructor done";
@@ -303,7 +300,8 @@ void MainWindow::load_parameter_triggered()
 {
     QString qFileName = QFileDialog::getOpenFileName(this, "Load Parameters", QDir::currentPath(), "JSON Files (*.json)");
     if(qFileName.isNull())return;
-    LoadParameterFile(qFileName);
+    QString tmp;
+    LoadParameterFile(qFileName, tmp);
 }
 
 
@@ -400,13 +398,12 @@ void MainWindow::screenshot()
 }
 
 
-void MainWindow::LoadParameterFile(QString qFileName)
+void MainWindow::LoadParameterFile(QString qFileName, QString resumeSnapshot)
 {
-    qDebug() << "MainWindow::LoadParameterFile" << qFileName;
-    model.LoadParameterFile(qFileName.toStdString());
+    qDebug() << "MainWindow::LoadParameterFile " << qFileName << " ;resume file: " << resumeSnapshot;
+    model.LoadParameterFile(qFileName.toStdString(), resumeSnapshot.toStdString());
 
     this->setWindowTitle(qFileName);
-
 
     representation.SynchronizeTopology();
     pbrowser->setActiveObject(params);
@@ -454,4 +451,70 @@ void MainWindow::parameters_updated()
     qDebug() << "MainWindow::parameters_updated(); ptsize " << model.prms.ParticleViewSize;
     representation.SynchronizeTopology();
     renderWindow->Render();
+}
+
+void MainWindow::print_camera_params()
+{
+    // --- Basic Checks (Assuming renderer, camera, qt_vtk_widget are valid) ---
+    vtkCamera* camera = renderer->GetActiveCamera(); // Assuming renderer is accessible member
+    if (!camera) {
+        qWarning() << "print_camera_params: Active camera is null.";
+        return;
+    }
+    if (!qt_vtk_widget) {
+        qWarning() << "print_camera_params: QVTKOpenGLNativeWidget is null.";
+        return;
+    }
+
+    QSize viewWindowSize = qt_vtk_widget->size();
+    int viewportWidthPixels = viewWindowSize.width();
+    int viewportHeightPixels = viewWindowSize.height();
+
+    qDebug() << "Viewport Size (Pixels): " << viewportWidthPixels << "x" << viewportHeightPixels;
+
+    if (viewportWidthPixels <= 0 || viewportHeightPixels <= 0) {
+        qWarning() << "print_camera_params: Invalid viewport dimensions.";
+        return;
+    }
+
+    // --- Get Relevant Camera Parameters ---
+    double parallelScale = camera->GetParallelScale(); // This is HALF the actual visible height in world units
+    double camPos[3];
+    camera->GetPosition(camPos);
+    double viewCenterXWorld = camPos[0];
+    double viewCenterYWorld = camPos[1];
+
+    qDebug() << "Camera Parallel Scale: " << parallelScale;
+    qDebug() << "Camera Position (View Center): (" << viewCenterXWorld << "," << viewCenterYWorld << ")";
+
+    // --- Calculate ACTUAL Visible Dimensions based on Camera and Viewport ---
+    double actualVisibleHeightWorld = 2.0 * parallelScale;
+    double actualAspectRatio = static_cast<double>(viewportWidthPixels) / static_cast<double>(viewportHeightPixels);
+    double actualVisibleWidthWorld = actualVisibleHeightWorld * actualAspectRatio;
+
+    // --- Calculate Target 16:9 Dimensions, Matching the ACTUAL Visible Width ---
+    const double targetAspectRatio = 16.0 / 9.0;
+
+    // Use the actual visible width as the target width
+    double targetVisibleWidthWorld = actualVisibleWidthWorld;
+
+    // Calculate the corresponding height for a 16:9 ratio
+    double targetVisibleHeightWorld = targetVisibleWidthWorld / targetAspectRatio;
+
+    // --- Calculate Bottom-Left Offset for the TARGET 16:9 region ---
+    // The offset is still centered around the camera's position (view center)
+    // but uses the TARGET dimensions.
+    double offsetXWorld = viewCenterXWorld - (targetVisibleWidthWorld / 2.0);
+    double offsetYWorld = viewCenterYWorld - (targetVisibleHeightWorld / 2.0);
+
+    // --- Output ---
+    // Printing the offset and size that represent a 16:9 region,
+    // centered like the current view, and scaled so its width matches
+    // the width currently visible in the viewport.
+    qDebug() << "--- Target 16:9 Raster Region (World Coordinates) ---";
+    qDebug() << "  (Based on matching current view width)";
+    qDebug() << "  Offset (Bottom-Left): (" << offsetXWorld << "," << offsetYWorld << ")";
+    qDebug() << "  Size: (" << targetVisibleWidthWorld << "x" << targetVisibleHeightWorld << ")";
+    // Optional: print ratio check
+    // qDebug() << "  Calculated Ratio Check:" << (targetVisibleWidthWorld / targetVisibleHeightWorld);
 }

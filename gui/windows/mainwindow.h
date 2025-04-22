@@ -72,7 +72,7 @@ public:
     ~MainWindow();
     void closeEvent( QCloseEvent* event ) override;
     icy::Model model;
-    void LoadParameterFile(QString qFileName);    // return file name of the point cloud
+    void LoadParameterFile(QString qFileName, QString resumeSnapshot);    // return file name of the point cloud
 
 private Q_SLOTS:
     void quit_triggered();
@@ -91,6 +91,7 @@ private Q_SLOTS:
     void spinbox_slowdown_value_changed(int val);
 
     void parameters_updated();
+    void print_camera_params();
 
 private:
     void updateGUI();   // when simulation is started/stopped or when a step is advanced
