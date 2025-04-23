@@ -6,9 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored -use_fast_maths")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-option(BUILD_CLI_VERSION "Build CLI version" OFF)
-option(BUILD_GUI_VERSION "Build Qt version" ON)
-option(BUILD_POSTPROCESSOR "Build Qt version" ON)
+option(BUILD_CLI_VERSION "Build CLI version" ON)
+option(BUILD_GUI_VERSION "Build Qt version" OFF)
+option(BUILD_POSTPROCESSOR "Build Qt version" OFF)
 
 if(BUILD_GUI_VERSION OR BUILD_POSTPROCESSOR)
     set(CMAKE_AUTOUIC ON)
@@ -21,6 +21,78 @@ include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 find_package(spdlog REQUIRED)
+
+
+
+
+
+
+
+if(BUILD_CLI_VERSION)
+
+# CLI version
+add_executable(cm2
+    cli/main.cpp
+
+    # simulation
+    simulation/parameters_sim.h
+    simulation/parameters_sim.cpp
+    simulation/model.cpp
+    simulation/model.h
+    simulation/point.h
+    simulation/point.cpp
+
+    simulation/givens.cuh
+    simulation/helper_math.cuh
+    simulation/gpu_implementation5.h
+    simulation/gpu_implementation5.cpp
+
+
+    simulation/hssoa/host_side_soa.h
+    simulation/hssoa/host_side_soa.cpp
+    simulation/hssoa/proxypoint2d.h
+    simulation/hssoa/proxypoint2d.cpp
+
+    simulation/gpu_partition.h
+    simulation/gpu_partition.cpp
+    simulation/kernels.cuh
+
+    simulation/data_manager/snapshotmanager.h
+    simulation/data_manager/snapshotmanager.cpp
+    simulation/data_manager/windandcurrentinterpolator.cpp
+    simulation/data_manager/windandcurrentinterpolator.h
+
+    simulation/data_manager/poisson_disk_sampling.h
+)
+set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
+
+set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
+set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+
+target_link_libraries(cm2 PRIVATE spdlog::spdlog)
+
+target_include_directories(cm2 PRIVATE simulation simulation/hssoa simulation/data_manager External)
+target_link_libraries(cm2 PRIVATE Eigen3::Eigen)
+
+
+if(HDF5_INCLUDE_DIRS)
+    target_link_libraries(cm2 PRIVATE ${HDF5_LIBRARIES})
+else()
+#    target_link_libraries(cm2 PRIVATE hdf5-shared hdf5_cpp-shared)
+    target_link_libraries(cm2 PRIVATE hdf5_cpp-shared)
+endif()
+
+target_include_directories(cm2 PRIVATE ${HDF5_INCLUDE_DIRS})
+
+endif()
+
+
+
+
+
+
+
+
 
 
 if(BUILD_POSTPROCESSOR)
@@ -98,83 +170,6 @@ target_link_libraries(pp PRIVATE gomp)
 
 endif()
 
-
-if(BUILD_CLI_VERSION)
-
-    find_package(VTK 9.4 HINTS "~/Projects-libraries/build-vtk/lib/cmake/vtk-9.4" REQUIRED COMPONENTS
-      CommonColor
-      CommonCore
-      FiltersSources
-      FiltersGeometry
-      InteractionStyle
-      RenderingContextOpenGL2
-      RenderingCore
-      RenderingFreeType
-      RenderingGL2PSOpenGL2
-      RenderingOpenGL2
-      IOGeometry
-      RenderingAnnotation
-      RenderingLabel
-      IOImage
-      ViewsQt
-    )
-
-# CLI version
-add_executable(cm2
-    cli/main.cpp
-
-    # simulation
-    simulation/parameters_sim.h
-    simulation/parameters_sim.cpp
-    simulation/model.cpp
-    simulation/model.h
-    simulation/point.h
-    simulation/point.cpp
-
-    simulation/givens.cuh
-    simulation/helper_math.cuh
-    simulation/gpu_implementation5.h
-    simulation/gpu_implementation5.cpp
-
-
-    simulation/hssoa/host_side_soa.h
-    simulation/hssoa/host_side_soa.cpp
-    simulation/hssoa/proxypoint2d.h
-    simulation/hssoa/proxypoint2d.cpp
-
-    simulation/gpu_partition.h
-    simulation/gpu_partition.cpp
-    simulation/kernels.cuh
-
-    simulation/data_manager/snapshotmanager.h
-    simulation/data_manager/snapshotmanager.cpp
-    simulation/data_manager/windandcurrentinterpolator.cpp
-    simulation/data_manager/windandcurrentinterpolator.h
-    
-    simulation/data_manager/poisson_disk_sampling.h
-)
-set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
-
-set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
-set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
-
-target_link_libraries(cm2 PRIVATE spdlog::spdlog)
-
-target_include_directories(cm2 PRIVATE simulation simulation/hssoa simulation/data_manager External)
-target_link_libraries(cm2 PRIVATE Eigen3::Eigen)
-
-target_link_libraries(cm2 PRIVATE ${HDF5_LIBRARIES})
-target_include_directories(cm2 PRIVATE ${HDF5_INCLUDE_DIRS})
-
-target_link_libraries(cm2 PRIVATE ${VTK_LIBRARIES})
-
-
-vtk_module_autoinit(
-  TARGETS cm2
-  MODULES ${VTK_LIBRARIES}
-)
-
-endif()
 
 
 if(BUILD_GUI_VERSION)
