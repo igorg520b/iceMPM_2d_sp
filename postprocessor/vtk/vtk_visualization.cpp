@@ -23,15 +23,6 @@ VTKVisualization::VTKVisualization()
     txtprop->ShadowOff();
     txtprop->SetColor(0,0,0);
 
-    // main grid
-    mapper_uniformgrid->SetInputData(uniformGrid);
-    actor_grid_main->SetMapper(mapper_uniformgrid);
-    actor_grid_main->GetProperty()->SetEdgeVisibility(false);
-    actor_grid_main->GetProperty()->LightingOff();
-    actor_grid_main->GetProperty()->ShadingOff();
-    actor_grid_main->PickableOff();
-
-
     // scalar bar
     scalarBar->SetLookupTable(lut_Pressure);
     scalarBar->SetMaximumWidthInPixels(180);
@@ -48,16 +39,6 @@ VTKVisualization::VTKVisualization()
     scalarBar->SetUnconstrainedFontSize(true);
     scalarBar->GetLabelTextProperty()->SetFontSize(40);
 
-
-    // rectangle frame
-    rectangleActor->SetMapper(rectangleMapper);
-    rectangleActor->GetProperty()->SetColor(0.0, 0.0, 0.0); // Red color
-    rectangleActor->GetProperty()->SetLineWidth(2.0);       // Line thickness
-
-    rectangleMapper->SetInputData(rectanglePolyData);
-    rectanglePolyData->SetPoints(rectanglePoints);
-    rectanglePolyData->SetLines(rectangleLines);
-
     actor_text->SetDisplayPosition(600, 10);
 
     txtprop = actor_text_title->GetTextProperty();
@@ -72,77 +53,125 @@ VTKVisualization::VTKVisualization()
 
 
 
-void VTKVisualization::SynchronizeTopology()
-{
-    LOGV("VTKVisualization::SynchronizeTopology()");
-    if(!frameData->dataLoaded) return;
-
-    const SimParams &prms = frameData->ggd->prms;
-
-    // actor_grid_main
-    const int gx = prms.GridXTotal;
-    const int gy = prms.GridYTotal;
-    const double h = prms.cellsize;
-
-    const int imgx = prms.InitializationImageSizeX;
-    const int imgy = prms.InitializationImageSizeY;
-
-    const int ox = prms.ModeledRegionOffsetX;
-    const int oy = prms.ModeledRegionOffsetY;
-
-    LOGR("img size {}", frameData->ggd->original_image_colors_rgb.size());
-    LOGR("calculated size {}", imgx*imgy*3);
-
-    uniformGrid->SetDimensions(imgx, imgy, 1);
-    uniformGrid->SetSpacing(h, h, 1.0);
-    uniformGrid->AllocateScalars(VTK_UNSIGNED_CHAR, 3);
-
-    for(int i=0;i<imgx;i++)
-        for(int j=0;j<imgy;j++)
-        {
-            unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i, j, 0));
-            int idx = (i+imgx*j)*3;
-            pixel[0] = frameData->ggd->original_image_colors_rgb[idx+0];
-            pixel[1] = frameData->ggd->original_image_colors_rgb[idx+1];
-            pixel[2] = frameData->ggd->original_image_colors_rgb[idx+2];
-        }
-
-    for(int i=0;i<gx;i++)
-        for(int j=0;j<gy;j++)
-        {
-            int idx2 = (j + gy*i);
-            if(frameData->ggd->grid_status_buffer[idx2])
-            {
-                // water color
-                unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+ox, j+oy, 0));
-                pixel[0] = 0x15;
-                pixel[1] = 0x1f;
-                pixel[2] = 0x2f;
-            }
-        }
-
-    mapper_uniformgrid->Update();
-
-
-    // rectangle
-    rectanglePoints->SetNumberOfPoints(4);
-    rectanglePoints->SetPoint(0, 0.5*h, 0.5*h,2.0);
-    rectanglePoints->SetPoint(1, (imgx-1.5)*h, 0.5*h , 2.0);
-    rectanglePoints->SetPoint(2, (imgx-1.5)*h, (imgy-1.5)*h , 2.0);
-    rectanglePoints->SetPoint(3, 0.5*h, (imgy-1.5)*h , 2.0);
-
-    vtkIdType pointIds[5] = {0, 1, 2, 3, 0};
-    rectangleLines->Reset();
-    rectangleLines->InsertNextCell(5, pointIds);
-
-
-    SynchronizeValues();
-}
-
 
 void VTKVisualization::SynchronizeValues()
 {
     if(!frameData->dataLoaded) return;
+    const SimParams &prms = frameData->ggd->prms;
+
+    const int &width = prms.InitializationImageSizeX;
+    const int &height = prms.InitializationImageSizeY;
+    const int &ox = prms.ModeledRegionOffsetX;
+    const int &oy = prms.ModeledRegionOffsetY;
+    const int &gx = prms.GridXTotal;
+    const int &gy = prms.GridYTotal;
+    const double &h = prms.cellsize;
+
+
+
+    renderedImage.assign(model->gpu.original_image_colors_rgb.begin(), model->gpu.original_image_colors_rgb.end());
+
+    for(size_t i=0;i<gx;i++)
+        for(size_t j=0;j<gy;j++)
+        {
+            uint8_t status = model->gpu.grid_status_buffer[j + i*gy];
+            if(status == 100)
+            {
+                if(VisualizingVariable == VisOpt::v_norm)
+                {
+                    // visualize current flow
+                    size_t idx2 = j + i*gy;
+                    t_GridReal vx = model->wac_interpolator.current_flow_data[idx2];
+                    t_GridReal vy = model->wac_interpolator.current_flow_data[idx2 + gx*gy];
+                    float norm = sqrt(vx*vx + vy*vy);
+                    norm /= 0.3;
+
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, norm);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
+                }
+                else if(VisualizingVariable == VisOpt::v_u)
+                {
+                    // visualize current flow
+                    size_t idx2 = j + i*gy;
+                    t_GridReal vx = model->wac_interpolator.current_flow_data[idx2];
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, 0.5+vx/0.3);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
+                }
+                else if(VisualizingVariable == VisOpt::v_v)
+                {
+                    // visualize current flow
+                    size_t idx2 = j + i*gy;
+                    t_GridReal vy = model->wac_interpolator.current_flow_data[idx2 + gx*gy];
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, 0.5+vy/0.3);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
+                }
+                else
+                {
+                    //                    for(int k=0;k<3;k++)
+                    //                        renderedImage[((i+ox) + (j+oy)*width)*3+k] = waterColor[k];
+                }
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+    raster_scalars->SetNumberOfComponents(3);          // RGB has 3 components
+    raster_scalars->SetArray(renderedImage.data(), renderedImage.size(), 1);
+    raster_scalars->Modified();
+
+    raster_imageData->SetDimensions(width, height, 1); // 2D image, depth = 1
+    raster_imageData->SetSpacing(1.0, 1.0, 1.0);      // Pixel spacing
+    raster_imageData->SetOrigin(0.0, 0.0, 0.0);       // Origin at (0,0,0)
+    raster_imageData->GetPointData()->SetScalars(raster_scalars);
+
+    raster_plane->SetOrigin(-h/2, -h/2, -1.0);           // Bottom-left corner
+    raster_plane->SetPoint1((width-0.5)*h, -h/2, -1.0);         // Bottom-right (x-axis)
+    raster_plane->SetPoint2(-h/2, (height-0.5)*h, -1.0);        // Top-left (y-axis)
+    raster_plane->SetNormal(0.0, 0.0, 1.0);           // Normal along z-axis (facing forward)
+
+    raster_mapper->SetInputConnection(raster_plane->GetOutputPort());
+
+    raster_texture->SetInputData(raster_imageData);
+    raster_texture->InterpolateOff(); // Smooth texture rendering
+
+    raster_actor->SetMapper(raster_mapper);
+    raster_actor->SetTexture(raster_texture);
+
+    raster_mapper->Update();
+    raster_texture->Update();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /*
     const SimParams &prms = frameData->ggd->prms;
 
     const int &_ox = prms.ModeledRegionOffsetX;
@@ -317,6 +346,8 @@ void VTKVisualization::SynchronizeValues()
     char buffer[100];
     std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
     actor_text->SetInput(buffer);
+
+*/
 }
 
 
@@ -345,7 +376,7 @@ void VTKVisualization::ChangeVisualizationOption(int option)
         actor_text_title->SetInput("-");
     }
 
-    SynchronizeTopology();
+    SynchronizeValues();
 }
 
 

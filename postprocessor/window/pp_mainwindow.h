@@ -34,10 +34,10 @@
 #include <vtkCamera.h>
 #include <vtkProperty.h>
 #include <vtkNew.h>
+#include <vtkInteractorStyleImage.h>
 
 #include <vtkWindowToImageFilter.h>
 #include <vtkPNGWriter.h>
-#include <vtkInteractorStyleRubberBand2D.h>
 
 #include "vtk_visualization.h"
 #include "framedata.h"
@@ -92,7 +92,7 @@ private:
     QVTKOpenGLNativeWidget *qt_vtk_widget;
 
     // other
-    vtkNew<vtkInteractorStyleRubberBand2D> interactor;
+    vtkNew<vtkInteractorStyleImage> interactor;
 
     constexpr static std::string_view outputDirectoryP = "render/P";
     constexpr static std::string_view outputDirectoryQ = "render/Q";

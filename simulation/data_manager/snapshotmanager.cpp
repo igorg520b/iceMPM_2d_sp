@@ -2,13 +2,8 @@
 #include "model.h"
 #include "poisson_disk_sampling.h"
 
-
 #include <spdlog/spdlog.h>
-#include <fmt/format.h>
-#include <fmt/std.h>
 #include <H5Cpp.h>
-
-
 
 #include <filesystem>
 #include <string>
@@ -18,6 +13,12 @@
 #include <algorithm>
 #include <utility>
 #include <type_traits>
+
+#include <fmt/format.h>
+#include <fmt/std.h>
+
+//#include <format>
+
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -334,7 +335,9 @@ void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTim
 
     // save current state
     const int frame = SimulationStep / model->prms.UpdateEveryNthStep;
+//    std::string baseName = std::format("s{:05d}.h5", frame);
     std::string baseName = fmt::format(fmt::runtime("s{:05d}.h5"), frame);
+
     fs::path fullPath = targetPath / baseName;
 
 
@@ -429,6 +432,7 @@ void icy::SnapshotManager::ReadPointColors()
 
 std::string icy::SnapshotManager::prepare_file_name(int gx, int gy)
 {
+//    return std::format("{}/point_cache_{:05d}_{:05d}.h5", pts_cache_path, gx, gy);
     return fmt::format("{}/point_cache_{:05d}_{:05d}.h5", pts_cache_path, gx, gy);
 }
 
@@ -712,7 +716,9 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
 
     // save current state
     const int frame = SimulationStep / model->prms.UpdateEveryNthStep;
+//    std::string baseName = std::format("f{:05d}.h5", frame);
     std::string baseName = fmt::format(fmt::runtime("f{:05d}.h5"), frame);
+
     fs::path fullPath = targetPath / baseName;
     H5::H5File file(fullPath.string(), H5F_ACC_TRUNC);
 

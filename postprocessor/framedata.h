@@ -24,13 +24,15 @@
 
 struct GeneralGridData
 {
+    void ReadParameterFile(std::string parameterFileName);
     void ScanDirectory(std::string frameFileName);
+
     SimParams prms;
     int countFrames;
     std::string frameDirectory;
 
-    std::vector<uint8_t> grid_status_buffer;
-    std::vector<uint8_t> original_image_colors_rgb;
+    std::vector<uint8_t> grid_status_buffer;        // from HDF5 file, dataset "path_indices"
+    std::vector<uint8_t> original_image_colors_rgb; // from PNG image
 };
 
 
@@ -62,6 +64,10 @@ struct FrameData
     vtkNew<vtkWindowToImageFilter> windowToImageFilter;
     vtkNew<vtkPNGWriter> writerPNG;
     vtkNew<vtkRenderer> renderer;
+
+    // VTK
+
+
 };
 
 #endif // FRAMEDATA_H

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.20.2)
 
 project(WaveIce_MPM LANGUAGES CXX C CUDA)
 set(CMAKE_CXX_STANDARD 20)
@@ -21,10 +21,7 @@ include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 find_package(spdlog REQUIRED)
-
-
-
-
+find_package(fmt REQUIRED)
 
 
 
@@ -69,10 +66,10 @@ set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUD
 set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
 set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
-target_link_libraries(cm2 PRIVATE spdlog::spdlog)
+target_link_libraries(cm2 PRIVATE Eigen3::Eigen spdlog::spdlog)
+target_link_libraries(cm2 PRIVATE fmt::fmt)
 
-target_include_directories(cm2 PRIVATE simulation simulation/hssoa simulation/data_manager External)
-target_link_libraries(cm2 PRIVATE Eigen3::Eigen)
+target_include_directories(cm2 PRIVATE simulation simulation/hssoa simulation/data_manager External External/rapidjson)
 
 
 if(HDF5_INCLUDE_DIRS)
@@ -172,6 +169,9 @@ endif()
 
 
 
+
+
+
 if(BUILD_GUI_VERSION)
 # Qt GUI executable
 
@@ -266,7 +266,7 @@ FetchContent_MakeAvailable(PBrowser)
     set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
     set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
-    target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa simulation/data_manager External)
+    target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa simulation/data_manager External External/rapidjson)
     target_link_libraries(gm2 PRIVATE Qt5::Widgets Qt5::Core)
 
     # Eigen

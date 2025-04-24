@@ -25,6 +25,8 @@
 #include <vtkScalarBarActor.h>
 #include <vtkTextProperty.h>
 #include <vtkTextActor.h>
+#include <vtkPlaneSource.h>
+#include <vtkTexture.h>
 
 #include <vtkRegularPolygonSource.h>
 #include <vtkCylinderSource.h>
@@ -35,7 +37,6 @@
 #include <vtkIntArray.h>
 #include <vtkArrowSource.h>
 #include <vtkGlyph2D.h>
-#include <vtkUniformGrid.h>
 
 #include <vtkWindowToImageFilter.h>
 #include <vtkPNGWriter.h>
@@ -63,31 +64,27 @@ public:
     double ranges[30] = {};
 
     void SynchronizeValues();
-    void SynchronizeTopology();
     void ChangeVisualizationOption(int option);  // invoked from GUI/main thread
 
-    vtkNew<vtkActor> actor_grid_main;
+    vtkNew<vtkActor> raster_actor;
+
     vtkNew<vtkScalarBarActor> scalarBar;
     vtkNew<vtkTextActor> actor_text;
     vtkNew<vtkTextActor> actor_text_title;
-    vtkNew<vtkActor> rectangleActor;
 
 private:
     ColorMap colormap;
 
     vtkNew<vtkLookupTable> lut_Pressure, lut_P2, lut_ANSYS;
 
-    // main grid
-    // draw background grid as vtkImageData
-    vtkNew<vtkUniformGrid> uniformGrid;
-    vtkNew<vtkDataSetMapper> mapper_uniformgrid;
+    // background image
+    std::vector<uint8_t> renderedImage;
+    vtkNew<vtkImageData> raster_imageData;
+    vtkNew<vtkUnsignedCharArray> raster_scalars;
+    vtkNew<vtkPlaneSource> raster_plane;
+    vtkNew<vtkTexture> raster_texture;
+    vtkNew<vtkPolyDataMapper> raster_mapper;
 
-    // frame around the grid
-    vtkNew<vtkPolyLine> polyline;
-    vtkNew<vtkPolyData> rectanglePolyData;
-    vtkNew<vtkPoints> rectanglePoints;
-    vtkNew<vtkCellArray> rectangleLines;
-    vtkNew<vtkPolyDataMapper> rectangleMapper;
 
     vtkNew<vtkWindowToImageFilter> windowToImageFilter;
     vtkNew<vtkPNGWriter> writerPNG;

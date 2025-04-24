@@ -107,12 +107,9 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     t_GridReal vx = buffer_grid[SimParams::grid_idx_px*pitch_grid + idx];
     t_GridReal vy = buffer_grid[SimParams::grid_idx_py*pitch_grid + idx];
 
-    const double &dt = gprms.InitialTimeStep;
+    // const double &dt = gprms.InitialTimeStep;
     const double &cellsize = gprms.cellsize;
     const double &vmax = gprms.vmax;
-    const int &gridXTotal = gprms.GridXTotal;
-    const double hsq = gprms.cellsize * gprms.cellsize;
-
 
     Vector2i gi(idx/gridY, idx%gridY);   // integer x-y index of the grid node
     GridVector2r gnpos = gi.cast<t_GridReal>()*cellsize;    // position of the grid node in the whole grid
@@ -121,7 +118,6 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     velocity /= mass;
 
     uint8_t is_modeled_area = grid_status[idx];
-    t_GridReal intensity = (t_GridReal)is_modeled_area/255.f;
     if(is_modeled_area != 100)
     {
         velocity.setZero();
@@ -589,7 +585,6 @@ __device__ void GetParametersForGrain(uint32_t utility_data, t_PointReal &pmin, 
     //    t_PointReal var2 = 1.0 + gprms.GrainVariability*0.033*(-15 + ((int)grain+3)%30);
     //    t_PointReal var3 = 1.0 + gprms.GrainVariability*0.1*(-10 + ((int)grain+4)%11);
 
-    uint16_t grain = utility_data & 0xffff;
 //    bool is_weakened = utility_data & status_weakened;
 
 //    t_PointReal gv = gprms.GrainVariability;

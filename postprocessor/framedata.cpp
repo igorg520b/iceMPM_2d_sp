@@ -105,10 +105,9 @@ FrameData::FrameData(const FrameData &other)
     offscreenRenderWindow->DoubleBufferOff();
     offscreenRenderWindow->SetOffScreenRendering(true);
 
-    renderer->AddActor(representation.actor_grid_main);
+    renderer->AddActor(representation.raster_actor);
     renderer->AddActor(representation.actor_text);
     renderer->AddActor(representation.scalarBar);
-    renderer->AddActor(representation.rectangleActor);
     renderer->AddActor(representation.actor_text_title);
 
     windowToImageFilter->SetInput(offscreenRenderWindow);
@@ -131,10 +130,9 @@ FrameData::FrameData()
     offscreenRenderWindow->DoubleBufferOff();
     offscreenRenderWindow->SetOffScreenRendering(true);
 
-    renderer->AddActor(representation.actor_grid_main);
+    renderer->AddActor(representation.raster_actor);
     renderer->AddActor(representation.actor_text);
     renderer->AddActor(representation.scalarBar);
-    renderer->AddActor(representation.rectangleActor);
     renderer->AddActor(representation.actor_text_title);
 
     windowToImageFilter->SetInput(offscreenRenderWindow);
