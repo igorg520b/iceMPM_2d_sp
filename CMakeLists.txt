@@ -63,7 +63,7 @@ add_executable(cm2
 )
 set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
 
-set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
+set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80")
 set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 target_link_libraries(cm2 PRIVATE Eigen3::Eigen spdlog::spdlog)
@@ -260,7 +260,7 @@ FetchContent_MakeAvailable(PBrowser)
     target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser)
     target_link_libraries(gm2 PRIVATE PBrowser)
 
-    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
+    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80")
     set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
     target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa simulation/data_manager External External/rapidjson)
