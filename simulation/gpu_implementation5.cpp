@@ -91,6 +91,24 @@ void GPU_Implementation5::initialize()
     cudaError_t err = cudaGetDeviceCount(&deviceCount);
     if (err != cudaSuccess) throw std::runtime_error("cudaGetDeviceCount error");
     if(deviceCount == 0) throw std::runtime_error("No avaialble CUDA devices");
+    LOGR("GPU_Implementation5::initialize; devic count {}",deviceCount);
+
+
+    LOGV("Device Information:");
+    for (int i = 0; i < deviceCount; ++i) {
+        cudaDeviceProp deviceProp;
+        cudaGetDeviceProperties(&deviceProp, i);
+
+        LOGR("  --- Device {}: {} ---", i, deviceProp.name);
+        LOGR("      Compute Capability: {}.{}", deviceProp.major, deviceProp.minor);
+        // Convert bytes to Megabytes (MB) for readability
+        double totalMemMB = static_cast<double>(deviceProp.totalGlobalMem) / (1024.0 * 1024.0);
+        LOGR("      Total Global Memory: {:>.2} MB", totalMemMB);
+        LOGR("      Clock Rate: {:>.2} GHz", deviceProp.clockRate / (1000.0 * 1000.0)); // Convert kHz to GHz
+        LOGR("      Number of SMs: {}", deviceProp.multiProcessorCount);
+    }
+
+
 
     partitions.clear();
     partitions.resize(nPartitions);
