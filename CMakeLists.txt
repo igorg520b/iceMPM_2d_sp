@@ -63,7 +63,7 @@ add_executable(cm2
 )
 set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
 
-set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80")
+set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89;61")
 set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 target_link_libraries(cm2 PRIVATE Eigen3::Eigen spdlog::spdlog)
@@ -75,7 +75,6 @@ target_include_directories(cm2 PRIVATE simulation simulation/hssoa simulation/da
 if(HDF5_INCLUDE_DIRS)
     target_link_libraries(cm2 PRIVATE ${HDF5_LIBRARIES})
 else()
-#    target_link_libraries(cm2 PRIVATE hdf5-shared hdf5_cpp-shared)
     target_link_libraries(cm2 PRIVATE hdf5_cpp-shared)
 endif()
 
@@ -93,7 +92,7 @@ endif()
 
 
 if(BUILD_POSTPROCESSOR)
-    find_package(VTK 9.4 HINTS "~/Projects-libraries/build-vtk/lib/cmake/vtk-9.4" REQUIRED COMPONENTS
+    find_package(VTK 9.1 REQUIRED COMPONENTS
       CommonColor
       CommonCore
       FiltersSources
@@ -181,8 +180,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(PBrowser)
 
 
-#    find_package(VTK 9.4 HINTS "~/Projects-libraries/build-vtk/lib/cmake/vtk-9.4" REQUIRED COMPONENTS
-        find_package(VTK 9.1 REQUIRED COMPONENTS
+      find_package(VTK 9.1 REQUIRED COMPONENTS
       CommonColor
       CommonCore
       FiltersSources
@@ -260,7 +258,7 @@ FetchContent_MakeAvailable(PBrowser)
     target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser)
     target_link_libraries(gm2 PRIVATE PBrowser)
 
-    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80")
+    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89;61")
     set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
     target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa simulation/data_manager External External/rapidjson)

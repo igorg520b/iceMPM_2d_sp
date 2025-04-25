@@ -37,6 +37,7 @@ int main(int argc, char** argv)
 
 
     model.LoadParameterFile(parameter_filename, resume_filename);
+    model.prms.Printout();
     model.Prepare();
 
 
