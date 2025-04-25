@@ -11,9 +11,7 @@
 #include <Eigen/Core>
 #include "parameters_sim.h"
 #include "vtk_visualization.h"
-
-//#include "windinterpolator.h"
-//#include "fluentinterpolator.h"
+#include "generalgriddata.h"
 
 #include <vtkRenderWindow.h>
 #include <vtkWindowToImageFilter.h>
@@ -22,52 +20,36 @@
 #include <vtkOpenGLRenderWindow.h>
 #include <vtkCamera.h>
 
-struct GeneralGridData
-{
-    void ReadParameterFile(std::string parameterFileName);
-    void ScanDirectory(std::string frameFileName);
-
-    SimParams prms;
-    int countFrames;
-    std::string frameDirectory;
-
-    std::vector<uint8_t> grid_status_buffer;        // from HDF5 file, dataset "path_indices"
-    std::vector<uint8_t> original_image_colors_rgb; // from PNG image
-};
 
 
 struct FrameData
 {
-    FrameData();
-    FrameData(const FrameData &other);
+    FrameData(GeneralGridData &ggd_);
 
+    GeneralGridData &ggd;
     VTKVisualization representation;
-
-    void SetUpOffscreenRender(FrameData &guiFD, double camData[10]);
-    void LoadHDF5Frame(int frameNumber);
-    void LoadHDF5Frame(std::string fileName);
-    void RenderFrame(VTKVisualization::VisOpt visopt, std::string_view outputDirectory);
-
-    GeneralGridData *ggd = nullptr;
-    bool dataLoaded = false;
-    int SimulationStep;
+    vtkNew<vtkRenderer> renderer;
     double SimulationTime;
-    int frame = 0;
-    std::mutex *mutex;
 
     std::vector<uint8_t> count;
     std::vector<float> vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
     std::vector<uint8_t> rgb;
 
-//    vtkNew<vtkRenderWindow> offscreenRenderWindow;
+    void LoadHDF5Frame(int frameNumber);
+
+/*
+    void SetUpOffscreenRender(FrameData &guiFD, double camData[10]);
+    void RenderFrame(VTKVisualization::VisOpt visopt, std::string outputDirectory);
+
+*/
+
+private:
+    int SimulationStep;
+    int frame = 0;
+
     vtkNew<vtkRenderWindow> offscreenRenderWindow;
     vtkNew<vtkWindowToImageFilter> windowToImageFilter;
     vtkNew<vtkPNGWriter> writerPNG;
-    vtkNew<vtkRenderer> renderer;
-
-    // VTK
-
-
 };
 
 #endif // FRAMEDATA_H

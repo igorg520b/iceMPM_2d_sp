@@ -25,7 +25,7 @@
 PPMainWindow::~PPMainWindow() {delete ui;}
 
 PPMainWindow::PPMainWindow(QWidget *parent)
-    : QMainWindow(parent)
+    : QMainWindow(parent), frameData(ggd)
     , ui(new Ui::PPMainWindow)
 {
     ui->setupUi(this);
@@ -36,7 +36,6 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     setCentralWidget(qt_vtk_widget);
 
 
-    frameData.ggd = &ggd;
     renderWindow->AddRenderer(frameData.renderer);
     renderWindow->GetInteractor()->SetInteractorStyle(interactor);
 
@@ -57,26 +56,21 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     ui->toolBar->addWidget(qsbFrameFrom);
     ui->toolBar->addWidget(qsbFrameTo);
 
-    qsbLoadFrame = new QSpinBox();
-    ui->toolBar->addWidget(qsbLoadFrame);
 
-    lbl = new QLabel();
-    lbl->setText("cpu:");
-//    ui->toolBar->addWidget(lbl);
-
-    qsbThreads = new QSpinBox();
-    qsbThreads->setRange(1,30);
-    qsbThreads->setValue(3);
-//    ui->toolBar->addWidget(qsbThreads);
+    slider2 = new QSlider(Qt::Horizontal);
+    ui->toolBar->addWidget(slider2);
+    slider2->setTracking(true);
+    slider2->setMinimum(1);
+    slider2->setMaximum(10000);
+    connect(slider2, SIGNAL(valueChanged(int)), this, SLOT(sliderValueChanged(int)));
 
     // populate combobox
     QMetaEnum qme = QMetaEnum::fromType<VTKVisualization::VisOpt>();
     for(int i=0;i<qme.keyCount();i++) comboBox_visualizations->addItem(qme.key(i));
 
+
     connect(comboBox_visualizations, QOverload<int>::of(&QComboBox::currentIndexChanged),
             [&](int index){ comboboxIndexChanged_visualizations(index); });
-
-
 
     // read/restore saved settings
     settingsFileName = QDir::currentPath() + "/ppcm.ini";
@@ -122,14 +116,17 @@ PPMainWindow::PPMainWindow(QWidget *parent)
         cameraReset_triggered();
     }
 
-    connect(ui->actionOpen_Frame, &QAction::triggered, this, &PPMainWindow::open_frame_triggered);
+
+
     connect(ui->action_camera_reset, &QAction::triggered, this, &PPMainWindow::cameraReset_triggered);
-    connect(ui->actionRender_Frame, &QAction::triggered, this, &PPMainWindow::render_frame_triggered);
-    connect(ui->actionGenerate_Script, &QAction::triggered, this, &PPMainWindow::generate_script_triggered);
-    connect(ui->actionShow_Wind, &QAction::triggered, this, &PPMainWindow::toggle_wind_visualization);
-    connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
-    connect(ui->actionRender_All_2, &QAction::triggered, this, &PPMainWindow::render_all2_triggered);
-    connect(ui->actionLoad_Selected_Frame, &QAction::triggered, this, &PPMainWindow::load_selected_frame_triggered);
+
+//    connect(ui->actionOpen_Frame, &QAction::triggered, this, &PPMainWindow::open_frame_triggered);
+//    connect(ui->actionRender_Frame, &QAction::triggered, this, &PPMainWindow::render_frame_triggered);
+//    connect(ui->actionGenerate_Script, &QAction::triggered, this, &PPMainWindow::generate_script_triggered);
+//    connect(ui->actionShow_Wind, &QAction::triggered, this, &PPMainWindow::toggle_wind_visualization);
+//    connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
+//    connect(ui->actionRender_All_2, &QAction::triggered, this, &PPMainWindow::render_all2_triggered);
+//    connect(ui->actionLoad_Selected_Frame, &QAction::triggered, this, &PPMainWindow::load_selected_frame_triggered);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &PPMainWindow::limits_changed);
 
@@ -139,67 +136,11 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     ui->actionShow_Wind->setChecked(false);
     // Set the target resolution for the off-screen render window
 
-    std::filesystem::path directory_path1(outputDirectoryP);
-    if (!std::filesystem::exists(directory_path1)) std::filesystem::create_directories(directory_path1);
-    std::filesystem::path directory_path2(outputDirectoryQ);
-    if (!std::filesystem::exists(directory_path2)) std::filesystem::create_directories(directory_path2);
-    std::filesystem::path directory_path3(outputDirectoryColors);
-    if (!std::filesystem::exists(directory_path3)) std::filesystem::create_directories(directory_path3);
-    std::filesystem::path directory_path4(outputDirectoryJpinv);
-    if (!std::filesystem::exists(directory_path4)) std::filesystem::create_directories(directory_path4);
-
-
     qDebug() << "PPMainWindow constructor done";
-    updateGUI();
-}
-
-void PPMainWindow::updateGUI()
-{
-
-    renderWindow->Render();
-}
-
-void PPMainWindow::open_frame_triggered()
-{
-    QString defaultPath = QDir::currentPath() + "/_data/frames";
-
-    // Check if the directory exists
-    if (!QDir(defaultPath).exists()) {
-        // Fall back to the current path if the default directory does not exist
-        defaultPath = QDir::currentPath();
-    }
-
-    // Open the file dialog
-    QString qFileName = QFileDialog::getOpenFileName(
-        this,
-        "Open Simulation Snapshot",
-        defaultPath,
-        "HDF5 Files (*.h5)"
-        );
-
-    if(qFileName.isNull())return;
-    ggd.ScanDirectory(qFileName.toStdString());
-
-
-    frameData.LoadHDF5Frame(qFileName.toStdString());
-    frameData.representation.SynchronizeTopology();
-
-    qsbFrameFrom->setRange(1, ggd.countFrames-1);
-    qsbFrameFrom->setValue(1);
-    qsbFrameTo->setRange(1, ggd.countFrames-1);
-    qsbFrameTo->setValue(ggd.countFrames-1);
-    qsbLoadFrame->setRange(1, ggd.countFrames-1);
-
-    updateGUI();
 }
 
 
-void PPMainWindow::comboboxIndexChanged_visualizations(int index)
-{
-    frameData.representation.ChangeVisualizationOption(index);
-    qdsbValRange->setValue(frameData.representation.ranges[index]);
-    renderWindow->Render();
-}
+
 
 void PPMainWindow::closeEvent(QCloseEvent* event)
 {
@@ -263,6 +204,82 @@ void PPMainWindow::cameraReset_triggered()
 }
 
 
+
+
+// ==================================================
+
+void PPMainWindow::LoadParametersFile(QString fileName)
+{
+    qDebug() << "PPMainWindow::LoadParametersFile: " << fileName;
+    ggd.ReadParameterFile(fileName.toStdString());
+}
+
+void PPMainWindow::LoadFramesDirectory(QString framesDirectory)
+{
+    qDebug() << "PPMainWindow::LoadFramesDirectory: " << framesDirectory;
+    ggd.ScanDirectory(framesDirectory.toStdString());
+    slider2->setMaximum(ggd.countFrames);
+    frameData.LoadHDF5Frame(1);
+    frameData.representation.SynchronizeValues();
+    renderWindow->Render();
+}
+
+void PPMainWindow::sliderValueChanged(int val)
+{
+    qDebug() << "slider set to " << val;
+    frameData.LoadHDF5Frame(val);
+    frameData.representation.SynchronizeValues();
+    renderWindow->Render();
+
+    renderWindow->Render();
+}
+
+
+void PPMainWindow::comboboxIndexChanged_visualizations(int index)
+{
+    frameData.representation.ChangeVisualizationOption(index);
+    qdsbValRange->setValue(frameData.representation.ranges[index]);
+    renderWindow->Render();
+}
+
+
+/*
+void PPMainWindow::open_frame_triggered()
+{
+    QString defaultPath = QDir::currentPath() + "/_data/frames";
+
+    // Check if the directory exists
+    if (!QDir(defaultPath).exists()) {
+        // Fall back to the current path if the default directory does not exist
+        defaultPath = QDir::currentPath();
+    }
+
+    // Open the file dialog
+    QString qFileName = QFileDialog::getOpenFileName(
+        this,
+        "Open Simulation Snapshot",
+        defaultPath,
+        "HDF5 Files (*.h5)"
+        );
+
+    if(qFileName.isNull())return;
+    ggd.ScanDirectory(qFileName.toStdString());
+
+
+    frameData.LoadHDF5Frame(qFileName.toStdString());
+    frameData.representation.SynchronizeTopology();
+
+    qsbFrameFrom->setRange(1, ggd.countFrames-1);
+    qsbFrameFrom->setValue(1);
+    qsbFrameTo->setRange(1, ggd.countFrames-1);
+    qsbFrameTo->setValue(ggd.countFrames-1);
+    qsbLoadFrame->setRange(1, ggd.countFrames-1);
+
+    updateGUI();
+}
+
+
+
 void PPMainWindow::render_frame_triggered()
 {
     qDebug() << "PPMainWindow::render_frame_triggered()";
@@ -277,16 +294,6 @@ void PPMainWindow::render_frame_triggered()
     localFD.LoadHDF5Frame(ggd.countFrames/2);
     localFD.RenderFrame(frameData.representation.VisualizingVariable,
                         getOutputDirectory(frameData.representation.VisualizingVariable));
-}
-
-
-std::string_view PPMainWindow::getOutputDirectory(VTKVisualization::VisOpt visopt)
-{
-    if(visopt == VTKVisualization::VisOpt::Jp_inv) return outputDirectoryJpinv;
-    else if(visopt == VTKVisualization::VisOpt::colors) return outputDirectoryColors;
-    else if(visopt == VTKVisualization::VisOpt::P) return outputDirectoryP;
-    else if(visopt == VTKVisualization::VisOpt::Q) return outputDirectoryQ;
-    else return "";
 }
 
 
@@ -383,20 +390,4 @@ void PPMainWindow::generate_script_triggered()
     }
 }
 
-
-void PPMainWindow::toggle_wind_visualization(bool checked)
-{
-    updateGUI();
-}
-
-
-void PPMainWindow::load_selected_frame_triggered()
-{
-    std::mutex mutex;
-    frameData.mutex = &mutex;
-
-
-    frameData.LoadHDF5Frame(qsbLoadFrame->value());
-    frameData.representation.SynchronizeTopology();
-    updateGUI();
-}
+*/

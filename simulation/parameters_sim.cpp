@@ -42,6 +42,8 @@ void SimParams::Reset()
     tpb_Upd = 512;
     tpb_G2P = 128;
 
+    InitializationImageSizeX = InitializationImageSizeY = 0;
+
     ComputeLame();
     ComputeHelperVariables();
     spdlog::info("SimParams reset");

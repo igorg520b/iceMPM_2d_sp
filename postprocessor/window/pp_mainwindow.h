@@ -59,33 +59,36 @@ public:
 
     void closeEvent( QCloseEvent* event ) override;
 
+    void LoadParametersFile(QString fileName);
+    void LoadFramesDirectory(QString framesDirectory);
+
+
 private Q_SLOTS:
     void cameraReset_triggered();
     void comboboxIndexChanged_visualizations(int index);
     void limits_changed(double val);
 
-    void open_frame_triggered();
-    void render_frame_triggered();
-    void render_all_triggered();
-    void render_all2_triggered();
-    void generate_script_triggered();
-    void load_selected_frame_triggered();
+    void sliderValueChanged(int val);
 
-    void toggle_wind_visualization(bool checked);
+//    void open_frame_triggered();
+//    void render_frame_triggered();
+//    void render_all_triggered();
+//    void generate_script_triggered();
+//    void load_selected_frame_triggered();
+//    void toggle_wind_visualization(bool checked);
 
 private:
-    FrameData frameData;
     GeneralGridData ggd;
+    FrameData frameData;
 
 
-    void updateGUI();
     void OpenSnapshot(QString fileName);
 
     QString settingsFileName;       // includes current dir
     QComboBox *comboBox_visualizations;
     QDoubleSpinBox *qdsbValRange;   // high and low limits for value scale
-    QSpinBox *qsbFrameFrom, *qsbFrameTo, *qsbThreads, *qsbLoadFrame;
-    QLabel *lbl;
+    QSpinBox *qsbFrameFrom, *qsbFrameTo;
+    QSlider *slider2;
 
     // VTK
     vtkNew<vtkGenericOpenGLRenderWindow> renderWindow;
@@ -93,12 +96,5 @@ private:
 
     // other
     vtkNew<vtkInteractorStyleImage> interactor;
-
-    constexpr static std::string_view outputDirectoryP = "render/P";
-    constexpr static std::string_view outputDirectoryQ = "render/Q";
-    constexpr static std::string_view outputDirectoryColors = "render/colors";
-    constexpr static std::string_view outputDirectoryJpinv = "render/Jp_inv";
-
-    static std::string_view getOutputDirectory(VTKVisualization::VisOpt visopt);
 };
 #endif

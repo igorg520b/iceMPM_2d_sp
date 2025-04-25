@@ -129,17 +129,14 @@ if(BUILD_POSTPROCESSOR)
 
         postprocessor/framedata.h
         postprocessor/framedata.cpp
-
-#        simulation/data_manager/windinterpolator.cpp
-#        simulation/data_manager/windinterpolator.h
-#        simulation/data_manager/fluentinterpolator.h
-#        simulation/data_manager/fluentinterpolator.cpp
+        postprocessor/generalgriddata.h
+        postprocessor/generalgriddata.cpp
 
         gui/colormap.h
         gui/colormap.cpp
     )
 
-    target_include_directories(pp PRIVATE postprocessor postprocessor/window postprocessor/vtk gui)
+    target_include_directories(pp PRIVATE postprocessor postprocessor/window postprocessor/vtk gui External)
     target_include_directories(pp PRIVATE simulation simulation/hssoa simulation/data_manager)
     target_link_libraries(pp PRIVATE Qt5::Widgets Qt5::Core)
 

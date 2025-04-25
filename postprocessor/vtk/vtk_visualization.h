@@ -52,9 +52,9 @@ class VTKVisualization : public QObject
     Q_OBJECT
 
 public:
-    FrameData *frameData;
+    FrameData &frameData;
 
-    VTKVisualization();
+    VTKVisualization(FrameData &fd_);
 
     double wind_visualization_time;
 

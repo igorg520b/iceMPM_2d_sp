@@ -22,23 +22,34 @@ int main(int argc, char *argv[])
 
     QCommandLineParser parser;
     parser.setApplicationDescription("Post-processing the HDF5 simulation output");
-    parser.addHelpOption();
-    parser.addVersionOption();
-    parser.addPositionalArgument("frame", QCoreApplication::translate("main", "Data frame to visualize"));
+    parser.addPositionalArgument("parameters", QCoreApplication::translate("main", "JSON parameter file"));
 
+    QCommandLineOption framesDirectoryOption(
+        QStringList() << "f" << "frames",
+        QCoreApplication::translate("main", "Directory where frames are located"),
+        QCoreApplication::translate("main", "directory"));
+
+    parser.addOption(framesDirectoryOption);
     parser.process(a);
 
     const QStringList args = parser.positionalArguments();
     PPMainWindow w;
 
-/*    if(args.size() == 1)
+    if(args.size() >= 1)
     {
-        QString parameters_file = args[0];
-        w.LoadParameterFile(parameters_file);
+        QString parametersFile = args[0];
+        w.LoadParametersFile(parametersFile);
+
+        if (parser.isSet(framesDirectoryOption))
+        {
+            QString directory = parser.value(framesDirectoryOption);
+            std::cout << "main, framesDirectory " << directory.toStdString();
+            w.LoadFramesDirectory(directory);
+        }
     }
-*/
+
     w.resize(1400,900);
-//    w.show();
-    w.showMaximized();
+    w.show();
+//    w.showMaximized();
     return a.exec();
 }
