@@ -117,25 +117,23 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
     GridVector2r velocity(vx, vy);
     velocity /= mass;
 
-    uint8_t is_modeled_area = grid_status[idx];
-    if(is_modeled_area != 100)
-    {
-        velocity.setZero();
-    }
-    else
+//    uint8_t is_modeled_area = grid_status[idx];
+//    if(is_modeled_area != 100)
+//    {
+//        velocity.setZero();
+//    }
+//    else
     {
         //grid_water_current
 
         t_GridReal vcx = buffer_grid[SimParams::grid_idx_current_vx*pitch_grid + idx];
         t_GridReal vcy = buffer_grid[SimParams::grid_idx_current_vy*pitch_grid + idx];
 
-        vcx = -0.05;
-        vcy = -0.3;
-
         GridVector2r wvel(vcx, vcy);
         wvel *= (1+min(simulation_time/(3600*10), 3.));
-//        wvel.x() = 0.1;
-//        wvel.y() = -0.1;
+
+        wvel.x() = 0.1;
+        wvel.y() = -0.3;
 
         // quadratic term
 /*
