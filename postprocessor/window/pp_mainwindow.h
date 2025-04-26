@@ -91,8 +91,10 @@ private:
     QSlider *slider2;
 
     // VTK
-    vtkNew<vtkGenericOpenGLRenderWindow> renderWindow;
+    vtkRenderWindow *renderWindow;
+//    vtkNew<vtkGenericOpenGLRenderWindow> renderWindow;
     QVTKOpenGLNativeWidget *qt_vtk_widget;
+    vtkNew<vtkRenderer> renderer;
 
     // other
     vtkNew<vtkInteractorStyleImage> interactor;

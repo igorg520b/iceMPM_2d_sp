@@ -1,5 +1,3 @@
-#include <filesystem>
-#include <regex>
 #include "framedata.h"
 #include <fmt/format.h>
 #include <fmt/std.h>
@@ -8,23 +6,23 @@
 
 FrameData::FrameData(GeneralGridData &ggd_) : ggd(ggd_), representation(*this)
 {
-    offscreenRenderWindow->Initialize();
+//    offscreenRenderWindow->Initialize();
 
-    renderer->SetBackground(1.0,1.0,1.0);
-    offscreenRenderWindow->SetSize(1920, 1080);
-    offscreenRenderWindow->DoubleBufferOff();
-    offscreenRenderWindow->SetOffScreenRendering(true);
+    //renderer->SetBackground(1.0,1.0,1.0);
+//    offscreenRenderWindow->SetSize(1920, 1080);
+//    offscreenRenderWindow->DoubleBufferOff();
+//    offscreenRenderWindow->SetOffScreenRendering(true);
 
-    renderer->AddActor(representation.raster_actor);
-    renderer->AddActor(representation.actor_text);
-    renderer->AddActor(representation.scalarBar);
-    renderer->AddActor(representation.actor_text_title);
+//    renderer->AddActor(representation.raster_actor);
+//    renderer->AddActor(representation.actor_text);
+//    renderer->AddActor(representation.scalarBar);
+//    renderer->AddActor(representation.actor_text_title);
 
-    windowToImageFilter->SetInput(offscreenRenderWindow);
-    windowToImageFilter->SetScale(1); // image quality
-    windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
-    windowToImageFilter->ReadFrontBufferOn(); // read from the back buffer
-    writerPNG->SetInputConnection(windowToImageFilter->GetOutputPort());
+//    windowToImageFilter->SetInput(offscreenRenderWindow);
+//    windowToImageFilter->SetScale(1); // image quality
+//    windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
+//    windowToImageFilter->ReadFrontBufferOn(); // read from the back buffer
+//    writerPNG->SetInputConnection(windowToImageFilter->GetOutputPort());
 }
 
 

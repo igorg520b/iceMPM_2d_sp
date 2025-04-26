@@ -28,7 +28,7 @@ struct FrameData
 
     GeneralGridData &ggd;
     VTKVisualization representation;
-    vtkNew<vtkRenderer> renderer;
+//    vtkNew<vtkRenderer> renderer;
     double SimulationTime;
 
     std::vector<uint8_t> count;
@@ -47,9 +47,9 @@ private:
     int SimulationStep;
     int frame = 0;
 
-    vtkNew<vtkRenderWindow> offscreenRenderWindow;
-    vtkNew<vtkWindowToImageFilter> windowToImageFilter;
-    vtkNew<vtkPNGWriter> writerPNG;
+//    vtkNew<vtkRenderWindow> offscreenRenderWindow;
+//    vtkNew<vtkWindowToImageFilter> windowToImageFilter;
+//    vtkNew<vtkPNGWriter> writerPNG;
 };
 
 #endif // FRAMEDATA_H

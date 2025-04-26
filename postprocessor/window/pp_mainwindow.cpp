@@ -5,14 +5,6 @@
 #include <QStringList>
 
 #include <algorithm>
-#include <cmath>
-#include <fstream>
-#include <chrono>
-#include <ctime>
-#include <iomanip>
-#include <iostream>
-#include <string>
-#include <filesystem>
 
 #include <spdlog/spdlog.h>
 #include <omp.h>
@@ -32,12 +24,23 @@ PPMainWindow::PPMainWindow(QWidget *parent)
 
     // VTK
     qt_vtk_widget = new QVTKOpenGLNativeWidget();
-    qt_vtk_widget->setRenderWindow(renderWindow);
     setCentralWidget(qt_vtk_widget);
 
+    renderWindow = qt_vtk_widget->renderWindow();
 
-    renderWindow->AddRenderer(frameData.renderer);
+//    qt_vtk_widget->setRenderWindow(renderWindow);
+
+
+    renderer->SetBackground(1.0,0.95,0.95);
+    renderWindow->AddRenderer(renderer);
+
     renderWindow->GetInteractor()->SetInteractorStyle(interactor);
+
+    renderer->AddActor(frameData.representation.raster_actor);
+    renderer->AddActor(frameData.representation.actor_text);
+    renderer->AddActor(frameData.representation.scalarBar);
+    renderer->AddActor(frameData.representation.actor_text_title);
+
 
     // toolbar - combobox
     comboBox_visualizations = new QComboBox();
@@ -81,8 +84,8 @@ PPMainWindow::PPMainWindow(QWidget *parent)
         QSettings settings(settingsFileName,QSettings::IniFormat);
         QVariant var;
 
-        vtkCamera* camera = frameData.renderer->GetActiveCamera();
-        frameData.renderer->ResetCamera();
+        vtkCamera* camera = renderer->GetActiveCamera();
+        renderer->ResetCamera();
         camera->ParallelProjectionOn();
 
         var = settings.value("camData");
@@ -137,6 +140,7 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     // Set the target resolution for the off-screen render window
 
     qDebug() << "PPMainWindow constructor done";
+
 }
 
 
@@ -150,9 +154,9 @@ void PPMainWindow::closeEvent(QCloseEvent* event)
     qDebug() << "PPMainWindow: closing main window; " << settings.fileName();
 
     double data[10];
-    frameData.renderer->GetActiveCamera()->GetPosition(&data[0]);
-    frameData.renderer->GetActiveCamera()->GetFocalPoint(&data[3]);
-    data[6] = frameData.renderer->GetActiveCamera()->GetParallelScale();
+    renderer->GetActiveCamera()->GetPosition(&data[0]);
+    renderer->GetActiveCamera()->GetFocalPoint(&data[3]);
+    data[6] = renderer->GetActiveCamera()->GetParallelScale();
 
     qDebug() << "cam pos " << data[0] << "," << data[1] << "," << data[2];
     qDebug() << "cam focal pt " << data[3] << "," << data[4] << "," << data[5];
@@ -184,8 +188,8 @@ void PPMainWindow::limits_changed(double val_)
 void PPMainWindow::cameraReset_triggered()
 {
     qDebug() << "MainWindow::on_action_camera_reset_triggered()";
-    vtkCamera* camera = frameData.renderer->GetActiveCamera();
-    frameData.renderer->ResetCamera();
+    vtkCamera* camera = renderer->GetActiveCamera();
+    renderer->ResetCamera();
     camera->ParallelProjectionOn();
     camera->SetClippingRange(1e-1,1e3);
 
@@ -210,7 +214,6 @@ void PPMainWindow::cameraReset_triggered()
 
 void PPMainWindow::LoadParametersFile(QString fileName)
 {
-    qDebug() << "PPMainWindow::LoadParametersFile: " << fileName;
     ggd.ReadParameterFile(fileName.toStdString());
 }
 
@@ -229,8 +232,6 @@ void PPMainWindow::sliderValueChanged(int val)
     qDebug() << "slider set to " << val;
     frameData.LoadHDF5Frame(val);
     frameData.representation.SynchronizeValues();
-    renderWindow->Render();
-
     renderWindow->Render();
 }
 
