@@ -8,9 +8,10 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 option(BUILD_CLI_VERSION "Build CLI version" ON)
 option(BUILD_GUI_VERSION "Build Qt version" OFF)
-option(BUILD_POSTPROCESSOR "Build Qt version" OFF)
+option(BUILD_POSTPROCESSOR "Build the tool for visualization" OFF)
+option(BUILD_PREPARER "Build the tool for preparing the data" OFF)
 
-if(BUILD_GUI_VERSION OR BUILD_POSTPROCESSOR)
+if(BUILD_GUI_VERSION OR BUILD_POSTPROCESSOR OR BUILD_PREPARER)
     set(CMAKE_AUTOUIC ON)
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
@@ -22,6 +23,64 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
+
+
+if(BUILD_PREPARER)
+
+    find_path(NANOSVG_INCLUDE_DIR NAMES nanosvg.h PATH_SUFFIXES nanosvg)
+    if(NOT NANOSVG_INCLUDE_DIR)
+        message(FATAL_ERROR "nanosvg.h not found. Please install libnanosvg-dev.")
+    endif()
+
+    find_package(VTK 9.1 REQUIRED COMPONENTS
+    CommonCore
+    IOGeometry
+    FiltersSources
+    FiltersGeometry
+    IOImage
+    InteractionStyle
+    RenderingContextOpenGL2
+    RenderingCore
+    RenderingFreeType
+    RenderingGL2PSOpenGL2
+    RenderingOpenGL2
+    RenderingAnnotation
+    RenderingLabel
+    ViewsQt
+    )
+
+    add_executable(MPM_setup_prepare
+        preparer/main.cpp
+        preparer/mainwindow.cpp
+        preparer/mainwindow.h
+        preparer/mainwindow.ui
+
+        preparer/processing/satelliteimageprocessor.h 
+        preparer/processing/satelliteimageprocessor.cpp
+        preparer/svg/bezierpath.h 
+        preparer/svg/bezierpath.cpp
+        preparer/parameterparser.h 
+        preparer/parameterparser.cpp
+        preparer/processing/flowdataprocessor.h 
+        preparer/processing/flowdataprocessor.cpp
+        preparer/vtk/vtkFLUENTCFFCustomReader.h 
+        preparer/vtk/vtkFLUENTCFFCustomReader.cxx
+        preparer/processing/mainimageimporter.h 
+        preparer/processing/mainimageimporter.cpp
+    )
+
+    target_link_libraries(MPM_setup_prepare PRIVATE spdlog::spdlog Eigen3::Eigen ${HDF5_LIBRARIES} ${VTK_LIBRARIES})
+    target_link_libraries(MPM_setup_prepare PRIVATE Qt${QT_VERSION_MAJOR}::Widgets )
+
+    target_include_directories(MPM_setup_prepare PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${NANOSVG_INCLUDE_DIR} ${HDF5_INCLUDE_DIRS})
+    target_include_directories(MPM_setup_prepare PRIVATE External preparer/vtk preparer/svg preparer/processing preparer)
+
+    vtk_module_autoinit(
+    TARGETS MPM_setup_prepare
+    MODULES ${VTK_LIBRARIES}
+    )
+
+endif()
 
 
 
@@ -153,13 +212,13 @@ if(BUILD_POSTPROCESSOR)
     # spdlog
     target_link_libraries(pp PRIVATE spdlog::spdlog)
 
-vtk_module_autoinit(
-  TARGETS pp
-  MODULES ${VTK_LIBRARIES}
-)
+    vtk_module_autoinit(
+    TARGETS pp
+    MODULES ${VTK_LIBRARIES}
+    )
 
-target_compile_options(pp PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
-target_link_libraries(pp PRIVATE gomp)
+    target_compile_options(pp PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
+    target_link_libraries(pp PRIVATE gomp)
 
 endif()
 
@@ -286,10 +345,10 @@ FetchContent_MakeAvailable(PBrowser)
         target_compile_options(iceMPM_GUI PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
         target_link_libraries(iceMPM_GUI PRIVATE gomp)
 ]]
-vtk_module_autoinit(
-  TARGETS gm2
-  MODULES ${VTK_LIBRARIES}
-)
+    vtk_module_autoinit(
+    TARGETS gm2
+    MODULES ${VTK_LIBRARIES}
+    )
 
 endif()
 
