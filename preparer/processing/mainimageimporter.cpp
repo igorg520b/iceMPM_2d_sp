@@ -31,7 +31,8 @@ void MainImageImporter::IdentifyIceThickness()
 
             const int idx = i+width*j;
             int path_val = sip.path_indices[i + width*j];
-            if(path_val != 1000 /*|| path_val == -1*/)
+//            if(path_val != 1000)
+            if(path_val == -1 || path_val > 1000)
             {
                 iceStatus[idx] = 3;
                 iceThickness[idx] = 0;

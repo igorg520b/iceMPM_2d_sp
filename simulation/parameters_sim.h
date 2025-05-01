@@ -42,7 +42,6 @@ public:
     constexpr static float MPM_points_per_cell = 5.0;    // approximate average value
 
     constexpr static int dim = 2;
-    constexpr static int snapshotFrequency = 25;
 
     // layout of the grid arrays
     constexpr static size_t grid_idx_mass           = 0;
@@ -78,10 +77,11 @@ public:
     int nPtsInitial;
     int64_t SimulationStartUnixTime;
     double InitialTimeStep, SimulationEndTime;
-    int AnimationFramesRequested; // run N steps without update
+    double AnimationFramePeriod;
     int SimulationStep;
     double SimulationTime;
     bool SaveSnapshots;
+    int SnapshotPeriod;
 
     // grid
     int GridXTotal, GridYTotal;     // actually used in simulation

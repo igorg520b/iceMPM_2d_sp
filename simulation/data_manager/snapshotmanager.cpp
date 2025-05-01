@@ -17,11 +17,13 @@
 #include <fmt/format.h>
 #include <fmt/std.h>
 
-//#include <format>
-
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 namespace fs = std::filesystem;
 
@@ -273,12 +275,6 @@ void icy::SnapshotManager::SplitIntoPartitionsAndTransferToDevice()
 }
 
 
-
-
-
-
-
-
 void icy::SnapshotManager::ReadPointsFromSnapshot(std::string fileNameSnapshotHDF5)
 {
     LOGR("ReadPointsFromSnapshot {}", fileNameSnapshotHDF5);
@@ -380,7 +376,6 @@ void icy::SnapshotManager::SaveSnapshot(int SimulationStep, double SimulationTim
 }
 
 
-
 void icy::SnapshotManager::SavePointColors()
 {
     // ensure that the output directory exists
@@ -427,56 +422,11 @@ void icy::SnapshotManager::ReadPointColors()
 
 
 
-
-
-
-
 std::string icy::SnapshotManager::prepare_file_name(int gx, int gy)
 {
 //    return std::format("{}/point_cache_{:05d}_{:05d}.h5", pts_cache_path, gx, gy);
     return fmt::format("{}/point_cache_{:05d}_{:05d}.h5", pts_cache_path, gx, gy);
 }
-
-
-
-
-
-// Haversine formula implementation
-double icy::SnapshotManager::haversineDistance(double lat, double lon1, double lon2) {
-    // Earth's radius in meters
-    constexpr double R = SimParams::Earth_Radius;
-
-    // Convert coordinates to radians
-    double latRad = degreesToRadians(lat);
-    double lon1Rad = degreesToRadians(lon1);
-    double lon2Rad = degreesToRadians(lon2);
-
-    // Difference in longitude
-    double deltaLon = lon2Rad - lon1Rad;
-
-    // Haversine formula
-    double a = std::pow(std::sin(deltaLon / 2), 2);
-    double c = 2 * std::atan2(std::sqrt(a), std::sqrt(1 - a));
-
-    // Distance along a parallel (latitude constant)
-    double distance = R * c * std::cos(latRad);
-
-    return distance;
-}
-
-
-/*
-void icy::SnapshotManager::LoadWindData(std::string fileName)
-{
-    LOGR("icy::SnapshotManager::LoadWindData - {}", fileName);
-    model->prms.use_GFS_wind = true;
-    model->wind_interpolator.LoadWindData(fileName,
-                                          model->prms.LatMin,model->prms.LatMax,model->prms.LonMin,model->prms.LonMax,
-                                          model->prms.SimulationStartUnixTime);
-    model->prms.gridLatMin = model->wind_interpolator.gridLatMin;
-    model->prms.gridLonMin = model->wind_interpolator.gridLonMin;
-}
-*/
 
 
 
@@ -623,8 +573,6 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
 
 
 
-
-
 // =============================  READ AND WRITE SNAPSHOTS
 
 void icy::SnapshotManager::PrepareFrameArrays()
@@ -700,6 +648,61 @@ void icy::SnapshotManager::PrepareFrameArrays()
         }
     }
 
+    const int &gx = model->prms.GridXTotal;
+    const int &gy = model->prms.GridYTotal;
+    const int &width = model->prms.InitializationImageSizeX;
+    const int &height = model->prms.InitializationImageSizeY;
+    const int &ox = model->prms.ModeledRegionOffsetX;
+    const int &oy = model->prms.ModeledRegionOffsetY;
+
+
+    rgb_img.resize(gridSize*3);
+    rgb_img_Jpinv.resize(gridSize*3);
+
+#pragma omp parallel for
+    for(int i=0;i<gx;i++)
+        for(int j=0;j<gy;j++)
+        {
+            const int img_idx = (i+gx*(gy-1-j))*3;
+            const int idx = j + gy*i;
+
+            uint8_t status = model->gpu.grid_status_buffer[idx];
+            uint8_t pts_count = count[idx];
+            if(status == 100 && pts_count)
+            {
+                // modelled area and points present
+                std::array<uint8_t, 3> _rgb;
+
+                _rgb[0] = static_cast<uint8_t>(vis_r[idx] * 255.0f);
+                _rgb[1] = static_cast<uint8_t>(vis_g[idx] * 255.0f);
+                _rgb[2] = static_cast<uint8_t>(vis_b[idx] * 255.0f);
+
+                const float Jp_inv = vis_Jpinv[idx];
+                const double range = 0.1;
+                const float val = (Jp_inv-1.)/range + 0.5;
+                std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, val);
+                float coeff2 = std::clamp(std::abs(Jp_inv-1)/range, 0., 1.);
+                if(Jp_inv>1.) coeff2 = std::clamp(std::abs(Jp_inv-1)*0.5/range, 0., 1.);
+                std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
+
+                for(int k=0;k<3;k++)
+                {
+                    rgb_img[img_idx+k] = _rgb[k];
+                    rgb_img_Jpinv[img_idx+k] = c2[k];
+                }
+
+            }
+            else
+            {
+                // static area
+                for(int k=0;k<3;k++)
+                {
+                    const int idx_special = ((i+ox) + (j+oy)*width)*3+k;
+                    const uint8_t val_color = model->gpu.original_image_colors_rgb[idx_special];
+                    rgb_img[img_idx + k] = rgb_img_Jpinv[img_idx + k] = val_color;
+                }
+            }
+        }
 }
 
 
@@ -708,6 +711,8 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
 {
     LOGR("SnapshotManager::SaveFrame: step {}, time {}", SimulationStep, SimulationTime);
     PrepareFrameArrays();
+    const int frame = SimulationStep / model->prms.UpdateEveryNthStep;
+    SaveImagesJGP(frame);
 
     // save as HDF5
     fs::path outputDir = "output";
@@ -716,7 +721,6 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
     fs::create_directories(targetPath);
 
     // save current state
-    const int frame = SimulationStep / model->prms.UpdateEveryNthStep;
 //    std::string baseName = std::format("f{:05d}.h5", frame);
     std::string baseName = fmt::format(fmt::runtime("f{:05d}.h5"), frame);
 
@@ -765,6 +769,33 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
     ds_count.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
 }
 
+void icy::SnapshotManager::SaveImagesJGP(const int frame)
+{
+    fs::path outputDir = "output";
+    fs::path imageDir1 = "images/rgb";
+    fs::path imageDir2 = "images/Jpinv";
+    fs::path targetPath1 = outputDir / SimulationTitle / imageDir1;
+    fs::path targetPath2 = outputDir / SimulationTitle / imageDir2;
+    fs::create_directories(targetPath1);
+    fs::create_directories(targetPath2);
+
+    std::string baseName = fmt::format(fmt::runtime("i{:05d}.jpg"), frame);
+
+    fs::path fullPath1 = targetPath1 / baseName;
+    fs::path fullPath2 = targetPath2 / baseName;
+
+    const int &gx = model->prms.GridXTotal;
+    const int &gy = model->prms.GridYTotal;
+
+
+    int success1 = stbi_write_jpg(fullPath1.string().c_str(), gx, gy, 3, rgb_img.data(), 80);
+    int success2 = stbi_write_jpg(fullPath2.string().c_str(), gx, gy, 3, rgb_img_Jpinv.data(), 80);
+
+    if(!success1 || !success2)
+    {
+        LOGV("failed saving frame images as JPG");
+    }
+}
 
 
 

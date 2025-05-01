@@ -10,9 +10,9 @@
 
 VTKVisualization::VTKVisualization(FrameData &fd_) : frameData(fd_)
 {
-    colormap.populateLut(ColorMap::Palette::Pressure, lut_Pressure);
-    colormap.populateLut(ColorMap::Palette::P2, lut_P2);
-    colormap.populateLut(ColorMap::Palette::ANSYS, lut_ANSYS);
+    populateLut(ColorMap::Palette::Pressure, lut_Pressure);
+    populateLut(ColorMap::Palette::P2, lut_P2);
+    populateLut(ColorMap::Palette::ANSYS, lut_ANSYS);
 
     // text
     constexpr int fontSize = 20;
@@ -198,6 +198,44 @@ void VTKVisualization::SynchronizeValues()
     std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
     actor_text->SetInput(buffer);
 }
+
+
+
+void VTKVisualization::populateLut(ColorMap::Palette palette, vtkNew<vtkLookupTable>& table)
+{
+    const std::vector<Eigen::Vector3f>& colorTable = ColorMap::getColorTable(palette);
+    int size = static_cast<int>(colorTable.size());
+
+    if (size < 2) {
+        std::cerr << "Error: Colormap must have at least two colors." << std::endl;
+        return;
+    }
+
+    const int m = 256;  // Number of colors in the lookup table
+    table->SetNumberOfTableValues(m);
+    table->Build();
+
+    for (int i = 0; i < m; ++i) {
+        float t = static_cast<float>(i) / (m - 1); // Normalize index to [0, 1]
+
+        // Scale t to the range [0, size-1] for interpolation
+        float scaledT = t * (size - 1);
+        int lowerIdx = static_cast<int>(std::floor(scaledT));
+        int upperIdx = static_cast<int>(std::ceil(scaledT));
+        float localT = scaledT - lowerIdx; // Fractional part for interpolation
+
+        // Interpolate RGB components
+        const Eigen::Vector3f& lowerColor = colorTable[lowerIdx];
+        const Eigen::Vector3f& upperColor = colorTable[upperIdx];
+
+        Eigen::Vector3f interpolatedColor = (1.0f - localT) * lowerColor + localT * upperColor;
+
+        // Set interpolated color in the lookup table
+        table->SetTableValue(i, interpolatedColor[0], interpolatedColor[1], interpolatedColor[2], 1.0);
+    }
+}
+
+
 
 /*
 

@@ -119,6 +119,10 @@ add_executable(cm2
     simulation/data_manager/windandcurrentinterpolator.h
 
     simulation/data_manager/poisson_disk_sampling.h
+
+    gui/colormap.h
+    gui/colormap.cpp
+
 )
 set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
 
@@ -140,10 +144,6 @@ endif()
 target_include_directories(cm2 PRIVATE ${HDF5_INCLUDE_DIRS})
 
 endif()
-
-
-
-
 
 
 

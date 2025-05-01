@@ -8,19 +8,16 @@
 #include <cstdint>
 #include <algorithm>
 
-#include <vtkLookupTable.h>
-
 class ColorMap {
 public:
     // Fast enum-based colormap selection
-    enum class Palette { SpecialJ, P2, Pressure, ANSYS, COUNT};
+    enum class Palette { SpecialJ, P2, Pressure, ANSYS, Pastel, COUNT};
 
 private:
     // Store colormaps using std::vector for variable sizes
     static const std::array<std::vector<Eigen::Vector3f>, static_cast<size_t>(Palette::COUNT)> colormaps;
 
 public:
-    void populateLut(Palette palette, vtkNew<vtkLookupTable>& table);
 
     // Get interpolated color as Eigen::Vector3f (values in range [0,1])
     static Eigen::Vector3f interpolateColor(Palette palette, float value);

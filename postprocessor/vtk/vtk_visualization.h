@@ -90,5 +90,9 @@ private:
     vtkNew<vtkPNGWriter> writerPNG;
     vtkNew<vtkRenderer> offscreenRenderer;
 
+
+    void populateLut(ColorMap::Palette palette, vtkNew<vtkLookupTable>& table);
+
+
 };
 #endif

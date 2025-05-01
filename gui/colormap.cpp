@@ -78,38 +78,6 @@ std::array<uint8_t, 3> ColorMap::mergeColors(const std::array<uint8_t, 3>& color
         return {r, g, b};
 }
 
-void ColorMap::populateLut(Palette palette, vtkNew<vtkLookupTable>& table) {
-    const std::vector<Eigen::Vector3f>& colorTable = getColorTable(palette);
-    int size = static_cast<int>(colorTable.size());
-
-    if (size < 2) {
-        std::cerr << "Error: Colormap must have at least two colors." << std::endl;
-        return;
-    }
-
-    const int m = 256;  // Number of colors in the lookup table
-    table->SetNumberOfTableValues(m);
-    table->Build();
-
-    for (int i = 0; i < m; ++i) {
-        float t = static_cast<float>(i) / (m - 1); // Normalize index to [0, 1]
-
-        // Scale t to the range [0, size-1] for interpolation
-        float scaledT = t * (size - 1);
-        int lowerIdx = static_cast<int>(std::floor(scaledT));
-        int upperIdx = static_cast<int>(std::ceil(scaledT));
-        float localT = scaledT - lowerIdx; // Fractional part for interpolation
-
-        // Interpolate RGB components
-        const Eigen::Vector3f& lowerColor = colorTable[lowerIdx];
-        const Eigen::Vector3f& upperColor = colorTable[upperIdx];
-
-        Eigen::Vector3f interpolatedColor = (1.0f - localT) * lowerColor + localT * upperColor;
-
-        // Set interpolated color in the lookup table
-        table->SetTableValue(i, interpolatedColor[0], interpolatedColor[1], interpolatedColor[2], 1.0);
-    }
-}
 
 const std::array<std::vector<Eigen::Vector3f>, static_cast<size_t>(ColorMap::Palette::COUNT)>
     ColorMap::colormaps = {{
@@ -161,7 +129,22 @@ const std::array<std::vector<Eigen::Vector3f>, static_cast<size_t>(ColorMap::Pal
 {0xff/255.,0x7f/255.,0x00/255.},
 {0xff/255.,0x55/255.,0x00/255.},
 {0xff/255.,0x2a/255.,0x00/255.},
-{0xff/255.,0x00/255.,0x00/255.}}
+{0xff/255.,0x00/255.,0x00/255.}},
+
+        //Pastel
+{{1.0f, 0.8f, 0.8f},
+         {1.0f, 0.85f, 0.7f},
+         {1.0f, 0.95f, 0.8f},
+         {0.85f, 1.0f, 0.8f},
+         {0.7f, 1.0f, 0.7f},
+         {0.7f, 1.0f, 0.9f},
+         {0.75f, 0.9f, 1.0f},
+         {0.7f, 0.7f, 1.0f},
+         {0.85f, 0.75f, 1.0f},
+         {0.95f, 0.8f, 1.0f},
+         {1.0f, 0.8f, 0.9f},
+         {0.9f, 0.9f, 0.9f},
+         {1.0f, 1.0f, 0.8f}}
 
 }};
 

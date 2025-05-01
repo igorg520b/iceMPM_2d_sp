@@ -52,7 +52,7 @@ public:
     icy::Model *model;
     double wind_visualization_time;
 
-    enum VisOpt { none, status, Jp_inv, P, Q, color, v_u, v_v, v_norm, strength};
+    enum VisOpt { none, status, Jp_inv, P, Q, color, v_u, v_v, v_norm, thickness, regions};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};
@@ -63,7 +63,6 @@ public:
 
     vtkNew<vtkActor> actor_points;
     vtkNew<vtkActor> raster_actor;
-    vtkNew<vtkActor> testing_actor;
 
     vtkNew<vtkScalarBarActor> scalarBar;
     vtkNew<vtkTextActor> actorText;
@@ -85,13 +84,6 @@ private:
     vtkNew<vtkPlaneSource> raster_plane;
     vtkNew<vtkTexture> raster_texture;
     vtkNew<vtkPolyDataMapper> raster_mapper;
-
-
-    // one point per cell (in the center) for testing
-    vtkNew<vtkPoints> testing_points;
-    vtkNew<vtkPolyData> testing_points_polydata;
-    vtkNew<vtkPolyDataMapper> testing_points_mapper;
-    vtkNew<vtkVertexGlyphFilter> testing_points_filter;
 
 
 };

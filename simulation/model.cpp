@@ -139,18 +139,21 @@ void icy::Model::SaveThread() {
             } else if (done.load()) {
                 break; // Exit if simulation is finished
             }
+
+            // Save the frame
+            if (saving_SimulationStep != -1) {
+                bool saveSnapshot = (saving_SimulationStep/prms.UpdateEveryNthStep)%prms.SnapshotPeriod == 0;
+                if (prms.SimulationTime >= prms.SimulationEndTime) saveSnapshot = true;
+                accessing_point_data.lock();
+                if(saveSnapshot) snapshot.SaveSnapshot(saving_SimulationStep, saving_SimulationTime);
+                snapshot.SaveFrame(saving_SimulationStep, saving_SimulationTime);
+                accessing_point_data.unlock();
+
+                saving_SimulationStep = -1;
+            }
+
         }
 
-        // Save the frame outside the critical section
-        if (saving_SimulationStep != -1) {
-            bool saveSnapshot = (saving_SimulationStep/prms.UpdateEveryNthStep)%SimParams::snapshotFrequency == 0;
-            accessing_point_data.lock();
-            if(saveSnapshot) snapshot.SaveSnapshot(saving_SimulationStep, saving_SimulationTime);
-            snapshot.SaveFrame(saving_SimulationStep, saving_SimulationTime);
-            accessing_point_data.unlock();
-
-            saving_SimulationStep = -1;
-        }
     }
 }
 

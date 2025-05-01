@@ -10,6 +10,8 @@
 #include <H5Cpp.h>
 #include <Eigen/Core>
 
+#include "gui/colormap.h"
+
 namespace icy {class SnapshotManager; class Model;}
 
 
@@ -37,15 +39,17 @@ public:
 
 private:
 
+    ColorMap colormap;
+
     std::vector<uint8_t> count;   // used for counting points per cell and image generation
     std::vector<uint8_t> rgb;
+    std::vector<uint8_t> rgb_img_Jpinv, rgb_img;
     std::vector<float> vis_r, vis_g, vis_b, vis_alpha, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
     void PrepareFrameArrays(); // invoked from SaveFrame
 
     constexpr static std::string_view pts_cache_path = "_data/point_cache";
 
     static constexpr double degreesToRadians(double degrees) { return degrees * M_PI / 180.0; }
-    static double haversineDistance(double lat, double lon1, double lon2);
     static std::string prepare_file_name(int gx, int gy);
     static bool attempt_to_fill_from_cache(int gx, int gy, std::vector<std::array<float, 2>> &buffer);
     static void generate_and_save(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
@@ -56,6 +60,7 @@ private:
     void SavePointColors();
     void ReadPointColors();
 
+    void SaveImagesJGP(const int frame);
 };
 
 #endif // SNAPSHOTWRITER_H

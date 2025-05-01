@@ -86,7 +86,6 @@ MainWindow::MainWindow(QWidget *parent)
 // anything that includes the Model
     renderer->AddActor(representation.actor_points);
     renderer->AddActor(representation.raster_actor);
-    renderer->AddActor(representation.testing_actor);
     renderer->AddActor(representation.actorText);
 //    renderer->AddActor(representation.scalarBar);
 

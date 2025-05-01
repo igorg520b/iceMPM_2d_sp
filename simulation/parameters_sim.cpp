@@ -11,6 +11,7 @@ void SimParams::Reset()
     SimulationStartUnixTime = 0;
     DimensionHorizontal = 0;
     SaveSnapshots = false;
+    SnapshotPeriod = 25;
 
     nPtsInitial = 0;
     windDragCoeff_airDensity = 0.0025 * 1.2;
@@ -21,8 +22,8 @@ void SimParams::Reset()
     YoungsModulus = 5.e8;
     ParticleViewSize = 2.5f;
 
-    SimulationEndTime = 12;
-    AnimationFramesRequested = 5000;
+    SimulationEndTime = 20000;
+    AnimationFramePeriod = 200;
 
     PoissonsRatio = 0.3;
     SurfaceDensity = 916*0.2;  // surface density
@@ -79,12 +80,14 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("SaveSnapshots")) SaveSnapshots = doc["SaveSnapshots"].GetBool();
     if(doc.HasMember("UseCurrentData")) UseCurrentData = doc["UseCurrentData"].GetBool();
 
+    if(doc.HasMember("SnapshotPeriod")) SnapshotPeriod = doc["SnapshotPeriod"].GetInt();
+
     if(doc.HasMember("SimulationStartUnixTime")) SimulationStartUnixTime = doc["SimulationStartUnixTime"].GetInt64();
     if(doc.HasMember("SimulationEndTime")) SimulationEndTime = doc["SimulationEndTime"].GetDouble();
 
     if(doc.HasMember("InitialTimeStep")) InitialTimeStep = doc["InitialTimeStep"].GetDouble();
     if(doc.HasMember("ParticleViewSize")) ParticleViewSize = doc["ParticleViewSize"].GetDouble();
-    if(doc.HasMember("AnimationFramesRequested")) AnimationFramesRequested = doc["AnimationFramesRequested"].GetInt();
+    if(doc.HasMember("AnimationFramePeriod")) AnimationFramePeriod = doc["AnimationFramePeriod"].GetDouble();
 
     if(doc.HasMember("YoungsModulus")) YoungsModulus = doc["YoungsModulus"].GetDouble();
     if(doc.HasMember("PoissonsRatio")) PoissonsRatio = doc["PoissonsRatio"].GetDouble();
@@ -116,7 +119,7 @@ void SimParams::ComputeHelperVariables()
 {
     ParticleMass = ParticleVolume * SurfaceDensity;
 
-    UpdateEveryNthStep = (int)(SimulationEndTime/(AnimationFramesRequested*InitialTimeStep));
+    UpdateEveryNthStep = (int)(AnimationFramePeriod / InitialTimeStep);
     cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
     Dp_inv = 4./(cellsize*cellsize);
     dt_vol_Dpinv = InitialTimeStep*ParticleVolume*Dp_inv;
@@ -132,7 +135,7 @@ void SimParams::Printout()
     spdlog::info(fmt::format(fmt::runtime("Simulation Parameters:")));
     spdlog::info(fmt::format(fmt::runtime("SimulationStartUnixTime: {}"), SimulationStartUnixTime));
     spdlog::info(fmt::format(fmt::runtime("InitialTimeStep: {}, SimulationEndTime: {}"), InitialTimeStep, SimulationEndTime));
-    spdlog::info(fmt::format(fmt::runtime("AnimationFramesRequested: {}"), AnimationFramesRequested));
+    spdlog::info(fmt::format(fmt::runtime("AnimationFramePeriod: {}"), AnimationFramePeriod));
     spdlog::info(fmt::format(fmt::runtime("SimulationStep: {}"), SimulationStep));
     spdlog::info(fmt::format(fmt::runtime("SimulationTime: {}"), SimulationTime));
     spdlog::info(fmt::format(fmt::runtime("UpdateEveryNthStep: {}"), UpdateEveryNthStep));
