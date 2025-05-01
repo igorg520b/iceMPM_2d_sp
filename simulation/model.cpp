@@ -176,7 +176,7 @@ void icy::Model::Prepare()
 
 
 
-void icy::Model::LoadParameterFile(std::string fileName, std::string resumeSnapshotFileName)
+void icy::Model::LoadParameterFile(std::string fileName, std::string resumeSnapshotFileName, bool onlyGeneratePoints)
 {
     LOGR("icy::Model::LoadParameterFile {}", fileName);
 
@@ -188,7 +188,8 @@ void icy::Model::LoadParameterFile(std::string fileName, std::string resumeSnaps
 
     if(resumeSnapshotFileName.empty())
     {
-        snapshot.PopulatePoints(additionalFiles["InputMap"]);
+        snapshot.PopulatePoints(additionalFiles["InputMap"], onlyGeneratePoints);
+        if(onlyGeneratePoints) return;
     }
     else
     {

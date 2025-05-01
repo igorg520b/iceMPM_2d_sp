@@ -21,7 +21,7 @@ public:
 
 
     void PrepareGrid(std::string fileNamePNG, std::string fileNameModelledAreaHDF5);
-    void PopulatePoints(std::string fileNameModelledAreaHDF5);
+    void PopulatePoints(std::string fileNameModelledAreaHDF5, bool onlyGenerateCache);
     void ReadPointsFromSnapshot(std::string fileNameSnapshotHDF5);
     void SplitIntoPartitionsAndTransferToDevice();
 

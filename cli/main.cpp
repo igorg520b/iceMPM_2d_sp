@@ -20,7 +20,8 @@ int main(int argc, char** argv)
     options.add_options()
         // Define options and link them to variables
         ("parameter", "Parameter file (JSON, required)", cxxopts::value<std::string>(parameter_filename))
-        ("r,resume", "Resume from snapshot file <filename>", cxxopts::value<std::string>(resume_filename));
+        ("r,resume", "Resume from snapshot file <filename>", cxxopts::value<std::string>(resume_filename))
+        ("g,generate-points", "Generate initial points and exit");
 
     // Mark 'parameter' as the positional argument
     options.parse_positional({"parameter"});
@@ -33,13 +34,17 @@ int main(int argc, char** argv)
     }
 
     icy::Model model;
-    std::atomic<bool> request_terminate = false;
+
+    if (result.count("generate-points")) {
+        LOGV("Only generating points");
+        model.LoadParameterFile(parameter_filename, resume_filename, true);
+        return 0; // Exit successfully as requested
+    }
 
 
     model.LoadParameterFile(parameter_filename, resume_filename);
     model.prms.Printout();
     model.Prepare();
-
 
     model.gpu.transfer_completion_callback = [&](){
         LOGR("cycle callback {}; ", model.prms.AnimationFrameNumber());

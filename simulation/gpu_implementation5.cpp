@@ -143,7 +143,7 @@ void GPU_Implementation5::allocate_host_arrays_grid()
     grid_boundary_normals.resize(2*modeled_grid_total);
     original_image_colors_rgb.resize(3*initial_image_total);
 
-    LOGV("GPU_Implementation5::allocate_host_arrays() completed");
+    LOGV("GPU_Implementation5::allocate_host_arrays_grid() completed");
 }
 
 

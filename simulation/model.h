@@ -42,7 +42,8 @@ public:
     Model();
     ~Model();
 
-    void LoadParameterFile(std::string fileName, std::string resumeSnapshotFileName);   // initialize the simulation from a parameter file
+    // initialize the simulation from a parameter file
+    void LoadParameterFile(std::string fileName, std::string resumeSnapshotFileName, bool onlyGeneratePoints = false);
 
     void Prepare();        // invoked once, at simulation start
     bool Step();           // either invoked by Worker or via GUI

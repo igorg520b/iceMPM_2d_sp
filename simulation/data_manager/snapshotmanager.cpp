@@ -121,7 +121,7 @@ void icy::SnapshotManager::PrepareGrid(std::string fileNamePNG, std::string file
 
 
 
-void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5)
+void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5, bool onlyGenerateCache)
 {
     LOGR("icy::SnapshotManager::PopulatePoints: {}", fileNameModelledAreaHDF5);
 
@@ -148,6 +148,8 @@ void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5)
     // (2) generate points (or load from cache)
     std::vector<std::array<float, 2>> pt_buffer;   // initial buffer for reading/generating points
     generate_points(gx, gy, SimParams::MPM_points_per_cell, pt_buffer);
+    if(onlyGenerateCache) return;   // the reason is to prepare point cache on the "login" node server-side
+
     const size_t initial_pt_count = pt_buffer.size();
     model->prms.ParticleVolume = h*h*gx*gy/ initial_pt_count;
 
