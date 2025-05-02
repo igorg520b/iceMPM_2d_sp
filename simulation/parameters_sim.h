@@ -40,6 +40,7 @@ public:
     constexpr static t_PointReal pi = 3.14159265358979323846;
     constexpr static double Earth_Radius = 6371000.0;
     constexpr static float MPM_points_per_cell = 5.0;    // approximate average value
+    constexpr static double g = 9.8;
 
     constexpr static int dim = 2;
 
@@ -95,7 +96,7 @@ public:
     bool UseWindData, UseCurrentData;
 
     // material properties
-    double SurfaceDensity, PoissonsRatio, YoungsModulus;
+    double IceDensity, PoissonsRatio, YoungsModulus;
     double IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2;
     double DP_phi, DP_threshold_p;
     double cellsize;

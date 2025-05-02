@@ -4,7 +4,6 @@
 #include <utility>
 #include <algorithm>
 
-#include <cuda.h>
 #include <cuda_runtime.h>
 
 #include <Eigen/Core>

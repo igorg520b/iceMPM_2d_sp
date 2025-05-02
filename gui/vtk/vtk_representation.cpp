@@ -218,6 +218,21 @@ void icy::VisualRepresentation::SynchronizeValues()
             pts_colors->SetValue((vtkIdType)(i*3+2), b);
         }
     }
+    else if(VisualizingVariable == VisOpt::status)
+    {
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+            bool crushed = s->getCrushedStatus();
+            bool disabled = s->getDisabledStatus();
+
+            double val = 0;
+            if(crushed) val = 1;
+            if(disabled) val = 2;
+            std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::NCD, val/2.);
+            for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(i*3+k), c[k]);
+        }
+    }
     else if(VisualizingVariable == VisOpt::none || VisualizingVariable == VisOpt::regions)
     {
         for(int i=0;i<nPts;i++)

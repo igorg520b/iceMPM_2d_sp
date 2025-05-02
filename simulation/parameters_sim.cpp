@@ -26,7 +26,7 @@ void SimParams::Reset()
     AnimationFramePeriod = 200;
 
     PoissonsRatio = 0.3;
-    SurfaceDensity = 916*0.2;  // surface density
+    IceDensity = 916;
 
     SimulationStep = 0;
     SimulationTime = 0;
@@ -76,7 +76,6 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     else result["SimulationTitle"] = "sim1";
 
     if(doc.HasMember("DimensionHorizontal")) DimensionHorizontal = doc["DimensionHorizontal"].GetDouble();
-    if(doc.HasMember("SurfaceDensity")) SurfaceDensity = doc["SurfaceDensity"].GetDouble();
     if(doc.HasMember("SaveSnapshots")) SaveSnapshots = doc["SaveSnapshots"].GetBool();
     if(doc.HasMember("UseCurrentData")) UseCurrentData = doc["UseCurrentData"].GetBool();
 
@@ -91,6 +90,7 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 
     if(doc.HasMember("YoungsModulus")) YoungsModulus = doc["YoungsModulus"].GetDouble();
     if(doc.HasMember("PoissonsRatio")) PoissonsRatio = doc["PoissonsRatio"].GetDouble();
+    if(doc.HasMember("IceDensity")) IceDensity = doc["IceDensity"].GetDouble();
 
     if(doc.HasMember("IceCompressiveStrength")) IceCompressiveStrength = doc["IceCompressiveStrength"].GetDouble();
     if(doc.HasMember("IceTensileStrength")) IceTensileStrength = doc["IceTensileStrength"].GetDouble();
@@ -117,7 +117,7 @@ void SimParams::ComputeLame()
 
 void SimParams::ComputeHelperVariables()
 {
-    ParticleMass = ParticleVolume * SurfaceDensity;
+    ParticleMass = ParticleVolume * IceDensity;
 
     UpdateEveryNthStep = (int)(AnimationFramePeriod / InitialTimeStep);
     cellsize_inv = 1./cellsize; // cellsize itself is set when loading .h5 file
@@ -151,8 +151,8 @@ void SimParams::Printout()
     spdlog::info(fmt::format(fmt::runtime("ParticleVolume: {}, ParticleViewSize: {}"), ParticleVolume, ParticleViewSize));
     spdlog::info(fmt::format(fmt::runtime("ParticleMass: {}"), ParticleMass));
     spdlog::info(fmt::format(fmt::runtime("DP_phi: {}, DP_threshold_p: {}"), DP_phi, DP_threshold_p));
-    spdlog::info(fmt::format(fmt::runtime("SurfaceDensity: {}, PoissonsRatio: {}, YoungsModulus: {}"),
-                             SurfaceDensity, PoissonsRatio, YoungsModulus));
+    spdlog::info(fmt::format(fmt::runtime("PoissonsRatio: {}, YoungsModulus: {}"),
+                             PoissonsRatio, YoungsModulus));
     spdlog::info(fmt::format(fmt::runtime("IceCompressiveStrength: {}, IceTensileStrength: {}, IceShearStrength: {}, IceTensileStrength2: {}"),
                              IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2));
 

@@ -206,7 +206,8 @@ void GPU_Implementation5::transfer_from_device()
         if(p.error_code)
         {
             LOGR("P {}; error code {}", p.PartitionID, p.error_code);
-            throw std::runtime_error("error code");
+            // throw std::runtime_error("error code");
+            this->error_code = error_code;
         }
     }
 
@@ -225,6 +226,7 @@ void GPU_Implementation5::synchronize()
 
 void GPU_Implementation5::update_constants()
 {
+    error_code = 0;
     for(GPU_Partition &p : partitions) p.update_constants();
 }
 

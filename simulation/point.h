@@ -6,7 +6,6 @@
 #include <Eigen/Core>
 
 #include "parameters_sim.h"
-#include <cuda.h>
 #include <cuda_runtime.h>
 
 namespace icy { struct Point; }

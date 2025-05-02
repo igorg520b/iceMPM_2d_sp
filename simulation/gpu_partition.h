@@ -5,7 +5,6 @@
 #include <Eigen/LU>
 #include <spdlog/spdlog.h>
 
-#include <cuda.h>
 #include <cuda_runtime.h>
 
 #include <functional>
@@ -20,7 +19,7 @@
 // kernels
 __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
                               const int count_pts, const int pitch_pts,
-                                     const t_PointReal *buffer_pts, t_GridReal *buffer_grid);
+                                     t_GridReal *buffer_grid);
 
 __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
                                               t_GridReal *_buffer_grid,
@@ -31,7 +30,7 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 __global__ void partition_kernel_g2p(const bool recordPQ,
                                      const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
-                                     t_PointReal *buffer_pts, const t_GridReal *buffer_grid,
+                                     const t_GridReal *buffer_grid,
                                      int applyGlensLaw);
 
 

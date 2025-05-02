@@ -40,6 +40,10 @@ PointVector2r ProxyPoint::getPos()
 {
     PointVector2r result;
     for(int i=0;i<SimParams::dim;i++) result[i] = getValue(SimParams::posx+i);
+    if(std::abs(result.x()) > 0.5 || std::abs(result.y()) > 0.5)
+    {
+        LOGR("point out of cell bounds; idx {}; local coord {} x {}", pos, result.x(), result.y());
+    }
     return result;
 }
 

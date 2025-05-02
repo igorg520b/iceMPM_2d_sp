@@ -43,10 +43,10 @@ bool icy::Model::Step()
     accessing_point_data.lock();
 
     gpu.transfer_from_device();
-    LOGR("finished {} ({}); host pts {}; cap {}", prms.SimulationEndTime,
-                 prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity);
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
+    LOGR("finished {} ({}); host pts {}; cap {}; err {}", prms.SimulationTime,
+                 prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity, gpu.error_code);
 
     // print out timings
     LOGR("{:^3s} {:^8s} {:^8s} {:^7s} | {:^5s} {:^5s} {:^5s} | {:^5s} {:^5s} {:^5s} {:^5s} {:^5s} | {:^6s}",
@@ -74,7 +74,7 @@ bool icy::Model::Step()
     accessing_point_data.unlock();
     if(prms.SaveSnapshots) SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
 
-    return (prms.SimulationTime < prms.SimulationEndTime);
+    return (prms.SimulationTime < prms.SimulationEndTime && !gpu.error_code);
 }
 
 

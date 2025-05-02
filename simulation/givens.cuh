@@ -1,7 +1,6 @@
 #ifndef GIVENS_CUH
 #define GIVENS_CUH
 #include <cmath>
-#include <cuda.h>
 #include <cuda_runtime.h>
 #include <type_traits>
 

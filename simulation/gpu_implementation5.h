@@ -10,7 +10,6 @@
 #include <Eigen/Core>
 #include <Eigen/LU>
 
-#include <cuda.h>
 #include <cuda_runtime.h>
 
 #include <functional>
@@ -28,6 +27,7 @@ public:
     icy::Model *model;
     std::vector<GPU_Partition> partitions;
     HostSideSOA hssoa;  // mainly stores host-side points
+    uint8_t error_code;
 
     std::vector<uint32_t> point_colors_rgb;     // rgb values of original point colors
     std::vector<uint8_t> grid_status_buffer;    // land (0), modeled area (>0)

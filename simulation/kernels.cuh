@@ -1,5 +1,3 @@
-#include <cuda.h>
-#include <cuda_runtime.h>
 #include "parameters_sim.h"
 
 
@@ -21,16 +19,15 @@ __device__ t_PointReal *dev_buffer_pts;
 
 __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
-                                     const t_PointReal *buffer_pts, t_GridReal *buffer_grid)
+                                     t_GridReal *buffer_grid)
 {
     int pt_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(pt_idx >= count_pts) return;
 
-    uint32_t utility_data = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]);
+    uint32_t utility_data = *reinterpret_cast<const uint32_t*>(&dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]);
     if(utility_data & status_disabled) return; // point is disabled
 
     const double &h = gprms.cellsize;
-    const double &particle_mass = gprms.ParticleMass;
     const int &gridY = gprms.GridYTotal;
 
     // pull point data from SOA
@@ -39,18 +36,19 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 
     for(int i=0; i<SimParams::dim; i++)
     {
-        pos[i] = buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)];
-        velocity[i] = buffer_pts[pt_idx + pitch_pts*(SimParams::velx+i)];
+        pos[i] = dev_buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)];
+        velocity[i] = dev_buffer_pts[pt_idx + pitch_pts*(SimParams::velx+i)];
         for(int j=0; j<SimParams::dim; j++)
         {
-            Fe(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)];
-            Bp(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Bp00 + i*SimParams::dim + j)];
+            Fe(i,j) = dev_buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)];
+            Bp(i,j) = dev_buffer_pts[pt_idx + pitch_pts*(SimParams::Bp00 + i*SimParams::dim + j)];
         }
     }
-    t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
-    t_PointReal strength = buffer_pts[pt_idx + pitch_pts*SimParams::idx_thickness];
+    t_PointReal Jp_inv = dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
+    const t_PointReal thickness = dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_thickness];
+    double particle_mass = gprms.ParticleMass * thickness;
 
-    const uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
+    const uint32_t cell = *reinterpret_cast<const uint32_t*>(&dev_buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
     Eigen::Vector2i cell_i((int)(cell & 0xffff), (int)(cell >> 16));
 
     PointMatrix2r PFt;
@@ -59,7 +57,7 @@ __global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
 //    PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv)*PFt;
 
     // version that accounts for surface density change
-    PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv*Jp_inv*strength)*PFt;
+    PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv*Jp_inv*thickness)*PFt;
 
     PointArray2r ww[3];
     CalculateWeightCoeffs(pos, ww);
@@ -200,14 +198,14 @@ __global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_
 
 __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
                                      const int count_pts, const int pitch_pts,
-                                     t_PointReal *buffer_pts, const t_GridReal *buffer_grid,
+                                     const t_GridReal *buffer_grid,
                                      int applyGlensLaw)
 {
     const int pt_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(pt_idx >= count_pts) return;
 
     // skip if a point is disabled
-    uint32_t utility_data = *reinterpret_cast<uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]);
+    uint32_t utility_data = *reinterpret_cast<uint32_t*>(&dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]);
     if(utility_data & status_disabled) return; // point is disabled
 
     const double &h_inv = gprms.cellsize_inv;
@@ -223,18 +221,18 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     // pull point data from SOA
     for(int i=0; i<SimParams::dim; i++)
     {
-        pos[i] = buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)];
+        pos[i] = dev_buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)];
         for(int j=0; j<SimParams::dim; j++)
         {
-            Fe(i,j) = buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)];
+            Fe(i,j) = dev_buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)];
         }
     }
-    t_PointReal initial_thickness = buffer_pts[pt_idx + pitch_pts*SimParams::idx_thickness];
-    t_PointReal Jp_inv = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
-    t_PointReal qp = buffer_pts[pt_idx + pitch_pts*SimParams::idx_Qp];
+    t_PointReal initial_thickness = dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_thickness];
+    t_PointReal Jp_inv = dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv];
+    t_PointReal qp = dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_Qp];
     uint16_t grain = (uint16_t) (utility_data & 0xffff);
 
-    uint32_t cell = *reinterpret_cast<const uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
+    uint32_t cell = *reinterpret_cast<const uint32_t*>(&dev_buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]);
     // coords of grid node for point
     Eigen::Vector2i cell_i((int)(cell & 0xffff), (int)(cell >> 16));
 
@@ -270,6 +268,7 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     else if(pos.x() < -0.5) { pos.x() += 1.0; cell_i.x()--; cell_updated = true; }
     if(pos.y() > 0.5) { pos.y() -= 1.0; cell_i.y()++; cell_updated = true; }
     else if(pos.y() < -0.5) { pos.y() += 1.0; cell_i.y()--; cell_updated = true; }
+
     if(cell_updated)
     {
         if(cell_i.x() <= 1 || cell_i.x() >= gridX-2 || cell_i.y() <= 1 || cell_i.y() >= gridY-2)
@@ -279,10 +278,11 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
         }
     }
 
-    Fe = (PointMatrix2r::Identity() + dt*p_Bp) * Fe;     // p.Bp is the gradient of the velocity vector (it seems)
+    // ensure the coordinates are valid
+    if(isnan(pos.x()) || isnan(pos.y())) { gpu_error_indicator = 1; printf("kernel error 1\n");}
+    if(pos.x() > 0.5 || pos.x() < -0.5 || pos.y() > 0.5 || pos.y() < -0.5) { gpu_error_indicator = 2; printf("kernel error 2\n"); }
 
-    // water
-//    Jp_inv *= (PointMatrix2r::Identity() + dt*p_Bp).determinant();  // for water model
+    Fe = (PointMatrix2r::Identity() + dt*p_Bp) * Fe;     // p.Bp is the gradient of the velocity vector (it seems)
 
     t_PointReal Je_tr, p_tr, q_tr;
     ComputePQ(Je_tr, p_tr, q_tr, kappa, mu, Fe);    // computes P, Q, J
@@ -294,7 +294,6 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     if(!(utility_data & status_crushed)) CheckIfPointIsInsideFailureSurface(utility_data, grain, p_tr, q_tr, initial_thickness);
     if(utility_data & status_crushed)
     {
-
         Wolper_Drucker_Prager(initial_thickness, p_tr, q_tr, Je_tr, U, V, vSigmaSquared, v_s_hat_tr, Fe, Jp_inv);
     }
 //    else if(applyGlensLaw)
@@ -307,31 +306,32 @@ __global__ void partition_kernel_g2p(const bool recordPQ, const int pitch_grid,
     // distribute the values of p back into GPU memory: pos, velocity, BP, Fe, Jp_inv, PQ
     for(int i=0; i<SimParams::dim; i++)
     {
-        buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)] = pos[i];
-        buffer_pts[pt_idx + pitch_pts*(SimParams::velx+i)] = p_velocity[i];
+        dev_buffer_pts[pt_idx + pitch_pts*(SimParams::posx+i)] = pos[i];
+        dev_buffer_pts[pt_idx + pitch_pts*(SimParams::velx+i)] = p_velocity[i];
         for(int j=0; j<SimParams::dim; j++)
         {
-            buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)] = Fe(i,j);
-            buffer_pts[pt_idx + pitch_pts*(SimParams::Bp00 + i*SimParams::dim + j)] = p_Bp(i,j);
+            dev_buffer_pts[pt_idx + pitch_pts*(SimParams::Fe00 + i*SimParams::dim + j)] = Fe(i,j);
+            dev_buffer_pts[pt_idx + pitch_pts*(SimParams::Bp00 + i*SimParams::dim + j)] = p_Bp(i,j);
         }
     }
 
-    buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv] = Jp_inv;
-    buffer_pts[pt_idx + pitch_pts*SimParams::idx_Qp] = qp;
+    dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv] = Jp_inv;
+    dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_Qp] = qp;
+
     // save crushed/disabled status
-    *reinterpret_cast<uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]) = utility_data;
+    *reinterpret_cast<uint32_t*>(&dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_utility_data]) = utility_data;
 
     if(cell_updated)
     {
         cell = ((uint32_t)cell_i[1] << 16) | (uint32_t)cell_i[0];
-        *reinterpret_cast<uint32_t*>(&buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]) = cell;
+        *reinterpret_cast<uint32_t*>(&dev_buffer_pts[pt_idx + pitch_pts*SimParams::integer_cell_idx]) = cell;
     }
 
-    // at the end of each cycle, PQ are recorded for visualization
+    // upon request, PQ are recorded for visualization
     if(recordPQ)
     {
-        buffer_pts[pt_idx + pitch_pts*SimParams::idx_P] = p_tr;
-        buffer_pts[pt_idx + pitch_pts*SimParams::idx_Q] = q_tr;
+        dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_P] = p_tr;
+        dev_buffer_pts[pt_idx + pitch_pts*SimParams::idx_Q] = q_tr;
     }
 }
 
@@ -414,14 +414,14 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
     const double &mu = gprms.mu;
     const double &kappa = gprms.kappa;
     t_PointReal DP_threshold_p = gprms.DP_threshold_p;
+//    DP_threshold_p *= Jp_inv;
+
+    const t_PointReal pmin = -gprms.IceTensileStrength;
 
     const double &pmax = gprms.IceCompressiveStrength;
-    double qmax = gprms.IceShearStrength;
-//    qmax *= initial_strength;
+    const double &qmax = gprms.IceShearStrength;
 
-    DP_threshold_p *= Jp_inv;
-//    t_PointReal tan_phi = tan(gprms.DP_phi*initial_strength*SimParams::pi/180);
-    t_PointReal tan_phi = tan(gprms.DP_phi*SimParams::pi/180);
+    const t_PointReal tan_phi = tan(gprms.DP_phi*SimParams::pi/180);
 
     if(p_tr < DP_threshold_p)
     {
@@ -433,7 +433,6 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
         }
         else
         {
-
         // stretching in tension - no resistance
             PointVector2r vSigma_new(1.0,1.0);
             Fe = U*vSigma_new.asDiagonal()*V.transpose();
@@ -444,42 +443,50 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
 
     // determine q_yeld from the combination of DP / elliptic yield surface, whichever is lower
     t_PointReal q_yield = 0;
-    t_PointReal smstp = smoothstep((Jp_inv-0.5)/2.);
-//    tan_phi /= smstp;
     if(p_tr < pmax)
     {
-        t_PointReal q_from_dp = (p_tr-DP_threshold_p)*tan_phi;
-        const t_PointReal pmin = -gprms.IceTensileStrength;
         t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_tr)*(p_tr-pmin))*qmax/(pmax-pmin);
+
+        t_PointReal q_from_dp = max((double)0, (p_tr-DP_threshold_p)*tan_phi);
         q_yield = min(q_from_failure_surface, q_from_dp);
+    }
+    else
+    {
+        // such hight pressures should not happen - everythigng is liquified
     }
 
     if(q_tr > q_yield)
     {
         // plasticity will be applied
-        // relaxation of p_tr
-        t_PointReal relax_coeff = smstp;
-        t_PointReal p_n_1 = p_tr*relax_coeff;
+
+        // estimate the new P based on the ridge height
+//        t_PointReal p_ridge_max = SimParams::g * gprms.IceDensity * initial_thickness * Jp_inv;
+
+        t_PointReal p_n_1 = p_tr;
+
+
+
+
+
         // re-evaluate q
-        t_PointReal q_from_dp = (p_tr-DP_threshold_p)*tan_phi;
-        const t_PointReal pmin = -gprms.IceTensileStrength;
-        t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_tr)*(p_tr-pmin))*qmax/(pmax-pmin);
-        t_PointReal q_n_1 = min(q_from_failure_surface, q_from_dp);
+        const t_PointReal q_from_dp = max((double)0, (p_n_1-DP_threshold_p)*tan_phi);
+        const t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_n_1)*(p_n_1-pmin))*qmax/(pmax-pmin);
+        const t_PointReal q_n_1 = min(q_from_failure_surface, q_from_dp);
 
         // given p_n_1 and q_n_1, compute Fe_new
-        t_PointReal Je_new = sqrt(-2*p_n_1/kappa + 1);
+        const t_PointReal Je_new = sqrt(-2*p_n_1/kappa + 1);
         t_PointReal s_hat_n_1_norm = q_n_1*coeff1_inv;
         //Matrix2d B_hat_E_new = s_hat_n_1_norm*(pow(Je_tr,2./d)/mu)*s_hat_tr.normalized() + Matrix2d::Identity()*(SigmaSquared.trace()/d);
 
-        PointVector2r vB_hat_E_new = s_hat_n_1_norm*(Je_tr/mu)*v_s_hat_tr.normalized() +
+        const PointVector2r vB_hat_E_new = s_hat_n_1_norm*(Je_tr/mu)*v_s_hat_tr.normalized() +
                                      PointVector2r::Constant(1)*(Je_new);
 
-        PointVector2r vSigma_new = vB_hat_E_new.array().sqrt().matrix();
+        const PointVector2r vSigma_new = vB_hat_E_new.array().sqrt().matrix();
         Fe = U*vSigma_new.asDiagonal()*V.transpose();
         Jp_inv *= Je_new/Je_tr;
-
     }
 
+//    t_PointReal smstp = smoothstep((Jp_inv-0.5)/2.);
 
 
     /*

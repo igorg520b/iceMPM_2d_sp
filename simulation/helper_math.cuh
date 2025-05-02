@@ -3,7 +3,6 @@
 
 #include "givens.cuh"
 #include <Eigen/Core>
-#include <cuda.h>
 #include <cuda_runtime.h>
 
 #include "parameters_sim.h"

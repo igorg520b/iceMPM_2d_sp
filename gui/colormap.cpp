@@ -144,7 +144,12 @@ const std::array<std::vector<Eigen::Vector3f>, static_cast<size_t>(ColorMap::Pal
          {0.95f, 0.8f, 1.0f},
          {1.0f, 0.8f, 0.9f},
          {0.9f, 0.9f, 0.9f},
-         {1.0f, 1.0f, 0.8f}}
+         {1.0f, 1.0f, 0.8f}},
+
+        //NCD
+        {{0.f, 0.7f, 0.f},
+                             {0.7f, 0.f, 0.f},
+                             {0.1f, 0.1f, 0.1f}}
 
 }};
 

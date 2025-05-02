@@ -46,9 +46,6 @@ public:
     double getYoungsModulus() {return prms->YoungsModulus;}
     void setYoungsModulus(double val) { prms->YoungsModulus = (float)val; prms->ComputeLame(); }
 
-    Q_PROPERTY(double p_SurfDensity READ getSurfDensity NOTIFY propertyChanged)
-    double getSurfDensity() {return prms->SurfaceDensity;}
-
     Q_PROPERTY(QString p_YM READ getYM NOTIFY propertyChanged)
     QString getYM() {return QString("%1 Pa").arg(prms->YoungsModulus, 0, 'e', 2);}
 

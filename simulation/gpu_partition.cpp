@@ -267,7 +267,7 @@ void GPU_Partition::p2g()
     const int &tpb = prms->tpb_P2G;
     const int blocksPerGrid = (n + tpb - 1) / tpb;
     partition_kernel_p2g<<<blocksPerGrid, tpb, 0, streamCompute>>>(gridX, nGridPitch,
-                         nPts_partition, nPtsPitch, pts_array, grid_array);
+                         nPts_partition, nPtsPitch, grid_array);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("p2g kernel");
 }
 
@@ -298,7 +298,7 @@ void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer, int
 
     partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ, nGridPitch,
                                                              nPts_partition, nPtsPitch,
-                                                             pts_array, grid_array, applyGlensLaw);
+                                                             grid_array, applyGlensLaw);
 
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("g2p kernel");
 }
