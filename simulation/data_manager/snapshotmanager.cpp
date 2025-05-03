@@ -270,7 +270,7 @@ void icy::SnapshotManager::SplitIntoPartitionsAndTransferToDevice()
     // allocate GPU partitions
     model->gpu.initialize();
     model->gpu.split_hssoa_into_partitions();
-    model->gpu.allocate_arrays();
+    model->gpu.allocate_device_arrays();
     model->gpu.transfer_to_device();
 }
 

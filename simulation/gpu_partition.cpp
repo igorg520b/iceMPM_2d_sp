@@ -38,8 +38,8 @@ void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offse
     }
 
     // transfer error code
-    err = cudaMemcpyFromSymbolAsync(&error_code, gpu_error_indicator, sizeof(error_code), 0, cudaMemcpyDeviceToHost,
-                                    streamCompute);
+    err = cudaMemcpyFromSymbolAsync(&error_code, gpu_error_indicator, sizeof(error_code), 0,
+                                    cudaMemcpyDeviceToHost, streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("transfer_from_device");
 
     // transfer the count of disabled points
@@ -47,6 +47,25 @@ void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offse
                                     sizeof(disabled_points_count), 0, cudaMemcpyDeviceToHost, streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("transfer_from_device; disabled_points_count");
 }
+
+
+void GPU_Partition::check_error_code()
+{
+    cudaError_t err;
+    err = cudaSetDevice(Device);
+    if(err != cudaSuccess) throw std::runtime_error("check_error_code() set");
+
+    // transfer error code
+    cudaDeviceSynchronize();
+    err = cudaMemcpyFromSymbol(&error_code, gpu_error_indicator, sizeof(error_code), 0, cudaMemcpyDeviceToHost);
+    if(err != cudaSuccess) throw std::runtime_error("transfer_from_device");
+    if(error_code)
+    {
+        LOGR("error {:#x}", error_code);
+        throw std::runtime_error("error code gpu");
+    }
+}
+
 
 
 void GPU_Partition::transfer_points_from_soa_to_device(HostSideSOA &hssoa, int point_idx_offset)
@@ -106,6 +125,40 @@ void GPU_Partition::transfer_grid_data_to_device(GPU_Implementation5* gpu)
                           transfer_size, cudaMemcpyHostToDevice, streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("transfer_grid_data_to_device bc ny");
 }
+
+
+void GPU_Partition::update_constants()
+{
+    cudaSetDevice(Device);
+    cudaError_t err = cudaMemcpyToSymbol(gpu_error_indicator, &error_code, sizeof(error_code));
+    if(err != cudaSuccess) throw std::runtime_error("gpu_error_indicator initialization");
+    err = cudaMemcpyToSymbol(gprms, prms, sizeof(SimParams));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: gprms");
+
+    err = cudaMemcpyToSymbol(partition_buffer_pts, &pts_array, sizeof(t_PointReal*));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants");
+
+    err = cudaMemcpyToSymbol(partition_buffer_grid, &grid_array, sizeof(t_GridReal*));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: grid_array");
+
+    err = cudaMemcpyToSymbol(partition_gridX, &GridX_partition, sizeof(size_t));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: GridX_partition");
+
+    err = cudaMemcpyToSymbol(partition_pitch_grid, &nGridPitch, sizeof(size_t));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: partition_pitch_grid");
+
+    err = cudaMemcpyToSymbol(partition_count_pts, &nPts_partition, sizeof(size_t));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: partition_count_pts");
+
+    err = cudaMemcpyToSymbol(partition_pitch_pts, &nPtsPitch, sizeof(size_t));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: partition_pitch_pts");
+
+    err = cudaMemcpyToSymbol(partition_grid_status, &grid_status_array, sizeof(uint8_t*));
+    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: partition_grid_status");
+
+    LOGR("Constant symbols copied to device {}; partition {}", Device, PartitionID);
+}
+
 
 
 void GPU_Partition::update_current_field(const WindAndCurrentInterpolator &wac)
@@ -228,22 +281,6 @@ void GPU_Partition::allocate(const int n_points_capacity, const int gx)
 }
 
 
-void GPU_Partition::update_constants()
-{
-    cudaSetDevice(Device);
-    cudaError_t err = cudaMemcpyToSymbol(gpu_error_indicator, &error_code, sizeof(error_code));
-    if(err != cudaSuccess) throw std::runtime_error("gpu_error_indicator initialization");
-    err = cudaMemcpyToSymbol(gprms, prms, sizeof(SimParams));
-    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants: gprms");
-
-    err = cudaMemcpyToSymbol(dev_buffer_pts, &pts_array, sizeof(t_PointReal*));
-    if(err!=cudaSuccess) throw std::runtime_error("cuda_update_constants");
-
-    //dev_buffer_pts
-
-    LOGR("Constant symbols copied to device {}; partition {}", Device, PartitionID);
-}
-
 
 
 
@@ -266,9 +303,10 @@ void GPU_Partition::p2g()
     const int &n = nPts_partition;
     const int &tpb = prms->tpb_P2G;
     const int blocksPerGrid = (n + tpb - 1) / tpb;
-    partition_kernel_p2g<<<blocksPerGrid, tpb, 0, streamCompute>>>(gridX, nGridPitch,
-                         nPts_partition, nPtsPitch, grid_array);
+    partition_kernel_p2g<<<blocksPerGrid, tpb, 0, streamCompute>>>();
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("p2g kernel");
+
+    check_error_code();
 }
 
 void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind, const float interpolation_coeff)
@@ -279,11 +317,10 @@ void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind
     int tpb = prms->tpb_Upd;
     int nBlocks = (nGridNodes + tpb - 1) / tpb;
 
-    partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(nGridNodes,
-                                                                      nGridPitch, grid_array,
-                                                                      simulation_time, grid_status_array, vWind,
-                                                                      interpolation_coeff);
+    partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(simulation_time);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
+
+    check_error_code();
 }
 
 void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw)
@@ -296,11 +333,11 @@ void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer, int
     const int &tpb = prms->tpb_G2P;
     const int nBlocks = (n + tpb - 1) / tpb;
 
-    partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ, nGridPitch,
-                                                             nPts_partition, nPtsPitch,
-                                                             grid_array, applyGlensLaw);
+    partition_kernel_g2p<<<nBlocks, tpb, 0, streamCompute>>>(recordPQ);
 
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("g2p kernel");
+
+    check_error_code();
 }
 
 

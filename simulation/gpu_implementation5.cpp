@@ -105,10 +105,8 @@ void GPU_Implementation5::initialize()
         double totalMemMB = static_cast<double>(deviceProp.totalGlobalMem) / (1024.0 * 1024.0);
         LOGR("      Total Global Memory: {:>.2} MB", totalMemMB);
         LOGR("      Clock Rate: {:>.2} GHz", deviceProp.clockRate / (1000.0 * 1000.0)); // Convert kHz to GHz
-        LOGR("      Number of SMs: {}", deviceProp.multiProcessorCount);
+        LOGR("      Number of SMs: {}\n", deviceProp.multiProcessorCount);
     }
-
-
 
     partitions.clear();
     partitions.resize(nPartitions);
@@ -154,12 +152,11 @@ void GPU_Implementation5::allocate_host_arrays_points()
 }
 
 
-void GPU_Implementation5::allocate_arrays()
+void GPU_Implementation5::allocate_device_arrays()
 {
-    LOGV("GPU_Implementation5::allocate_arrays()");
+    LOGV("GPU_Implementation5::allocate_device_arrays()");
     int GridX_size = partitions.front().GridX_partition;
     partitions.front().allocate(model->prms.nPtsInitial, GridX_size);
-    LOGV("GPU_Implementation5::allocate_arrays() done");
 }
 
 
@@ -205,9 +202,9 @@ void GPU_Implementation5::transfer_from_device()
         cudaStreamSynchronize(p.streamCompute);
         if(p.error_code)
         {
-            LOGR("P {}; error code {}", p.PartitionID, p.error_code);
             // throw std::runtime_error("error code");
-            this->error_code = error_code;
+            this->error_code = p.error_code;
+            LOGR("P {}; error code {}; this error code {}", p.PartitionID, p.error_code, this->error_code);
         }
     }
 

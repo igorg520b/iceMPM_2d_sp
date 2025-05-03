@@ -17,21 +17,11 @@
 
 
 // kernels
-__global__ void partition_kernel_p2g(const int gridX, const int pitch_grid,
-                              const int count_pts, const int pitch_pts,
-                                     t_GridReal *buffer_grid);
+__global__ void partition_kernel_p2g();
 
-__global__ void partition_kernel_update_nodes(const int nNodes, const int pitch_grid,
-                                              t_GridReal *_buffer_grid,
-                                              t_PointReal simulation_time, const uint8_t *grid_status,
-                                              const GridVector2r vWind,
-                                              const float interpolation_coeff);
+__global__ void partition_kernel_update_nodes(const t_PointReal simulation_time);
 
-__global__ void partition_kernel_g2p(const bool recordPQ,
-                                     const int pitch_grid,
-                                     const int count_pts, const int pitch_pts,
-                                     const t_GridReal *buffer_grid,
-                                     int applyGlensLaw);
+__global__ void partition_kernel_g2p(const bool recordPQ);
 
 
 
@@ -103,13 +93,13 @@ struct GPU_Partition
     int Device;
     static SimParams *prms;
 
-    int nPts_partition;    // number of points including disabled
-    int GridX_partition;   // size of the portion of the grid for which this partition is "responsible"
+    size_t nPts_partition;    // number of points including disabled
+    size_t GridX_partition;   // size of the portion of the grid for which this partition is "responsible"
 
     // stream and events
     cudaStream_t streamCompute;
 
-    uint8_t error_code;             // set by kernels if there is something wrong
+    uint32_t error_code;             // set by kernels if there is something wrong
     int disabled_points_count;      // counts how many points are marked as disabled in the partition
 
     // pointers to device-side arrays
@@ -138,6 +128,7 @@ struct GPU_Partition
 
 private:
     bool initialized = false;
+    void check_error_code();
 };
 
 

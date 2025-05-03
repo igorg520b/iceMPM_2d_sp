@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20.2)
 project(WaveIce_MPM LANGUAGES CXX C CUDA)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored -use_fast_maths")
+#set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored -use_fast_maths")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 option(BUILD_CLI_VERSION "Build CLI version" ON)
