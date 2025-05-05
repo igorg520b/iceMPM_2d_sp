@@ -306,7 +306,7 @@ void GPU_Partition::p2g()
     partition_kernel_p2g<<<blocksPerGrid, tpb, 0, streamCompute>>>();
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("p2g kernel");
 
-    check_error_code();
+//    check_error_code();
 }
 
 void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind, const float interpolation_coeff)
@@ -320,7 +320,7 @@ void GPU_Partition::update_nodes(float simulation_time, const GridVector2r vWind
     partition_kernel_update_nodes<<<nBlocks, tpb, 0, streamCompute>>>(simulation_time);
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("update_nodes");
 
-    check_error_code();
+//    check_error_code();
 }
 
 void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw)
@@ -337,7 +337,7 @@ void GPU_Partition::g2p(const bool recordPQ, const bool enablePointTransfer, int
 
     if(cudaGetLastError() != cudaSuccess) throw std::runtime_error("g2p kernel");
 
-    check_error_code();
+//    check_error_code();
 }
 
 

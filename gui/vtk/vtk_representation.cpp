@@ -238,9 +238,9 @@ void icy::VisualRepresentation::SynchronizeValues()
         for(int i=0;i<nPts;i++)
         {
             SOAIterator s = model->gpu.hssoa.begin()+i;
-            pts_colors->SetValue((vtkIdType)(i*3+0), 255);
-            pts_colors->SetValue((vtkIdType)(i*3+1), 0);
-            pts_colors->SetValue((vtkIdType)(i*3+2), 0);
+            pts_colors->SetValue((vtkIdType)(i*3+0), 240);
+            pts_colors->SetValue((vtkIdType)(i*3+1), 122);
+            pts_colors->SetValue((vtkIdType)(i*3+2), 122);
         }
     }
     else if(VisualizingVariable == VisOpt::Jp_inv)

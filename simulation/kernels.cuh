@@ -19,7 +19,7 @@ constexpr uint32_t error_code_point_vel_nan = 0x0002;           // point's veloc
 constexpr uint32_t error_code_point_jump_cells = 0x0004;    // point is flying too fast
 constexpr uint32_t error_code_point_left_area = 0x0008;     // point is outside of bouds
 constexpr uint32_t error_code_point_Bp_nan = 0x0010;
-constexpr uint32_t error_code_point_Fe_nan = 0x0010;
+constexpr uint32_t error_code_point_Fe_nan = 0x0020;
 
 constexpr uint32_t error_code_grid_p2g_nan_vel = 0x0100;    // during P2G writing NaN velocity into grid
 constexpr uint32_t error_code_grid_p2g_nan_mass = 0x0200;   // during P2G writing NaN velocity into grid
@@ -69,14 +69,11 @@ __global__ void partition_kernel_p2g()
     Eigen::Vector2i cell_i((int)(cell & 0xffff), (int)(cell >> 16));
 
     const PointMatrix2r PFt = KirchhoffStress_Wolper(Fe);
-    if(isnan(Fe(0,0)) || isnan(Fe(1,0)) || isnan(Fe(0,1)) || isnan(Fe(1,1))) printf("p2g: Fe contains NaN\n");
-    if(isnan(PFt(0,0)) || isnan(PFt(1,0)) || isnan(PFt(0,1)) || isnan(PFt(1,1))) printf("p2g: PFt contains NaN\n");
     // PFt = Water(buffer_pts[pt_idx + pitch_pts*SimParams::idx_Jp_inv]);
 //    PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv)*PFt;
 
     // version that accounts for surface density change
     const PointMatrix2r subterm2 = particle_mass*Bp - (gprms.dt_vol_Dpinv*Jp_inv*thickness)*PFt;
-    if(isnan(subterm2(0,0)) || isnan(subterm2(1,0)) || isnan(subterm2(0,1)) || isnan(subterm2(1,1))) printf("subterm2 contains NaN\n");
 
     PointArray2r ww[3];
     CalculateWeightCoeffs(pos, ww);
@@ -448,6 +445,7 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
 
     if(p_tr < DP_threshold_p)
     {
+        // tension
         if(Jp_inv < 0.1)
         {
             case1 = 0;
@@ -471,14 +469,14 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
         // determine q_yeld from the combination of DP / elliptic yield surface, whichever is lower
         if(p_tr < pmax)
         {
-            t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_tr)*(p_tr-pmin))*qmax/(pmax-pmin);
-
-            t_PointReal q_from_dp = max((double)0, (p_tr-DP_threshold_p)*tan_phi);
+            t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_tr)*(p_tr-pmin))*qmax/(pmax-pmin);  // elliptic
+            t_PointReal q_from_dp = max((double)0, (p_tr-DP_threshold_p)*tan_phi); // linear Drucker-Prager
             q_yield = min(q_from_failure_surface, q_from_dp);
         }
         else
         {
             // such hight pressures should not happen - everythigng is liquified
+            q_yield = 0;
         }
 
         if(q_tr > q_yield)
@@ -487,12 +485,13 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
             // plasticity will be applied
 
             // estimate the new P based on the ridge height
-            //        t_PointReal p_ridge_max = SimParams::g * gprms.IceDensity * initial_thickness * Jp_inv;
+            const double coeff0 = 0.02; // for testing only
+            t_PointReal p_ridge_max = coeff0 * SimParams::g * gprms.IceDensity * initial_thickness * Jp_inv;
 
-            p_n_1 = p_tr;
+            p_n_1 = min(p_tr, p_ridge_max);
 
-            // re-evaluate q
-            if(p_tr < pmax)
+            // re-evaluate q (to find the new "projected" value)
+            if(p_n_1 < pmax)
             {
                 const t_PointReal q_from_dp = max((double)0, (p_n_1-DP_threshold_p)*tan_phi);
                 const t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_n_1)*(p_n_1-pmin))*qmax/(pmax-pmin);
@@ -503,7 +502,7 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
                 q_n_1 = 0;
             }
 
-            // given p_n_1 and q_n_1, compute Fe_new
+            // given p_n_1 and q_n_1, compute the new Fe
             const t_PointReal Je_new = sqrt(-2*p_n_1/kappa + 1);
             t_PointReal s_hat_n_1_norm = q_n_1*coeff1_inv;
             //Matrix2d B_hat_E_new = s_hat_n_1_norm*(pow(Je_tr,2./d)/mu)*s_hat_tr.normalized() + Matrix2d::Identity()*(SigmaSquared.trace()/d);
@@ -517,6 +516,7 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
         }
     }
 
+    // check if something went wrong
     if(isnan(Fe(0,0)) || isnan(Fe(1,0)) || isnan(Fe(0,1)) || isnan(Fe(1,1)))
     {
         printf("after invoking Wolper Drucker Prager, Fe is NaN\n");
@@ -525,56 +525,11 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
         printf("q_yield %e\n", q_yield);
         printf("projected p, q %e, %e\n", p_n_1, q_n_1);
         printf("case %d\n", case1);
-
+        gpu_error_indicator |= error_code_point_Fe_nan;
     }
-
 
 //    t_PointReal smstp = smoothstep((Jp_inv-0.5)/2.);
 
-
-    /*
-    if(p_tr < DP_threshold_p || Jp_inv < 1)
-    {
-        // stretching in tension
-        t_PointReal p_new = 0;
-        t_PointReal Je_new = sqrt(-2*p_new/kappa + 1);
-        t_PointReal sqrt_Je_new = sqrt(Je_new);
-
-        PointVector2r vSigma_new(sqrt_Je_new,sqrt_Je_new); //= Vector2d::Constant(1.)*sqrt(Je_new);  //Matrix2d::Identity() * pow(Je_new, 1./(double)d);
-        Fe = U*vSigma_new.asDiagonal()*V.transpose();
-        Jp_inv *= Je_new/Je_tr;
-    }
-    else
-    {
-        t_PointReal q_n_1;
-
-        if(p_tr > pmax)
-        {
-            q_n_1 = 0;
-        }
-        else
-        {
-            t_PointReal q_from_dp = (p_tr-DP_threshold_p)*tan_phi;
-            //q_n_1 = min(q_from_dp,qmax);
-
-            const t_PointReal pmin = -gprms.IceTensileStrength;
-            t_PointReal q_from_failure_surface = 2*sqrt((pmax-p_tr)*(p_tr-pmin))*qmax/(pmax-pmin);
-            q_n_1 = min(q_from_failure_surface, q_from_dp);
-        }
-
-        if(q_tr >= q_n_1)
-        {
-            // project onto YS
-            t_PointReal s_hat_n_1_norm = q_n_1*coeff1_inv;
-            //Matrix2d B_hat_E_new = s_hat_n_1_norm*(pow(Je_tr,2./d)/mu)*s_hat_tr.normalized() + Matrix2d::Identity()*(SigmaSquared.trace()/d);
-            PointVector2r vB_hat_E_new = s_hat_n_1_norm*(Je_tr/mu)*v_s_hat_tr.normalized() +
-                                    PointVector2r::Constant(1)*(vSigmaSquared.sum()/d);
-            PointVector2r vSigma_new = vB_hat_E_new.array().sqrt().matrix();
-            Fe = U*vSigma_new.asDiagonal()*V.transpose();
-        }
-    }
-
-*/
 }
 
 

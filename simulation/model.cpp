@@ -45,7 +45,7 @@ bool icy::Model::Step()
     gpu.transfer_from_device();
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
-    LOGR("finished {:>8.1} ({}); host pts {}; cap {}; err {:#x}", prms.SimulationTime,
+    LOGR("finished {:>8.1f} of {:>8.1f} ({}); host pts {}; cap {}; err {:#x}", prms.SimulationTime, prms.SimulationEndTime,
          prms.AnimationFrameNumber(), gpu.hssoa.size, gpu.hssoa.capacity, gpu.error_code);
 
     // print out timings
