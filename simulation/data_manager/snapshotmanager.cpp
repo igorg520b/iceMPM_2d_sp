@@ -658,6 +658,7 @@ void icy::SnapshotManager::PrepareFrameArrays()
 
     rgb_img.resize(gridSize*3);
     rgb_img_Jpinv.resize(gridSize*3);
+    rgb_img_ridges.resize(gridSize*3);
 
 #pragma omp parallel for
     for(int i=0;i<gx;i++)
@@ -685,10 +686,17 @@ void icy::SnapshotManager::PrepareFrameArrays()
                 if(Jp_inv>1.) coeff2 = std::clamp(std::abs(Jp_inv-1)*0.5/range, 0., 1.);
                 std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
 
+                // colors for ridges
+                const float val_ridges = (Jp_inv-1.)/range;
+                double alpha = val_ridges > 0 ? 1 : 0;
+                std::array<uint8_t, 3> c3 = colormap.getColor(ColorMap::Palette::Ridges, val_ridges);
+                std::array<uint8_t, 3> c4 = colormap.mergeColors(_rgb, c3, alpha);
+
                 for(int k=0;k<3;k++)
                 {
                     rgb_img[img_idx+k] = _rgb[k];
                     rgb_img_Jpinv[img_idx+k] = c2[k];
+                    rgb_img_ridges[img_idx+k] = c4[k];
                 }
 
             }
@@ -700,6 +708,7 @@ void icy::SnapshotManager::PrepareFrameArrays()
                     const int idx_special = ((i+ox) + (j+oy)*width)*3+k;
                     const uint8_t val_color = model->gpu.original_image_colors_rgb[idx_special];
                     rgb_img[img_idx + k] = rgb_img_Jpinv[img_idx + k] = val_color;
+                    rgb_img_ridges[img_idx + k] = val_color;
                 }
             }
         }
@@ -774,8 +783,10 @@ void icy::SnapshotManager::SaveImagesJGP(const int frame)
     fs::path outputDir = "output";
     fs::path imageDir1 = "images/rgb";
     fs::path imageDir2 = "images/Jpinv";
+    fs::path imageDir3 = "images/ridges";
     fs::path targetPath1 = outputDir / SimulationTitle / imageDir1;
     fs::path targetPath2 = outputDir / SimulationTitle / imageDir2;
+    fs::path targetPath3 = outputDir / SimulationTitle / imageDir3;
     fs::create_directories(targetPath1);
     fs::create_directories(targetPath2);
 
@@ -783,19 +794,18 @@ void icy::SnapshotManager::SaveImagesJGP(const int frame)
 
     fs::path fullPath1 = targetPath1 / baseName;
     fs::path fullPath2 = targetPath2 / baseName;
+    fs::path fullPath3 = targetPath3 / baseName;
 
     const int &gx = model->prms.GridXTotal;
     const int &gy = model->prms.GridYTotal;
 
-
     int success1 = stbi_write_jpg(fullPath1.string().c_str(), gx, gy, 3, rgb_img.data(), 80);
     int success2 = stbi_write_jpg(fullPath2.string().c_str(), gx, gy, 3, rgb_img_Jpinv.data(), 80);
+    int success3 = stbi_write_jpg(fullPath3.string().c_str(), gx, gy, 3, rgb_img_ridges.data(), 80);
 
-    if(!success1 || !success2)
+    if(!success1 || !success2 || !success3)
     {
         LOGV("failed saving frame images as JPG");
     }
 }
-
-
 

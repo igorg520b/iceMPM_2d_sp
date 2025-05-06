@@ -35,6 +35,7 @@ void SimParams::Reset()
     IceTensileStrength = 10e6;
     IceShearStrength = 1e6;
     IceTensileStrength2 = 10e6;
+    RidgeFormationCoeff = 30;
 
     DP_phi = 62;
     DP_threshold_p = 1e4;
@@ -99,6 +100,7 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
 
     if(doc.HasMember("DP_phi")) DP_phi = doc["DP_phi"].GetDouble();
     if(doc.HasMember("DP_threshold_p")) DP_threshold_p = doc["DP_threshold_p"].GetDouble();
+    if(doc.HasMember("RidgeFormationCoeff")) RidgeFormationCoeff = doc["RidgeFormationCoeff"].GetDouble();
 
     if(doc.HasMember("tpb_P2G")) tpb_P2G = doc["tpb_P2G"].GetInt();
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();
@@ -155,7 +157,8 @@ void SimParams::Printout()
                              PoissonsRatio, YoungsModulus));
     spdlog::info(fmt::format(fmt::runtime("IceCompressiveStrength: {}, IceTensileStrength: {}, IceShearStrength: {}, IceTensileStrength2: {}"),
                              IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2));
-
+    spdlog::info(fmt::format(fmt::runtime("RidgeFormationCoeff: {}"),
+                             RidgeFormationCoeff));
     // points
     spdlog::info("");
     spdlog::info(fmt::format(fmt::runtime("Points:")));

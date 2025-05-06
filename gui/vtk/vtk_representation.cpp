@@ -10,6 +10,12 @@
 
 icy::VisualRepresentation::VisualRepresentation()
 {
+    populateLut(ColorMap::Palette::Pressure, lut_Pressure);
+    populateLut(ColorMap::Palette::P2, lut_P2);
+    populateLut(ColorMap::Palette::ANSYS, lut_ANSYS);
+    populateLut(ColorMap::Palette::Ridges, lut_Ridges);
+
+
     // points
     pts_colors->SetNumberOfComponents(3);
     pts_colors->SetName("pts_colors");
@@ -33,8 +39,8 @@ icy::VisualRepresentation::VisualRepresentation()
 
     // scalar bar
     //scalarBar->SetLookupTable(lutMPM);
-    scalarBar->SetMaximumWidthInPixels(130);
-    scalarBar->SetBarRatio(0.07);
+    scalarBar->SetMaximumWidthInPixels(150);
+    scalarBar->SetBarRatio(0.1);
     scalarBar->SetMaximumHeightInPixels(200);
     scalarBar->GetPositionCoordinate()->SetCoordinateSystemToNormalizedDisplay();
     scalarBar->GetPositionCoordinate()->SetValue(0.01,0.015, 0.0);
@@ -196,7 +202,7 @@ void icy::VisualRepresentation::SynchronizeValues()
 
     // point visibility and color
     actor_points->VisibilityOn();
-    scalarBar->VisibilityOff();
+//    scalarBar->VisibilityOff();
     points_mapper->ScalarVisibilityOn();
     points_mapper->SetColorModeToDirectScalars();
     points_mapper->Modified();
@@ -258,6 +264,25 @@ void icy::VisualRepresentation::SynchronizeValues()
             std::array<uint8_t, 3> c2 = colormap.mergeColors(rgb, c, alpha);
             for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(i*3+k), c2[k]);
         }
+    }
+    else if(VisualizingVariable == VisOpt::ridges)
+    {
+        for(int i=0;i<nPts;i++)
+        {
+            SOAIterator s = model->gpu.hssoa.begin()+i;
+
+            double val = s->getValue(SimParams::idx_Jp_inv)-1.;
+            double value = (val)/range;
+            double alpha = val > 0 ? 1 : 0;
+            int pt_idx = s->getValueInt(SimParams::integer_point_idx);
+            uint32_t rgb = model->gpu.point_colors_rgb[pt_idx];
+            std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Ridges, value);
+            std::array<uint8_t, 3> c2 = colormap.mergeColors(rgb, c, alpha);
+            for(int k=0;k<3;k++) pts_colors->SetValue((vtkIdType)(i*3+k), c2[k]);
+        }
+        lut_Ridges->SetTableRange(0, range);
+        scalarBar->SetLookupTable(lut_Ridges);
+        scalarBar->SetLabelFormat("%.2f");
     }
     else if(VisualizingVariable == VisOpt::P)
     {
@@ -328,5 +353,40 @@ void icy::VisualRepresentation::ChangeVisualizationOption(int option)
 }
 
 
+
+
+void icy::VisualRepresentation::populateLut(ColorMap::Palette palette, vtkNew<vtkLookupTable>& table)
+{
+    const std::vector<Eigen::Vector3f>& colorTable = ColorMap::getColorTable(palette);
+    int size = static_cast<int>(colorTable.size());
+
+    if (size < 2) {
+        std::cerr << "Error: Colormap must have at least two colors." << std::endl;
+        return;
+    }
+
+    const int m = 256;  // Number of colors in the lookup table
+    table->SetNumberOfTableValues(m);
+    table->Build();
+
+    for (int i = 0; i < m; ++i) {
+        float t = static_cast<float>(i) / (m - 1); // Normalize index to [0, 1]
+
+        // Scale t to the range [0, size-1] for interpolation
+        float scaledT = t * (size - 1);
+        int lowerIdx = static_cast<int>(std::floor(scaledT));
+        int upperIdx = static_cast<int>(std::ceil(scaledT));
+        float localT = scaledT - lowerIdx; // Fractional part for interpolation
+
+        // Interpolate RGB components
+        const Eigen::Vector3f& lowerColor = colorTable[lowerIdx];
+        const Eigen::Vector3f& upperColor = colorTable[upperIdx];
+
+        Eigen::Vector3f interpolatedColor = (1.0f - localT) * lowerColor + localT * upperColor;
+
+        // Set interpolated color in the lookup table
+        table->SetTableValue(i, interpolatedColor[0], interpolatedColor[1], interpolatedColor[2], 1.0);
+    }
+}
 
 

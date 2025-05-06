@@ -92,6 +92,7 @@ private Q_SLOTS:
 
     void parameters_updated();
     void print_camera_params();
+    void toggle_scalarbar(bool checked);
 
 private:
     void updateGUI();   // when simulation is started/stopped or when a step is advanced

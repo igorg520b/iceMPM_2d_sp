@@ -52,7 +52,7 @@ public:
     icy::Model *model;
     double wind_visualization_time;
 
-    enum VisOpt { none, status, Jp_inv, P, Q, color, v_u, v_v, v_norm, thickness, regions};
+    enum VisOpt { none, status, Jp_inv, P, Q, color, v_u, v_v, v_norm, thickness, regions, ridges};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};
@@ -63,12 +63,14 @@ public:
 
     vtkNew<vtkActor> actor_points;
     vtkNew<vtkActor> raster_actor;
-
-    vtkNew<vtkScalarBarActor> scalarBar;
     vtkNew<vtkTextActor> actorText;
+    vtkNew<vtkScalarBarActor> scalarBar;
 
 private:
     ColorMap colormap;
+
+    vtkNew<vtkLookupTable> lut_Pressure, lut_P2, lut_ANSYS, lut_Ridges;
+    void populateLut(ColorMap::Palette palette, vtkNew<vtkLookupTable>& table);
 
     // points
     vtkNew<vtkPoints> points;

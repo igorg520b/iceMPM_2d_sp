@@ -87,7 +87,7 @@ MainWindow::MainWindow(QWidget *parent)
     renderer->AddActor(representation.actor_points);
     renderer->AddActor(representation.raster_actor);
     renderer->AddActor(representation.actorText);
-//    renderer->AddActor(representation.scalarBar);
+    renderer->AddActor(representation.scalarBar);
 
     // populate combobox
     QMetaEnum qme = QMetaEnum::fromType<icy::VisualRepresentation::VisOpt>();
@@ -180,6 +180,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->actionStart_Pause, &QAction::triggered, this, &MainWindow::simulation_start_pause);
     connect(ui->actionLoad_Parameters, &QAction::triggered, this, &MainWindow::load_parameter_triggered);
     connect(ui->actionPrint_Camera_Params, &QAction::triggered, this, &MainWindow::print_camera_params);
+    connect(ui->actionView_ScalarBar, &QAction::triggered, this, &MainWindow::toggle_scalarbar);
 
     connect(qdsbValRange,QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MainWindow::limits_changed);
     connect(qsbIntentionalSlowdown,QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::spinbox_slowdown_value_changed);
@@ -516,4 +517,11 @@ void MainWindow::print_camera_params()
     qDebug() << "  Size: (" << targetVisibleWidthWorld << "x" << targetVisibleHeightWorld << ")";
     // Optional: print ratio check
     // qDebug() << "  Calculated Ratio Check:" << (targetVisibleWidthWorld / targetVisibleHeightWorld);
+}
+
+
+void MainWindow::toggle_scalarbar(bool checked)
+{
+    representation.scalarBar->SetVisibility(checked);
+    renderWindow->Render();
 }

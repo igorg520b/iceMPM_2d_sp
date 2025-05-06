@@ -42,6 +42,7 @@
     <addaction name="action_camera_reset"/>
     <addaction name="actionTake_Screenshots"/>
     <addaction name="actionPrint_Camera_Params"/>
+    <addaction name="actionView_ScalarBar"/>
    </widget>
    <widget class="QMenu" name="menuSimulation">
     <property name="title">
@@ -155,6 +156,17 @@
   <action name="actionPrint_Camera_Params">
    <property name="text">
     <string>Print Camera Params</string>
+   </property>
+  </action>
+  <action name="actionView_ScalarBar">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>View ScalarBar</string>
+   </property>
+   <property name="shortcut">
+    <string>F6</string>
    </property>
   </action>
  </widget>

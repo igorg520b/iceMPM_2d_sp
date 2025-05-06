@@ -43,7 +43,7 @@ private:
 
     std::vector<uint8_t> count;   // used for counting points per cell and image generation
     std::vector<uint8_t> rgb;
-    std::vector<uint8_t> rgb_img_Jpinv, rgb_img;
+    std::vector<uint8_t> rgb_img_Jpinv, rgb_img, rgb_img_ridges;
     std::vector<float> vis_r, vis_g, vis_b, vis_alpha, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
     void PrepareFrameArrays(); // invoked from SaveFrame
 

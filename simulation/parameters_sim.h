@@ -99,6 +99,7 @@ public:
     double IceDensity, PoissonsRatio, YoungsModulus;
     double IceCompressiveStrength, IceTensileStrength, IceShearStrength, IceTensileStrength2;
     double DP_phi, DP_threshold_p;
+    double RidgeFormationCoeff;
     double cellsize;
     double ParticleVolume, ParticleViewSize;
 

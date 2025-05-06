@@ -383,12 +383,6 @@ __device__ void ComputePQ(t_PointReal &Je_tr, t_PointReal &p_tr, t_PointReal &q_
 
 
 
-
-
-
-
-
-
 __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const uint16_t &grain,
                             const t_PointReal &p, const t_PointReal &q, const t_PointReal &strength)
 {
@@ -409,14 +403,6 @@ __device__ void CheckIfPointIsInsideFailureSurface(uint32_t &utility_data, const
         t_PointReal y = (1.+2.*beta)*q*q + M_sq*(p+beta*pmax) * (p-pmax);
         if(y > 0) utility_data |= status_crushed;
     }
-}
-
-
-__device__ t_PointReal smoothstep(t_PointReal x)
-{
-    if(x<0) x = 0;
-    if(x>1) x = 1;
-    return (x*x)*(3.0 - 2.0 * x);
 }
 
 
@@ -485,8 +471,8 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
             // plasticity will be applied
 
             // estimate the new P based on the ridge height
-            const double coeff0 = 0.02; // for testing only
-            t_PointReal p_ridge_max = coeff0 * SimParams::g * gprms.IceDensity * initial_thickness * Jp_inv;
+//            const t_PointReal p_ridge_max = gprms.RidgeFormationCoeff * SimParams::g * gprms.IceDensity * initial_thickness * (pow(Jp_inv,1));
+            const t_PointReal p_ridge_max = gprms.RidgeFormationCoeff * SimParams::g * gprms.IceDensity * initial_thickness * (Jp_inv*Jp_inv);
 
             p_n_1 = min(p_tr, p_ridge_max);
 
@@ -614,6 +600,18 @@ __device__ void GetParametersForGrain(uint32_t utility_data, t_PointReal &pmin, 
     beta = gprms.IceTensileStrength/gprms.IceCompressiveStrength;
     mSq = (4.*qmax*qmax*(1.+2.*beta))/((pmax-pmin)*(pmax-pmin));
 }
+
+
+
+__device__ t_PointReal smoothstep(t_PointReal x)
+{
+    if(x<0) x = 0;
+    if(x>1) x = 1;
+    return (x*x)*(3.0 - 2.0 * x);
+}
+
+
+
 
 /*
 __device__ GridVector2r get_wind_vector(float lat, float lon, float tb)
