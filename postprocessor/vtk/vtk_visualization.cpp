@@ -13,6 +13,7 @@ VTKVisualization::VTKVisualization(FrameData &fd_) : frameData(fd_)
     populateLut(ColorMap::Palette::Pressure, lut_Pressure);
     populateLut(ColorMap::Palette::P2, lut_P2);
     populateLut(ColorMap::Palette::ANSYS, lut_ANSYS);
+    populateLut(ColorMap::Palette::Ridges, lut_ridges);
 
     // text
     constexpr int fontSize = 20;
@@ -132,6 +133,15 @@ void VTKVisualization::SynchronizeValues()
 
                     for(int k=0;k<3;k++) renderedImage[((i+ox)+(j+oy)*width)*3+k] = c2[k];
                 }
+                if(VisualizingVariable == ridges && count > 0)
+                {
+                    float Jp_inv = frameData.vis_Jpinv[idx2];
+                    const float val = (Jp_inv-1.)/range;
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Ridges, val);
+                    float coeff2 = val > 0 ? 1 : 0;
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox)+(j+oy)*width)*3+k] = c2[k];
+                }
                 else if(VisualizingVariable == P && count > 0)
                 {
                     float P = frameData.vis_P[idx2];
@@ -197,6 +207,39 @@ void VTKVisualization::SynchronizeValues()
     char buffer[100];
     std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
     actor_text->SetInput(buffer);
+
+    // scalarbar
+
+    scalarBar->VisibilityOn();
+    if(VisualizingVariable == ridges)
+    {
+        lut_ridges->SetTableRange(0, range);
+        scalarBar->SetLookupTable(lut_ridges);
+        scalarBar->SetLabelFormat("%.2f");
+    }
+    else if(VisualizingVariable == Jp_inv)
+    {
+        lut_Pressure->SetTableRange(-range, range);
+        scalarBar->SetLookupTable(lut_Pressure);
+        scalarBar->SetLabelFormat("%.1e");
+    }
+    else if(VisualizingVariable == P)
+    {
+        lut_Pressure->SetTableRange(-range, range);
+        scalarBar->SetLookupTable(lut_Pressure);
+        scalarBar->SetLabelFormat("%.1e");
+    }
+    else if(VisualizingVariable == Q)
+    {
+        lut_Pressure->SetTableRange(0, range);
+        scalarBar->SetLookupTable(lut_ANSYS);
+        scalarBar->SetLabelFormat("%.1e");
+    }
+    else
+    {
+        scalarBar->VisibilityOff();
+    }
+
 }
 
 

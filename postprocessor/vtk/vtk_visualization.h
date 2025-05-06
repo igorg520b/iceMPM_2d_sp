@@ -58,7 +58,7 @@ public:
 
     double wind_visualization_time;
 
-    enum VisOpt { none, count, colors, Jp_inv, P, Q, wind_u, wind_v, wind_norm};
+    enum VisOpt { none, count, colors, Jp_inv, P, Q, wind_u, wind_v, wind_norm, ridges};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};
@@ -75,7 +75,7 @@ public:
 private:
     ColorMap colormap;
 
-    vtkNew<vtkLookupTable> lut_Pressure, lut_P2, lut_ANSYS;
+    vtkNew<vtkLookupTable> lut_Pressure, lut_P2, lut_ANSYS, lut_ridges;
 
     // background image
     std::vector<uint8_t> renderedImage;

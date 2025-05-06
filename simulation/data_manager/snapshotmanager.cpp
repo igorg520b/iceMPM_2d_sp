@@ -789,6 +789,7 @@ void icy::SnapshotManager::SaveImagesJGP(const int frame)
     fs::path targetPath3 = outputDir / SimulationTitle / imageDir3;
     fs::create_directories(targetPath1);
     fs::create_directories(targetPath2);
+    fs::create_directories(targetPath3);
 
     std::string baseName = fmt::format(fmt::runtime("i{:05d}.jpg"), frame);
 
