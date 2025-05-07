@@ -3,6 +3,9 @@
 #include <QPointF>
 #include <QCloseEvent>
 #include <QStringList>
+#include <QCoreApplication>
+#include <QMessageBox>
+#include <QProgressDialog>
 
 #include <algorithm>
 
@@ -79,14 +82,15 @@ PPMainWindow::PPMainWindow(QWidget *parent)
     settingsFileName = QDir::currentPath() + "/ppcm.ini";
     QFileInfo fi(settingsFileName);
 
+    vtkCamera* camera = renderer->GetActiveCamera();
+    renderer->ResetCamera();
+    camera->ParallelProjectionOn();
+
     if(fi.exists())
     {
         QSettings settings(settingsFileName,QSettings::IniFormat);
         QVariant var;
 
-        vtkCamera* camera = renderer->GetActiveCamera();
-        renderer->ResetCamera();
-        camera->ParallelProjectionOn();
 
         var = settings.value("camData");
         if(!var.isNull())
@@ -97,6 +101,7 @@ PPMainWindow::PPMainWindow(QWidget *parent)
             camera->SetPosition(vec[0],vec[1],vec[2]);
             camera->SetFocalPoint(vec[3],vec[4],vec[5]);
             camera->SetParallelScale(vec[6]);
+            camera->ParallelProjectionOn();
             camera->Modified();
         }
 
@@ -122,12 +127,12 @@ PPMainWindow::PPMainWindow(QWidget *parent)
 
 
     connect(ui->action_camera_reset, &QAction::triggered, this, &PPMainWindow::cameraReset_triggered);
+    connect(ui->actionRender_Frame, &QAction::triggered, this, &PPMainWindow::render_frame_triggered);
+    connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
 
 //    connect(ui->actionOpen_Frame, &QAction::triggered, this, &PPMainWindow::open_frame_triggered);
-//    connect(ui->actionRender_Frame, &QAction::triggered, this, &PPMainWindow::render_frame_triggered);
 //    connect(ui->actionGenerate_Script, &QAction::triggered, this, &PPMainWindow::generate_script_triggered);
 //    connect(ui->actionShow_Wind, &QAction::triggered, this, &PPMainWindow::toggle_wind_visualization);
-//    connect(ui->actionRender_All, &QAction::triggered, this, &PPMainWindow::render_all_triggered);
 //    connect(ui->actionRender_All_2, &QAction::triggered, this, &PPMainWindow::render_all2_triggered);
 //    connect(ui->actionLoad_Selected_Frame, &QAction::triggered, this, &PPMainWindow::load_selected_frame_triggered);
 
@@ -222,6 +227,13 @@ void PPMainWindow::LoadFramesDirectory(QString framesDirectory)
     qDebug() << "PPMainWindow::LoadFramesDirectory: " << framesDirectory;
     ggd.ScanDirectory(framesDirectory.toStdString());
     slider2->setMaximum(ggd.countFrames);
+
+    qsbFrameTo->setMaximum(ggd.countFrames);
+    qsbFrameTo->setValue(ggd.countFrames);
+
+    qsbFrameFrom->setMaximum(ggd.countFrames-1);
+    qsbFrameFrom->setValue(1);
+
     frameData.LoadHDF5Frame(1);
     frameData.representation.SynchronizeValues();
     renderWindow->Render();
@@ -244,128 +256,129 @@ void PPMainWindow::comboboxIndexChanged_visualizations(int index)
 }
 
 
-/*
-void PPMainWindow::open_frame_triggered()
-{
-    QString defaultPath = QDir::currentPath() + "/_data/frames";
-
-    // Check if the directory exists
-    if (!QDir(defaultPath).exists()) {
-        // Fall back to the current path if the default directory does not exist
-        defaultPath = QDir::currentPath();
-    }
-
-    // Open the file dialog
-    QString qFileName = QFileDialog::getOpenFileName(
-        this,
-        "Open Simulation Snapshot",
-        defaultPath,
-        "HDF5 Files (*.h5)"
-        );
-
-    if(qFileName.isNull())return;
-    ggd.ScanDirectory(qFileName.toStdString());
-
-
-    frameData.LoadHDF5Frame(qFileName.toStdString());
-    frameData.representation.SynchronizeTopology();
-
-    qsbFrameFrom->setRange(1, ggd.countFrames-1);
-    qsbFrameFrom->setValue(1);
-    qsbFrameTo->setRange(1, ggd.countFrames-1);
-    qsbFrameTo->setValue(ggd.countFrames-1);
-    qsbLoadFrame->setRange(1, ggd.countFrames-1);
-
-    updateGUI();
-}
-
-
 
 void PPMainWindow::render_frame_triggered()
 {
-    qDebug() << "PPMainWindow::render_frame_triggered()";
-    FrameData localFD;
+    const int selectedFrame = slider2->value();
+    qDebug() << "render_frame_triggered() " << selectedFrame;
 
-    double data[10];
-    frameData.renderer->GetActiveCamera()->GetPosition(&data[0]);
-    frameData.renderer->GetActiveCamera()->GetFocalPoint(&data[3]);
-    data[6] = frameData.renderer->GetActiveCamera()->GetParallelScale();
 
-    localFD.SetUpOffscreenRender(frameData, data);
-    localFD.LoadHDF5Frame(ggd.countFrames/2);
-    localFD.RenderFrame(frameData.representation.VisualizingVariable,
-                        getOutputDirectory(frameData.representation.VisualizingVariable));
+    FrameData fd(ggd);
+
+    vtkCamera *cam = renderer->GetActiveCamera();
+
+    fd.SetUpOffscreenRender(this->frameData, cam);
+    fd.LoadHDF5Frame(selectedFrame);
+    fd.RenderFrame(frameData.representation.VisualizingVariable);
+
 }
 
 
 void PPMainWindow::render_all_triggered()
 {
-    qDebug() << "PPMainWindow::render_all_triggered()";
     const int frameFrom = qsbFrameFrom->value();
     const int frameTo = qsbFrameTo->value();
+    const int totalFramesInRange = (frameTo - frameFrom) + 1;
 
-    std::mutex mutex;
-    int threads = qsbThreads->value();
-
-//    omp_set_num_threads(threads);
-
-    double data[10];
-    frameData.renderer->GetActiveCamera()->GetPosition(&data[0]);
-    frameData.renderer->GetActiveCamera()->GetFocalPoint(&data[3]);
-    data[6] = frameData.renderer->GetActiveCamera()->GetParallelScale();
-
-    FrameData localFD;
-    localFD.mutex = &mutex;
-
-//
-//#pragma omp parallel for schedule(dynamic, 5) firstprivate(localFD) num_threads(2)
-    for(int frame=frameFrom; frame<=frameTo; frame++)
-    {
-        localFD.SetUpOffscreenRender(frameData, data);
-        localFD.LoadHDF5Frame(frame);
-        localFD.RenderFrame(frameData.representation.VisualizingVariable,
-                            getOutputDirectory(frameData.representation.VisualizingVariable));
+    if (totalFramesInRange <= 0) {
+        qDebug() << "PPMainWindow::render_all_triggered() - Invalid frame range.";
+        QMessageBox::warning(this, "Invalid Range", "Frame 'To' must be greater than or equal to Frame 'From'.");
+        return;
     }
+
+    qDebug() << "PPMainWindow::render_all_triggered() from frame" << frameFrom << "to" << frameTo;
+
+    std::vector<VTKVisualization::VisOpt> visOptsToRender = {
+        VTKVisualization::VisOpt::Jp_inv,
+        VTKVisualization::VisOpt::colors,
+        VTKVisualization::VisOpt::P,
+        VTKVisualization::VisOpt::Q,
+        VTKVisualization::VisOpt::ridges
+    };
+
+    if (visOptsToRender.empty()) {
+        qDebug() << "No visualization options selected for rendering.";
+        QMessageBox::information(this, "Nothing to Render", "No visualization types were specified for batch rendering.");
+        return;
+    }
+
+    FrameData fd(ggd);
+    vtkCamera* currentGuiCamera = this->renderer->GetActiveCamera();
+    fd.SetUpOffscreenRender(this->frameData, currentGuiCamera); // Sets up canonical camera for fd.renderer
+
+    int totalOperations = totalFramesInRange * visOptsToRender.size();
+    QProgressDialog progress("Rendering all frames...", "Abort", 0, totalOperations, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setValue(0);
+    progress.show();
+    QCoreApplication::processEvents(); // Ensure dialog is shown
+
+    int operationCount = 0;
+    bool abortRendering = false;
+
+    qDebug() << "Starting batch rendering. Total frames:" << totalFramesInRange << "Total VisOpts:" << visOptsToRender.size();
+
+    // Outer loop: Iterate through frames
+    for (int frameNum = frameFrom; frameNum <= frameTo; ++frameNum) {
+        if (abortRendering) {
+            break; // Exit outer loop if aborted
+        }
+
+        progress.setLabelText(QString("Processing Frame %1/%2...")
+                                  .arg(frameNum - frameFrom + 1)
+                                  .arg(totalFramesInRange));
+        QCoreApplication::processEvents();
+
+        qDebug() << "--- Loading HDF5 data for frame:" << frameNum << "---";
+        fd.LoadHDF5Frame(frameNum); // Load frame data ONCE per frame
+
+        // Inner loop: Iterate through visualization options for the current frame
+        for (VTKVisualization::VisOpt currentVisOpt : visOptsToRender) {
+            if (progress.wasCanceled()) {
+                qDebug() << "Batch rendering aborted by user during VisOpt loop.";
+                abortRendering = true;
+                break; // Exit inner (VisOpt) loop
+            }
+            if (abortRendering) { // Double check, though outer loop break should handle it
+                break;
+            }
+
+            operationCount++;
+            QMetaEnum qme = QMetaEnum::fromType<VTKVisualization::VisOpt>();
+            QString visOptName = qme.valueToKey(static_cast<int>(currentVisOpt));
+
+            progress.setValue(operationCount);
+            progress.setLabelText(QString("Rendering Frame %1 (%2/%3) - Vis: %4 (Op %5/%6)")
+                                      .arg(frameNum)
+                                      .arg(frameNum - frameFrom + 1)
+                                      .arg(totalFramesInRange)
+                                      .arg(visOptName)
+                                      .arg(operationCount)
+                                      .arg(totalOperations));
+            QCoreApplication::processEvents(); // Keep GUI responsive
+
+            qDebug() << "Rendering frame" << frameNum << "with VisOpt" << visOptName;
+            fd.RenderFrame(currentVisOpt); // Render current VisOpt for the loaded frame
+                // RenderFrame calls representation.ChangeVisualizationOption -> SynchronizeValues
+
+            // QCoreApplication::processEvents(); // Process events after each render might be too frequent
+            // but good for very slow single renders.
+            // The one at the start of the inner loop is usually enough.
+        }
+        qDebug() << "--- Finished all VisOpts for frame:" << frameNum << "---";
+        QCoreApplication::processEvents(); // Process events after all VisOpts for a frame are done
+    }
+
+    progress.setValue(totalOperations); // Ensure progress bar shows 100% if not aborted
+    if (abortRendering) {
+        QMessageBox::information(this, "Rendering Aborted", "Batch rendering was aborted by the user.");
+    } else {
+        QMessageBox::information(this, "Rendering Complete", "All selected frames and visualization types have been rendered.");
+    }
+    qDebug() << "PPMainWindow::render_all_triggered() finished.";
 }
 
-
-void PPMainWindow::render_all2_triggered()
-{
-    qDebug() << "PPMainWindow::render_all_triggered()";
-    const int frameFrom = qsbFrameFrom->value();
-    const int frameTo = qsbFrameTo->value();
-
-    std::mutex mutex;
-    int threads = qsbThreads->value();
-
-    //    omp_set_num_threads(threads);
-
-    double data[10];
-    frameData.renderer->GetActiveCamera()->GetPosition(&data[0]);
-    frameData.renderer->GetActiveCamera()->GetFocalPoint(&data[3]);
-    data[6] = frameData.renderer->GetActiveCamera()->GetParallelScale();
-
-    FrameData localFD;
-    localFD.mutex = &mutex;
-
-//
-#pragma omp parallel for schedule(dynamic, 5) firstprivate(localFD) num_threads(10)
-    for(int frame=frameFrom; frame<=frameTo; frame++)
-    {
-        localFD.SetUpOffscreenRender(frameData, data);
-        localFD.LoadHDF5Frame(frame);
-        localFD.RenderFrame(VTKVisualization::VisOpt::Jp_inv,
-                            getOutputDirectory(VTKVisualization::VisOpt::Jp_inv));
-        localFD.RenderFrame(VTKVisualization::VisOpt::colors,
-                            getOutputDirectory(VTKVisualization::VisOpt::colors));
-        localFD.RenderFrame(VTKVisualization::VisOpt::P,
-                            getOutputDirectory(VTKVisualization::VisOpt::P));
-        localFD.RenderFrame(VTKVisualization::VisOpt::Q,
-                            getOutputDirectory(VTKVisualization::VisOpt::Q));
-    }
-}
-
-
+/*
 void PPMainWindow::generate_script_triggered()
 {
     std::string filename = "render/genvideo.sh";

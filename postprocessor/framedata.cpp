@@ -2,27 +2,53 @@
 #include <fmt/format.h>
 #include <fmt/std.h>
 
+#include <vtkVersionMacros.h>
+#include <QDebug>
+
+namespace fs = std::filesystem;
 
 
 FrameData::FrameData(GeneralGridData &ggd_) : ggd(ggd_), representation(*this)
 {
-//    offscreenRenderWindow->Initialize();
+    std::cout << "VTK Version (from macros):" << std::endl;
+    std::cout << "  Full Version String (VTK_VERSION): " << VTK_VERSION << std::endl;
+    std::cout << "  Major Version (VTK_MAJOR_VERSION): " << VTK_MAJOR_VERSION << std::endl;
+    std::cout << "  Minor Version (VTK_MINOR_VERSION): " << VTK_MINOR_VERSION << std::endl;
+    std::cout << "  Build Version (VTK_BUILD_VERSION): " << VTK_BUILD_VERSION << std::endl;
+}
 
-    //renderer->SetBackground(1.0,1.0,1.0);
-//    offscreenRenderWindow->SetSize(1920, 1080);
-//    offscreenRenderWindow->DoubleBufferOff();
-//    offscreenRenderWindow->SetOffScreenRendering(true);
+void FrameData::SetUpOffscreenRender(const FrameData &guiFD, vtkCamera* sourceGuiCamera)
+{
+    std::copy(std::begin(guiFD.representation.ranges), std::end(guiFD.representation.ranges), std::begin(this->representation.ranges));
 
-//    renderer->AddActor(representation.raster_actor);
-//    renderer->AddActor(representation.actor_text);
-//    renderer->AddActor(representation.scalarBar);
-//    renderer->AddActor(representation.actor_text_title);
+    offscreenRenderWindow->Initialize();
+    offscreenRenderWindow->SetOffScreenRendering(true);
+    offscreenRenderWindow->SetSize(1920, 1080);
+    offscreenRenderWindow->DoubleBufferOff();
 
-//    windowToImageFilter->SetInput(offscreenRenderWindow);
-//    windowToImageFilter->SetScale(1); // image quality
+    // renderer -> offscreen
+    offscreenRenderWindow->AddRenderer(renderer);
+    renderer->SetBackground(1.0, 1.0, 1.0);
+
+    renderer->AddActor(representation.raster_actor);
+    renderer->AddActor(representation.actor_text);
+    renderer->AddActor(representation.scalarBar);
+    renderer->AddActor(representation.actor_text_title);
+
+    windowToImageFilter->SetInput(offscreenRenderWindow);
+    windowToImageFilter->SetScale(1);
+    windowToImageFilter->SetInputBufferTypeToRGB();
 //    windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
-//    windowToImageFilter->ReadFrontBufferOn(); // read from the back buffer
-//    writerPNG->SetInputConnection(windowToImageFilter->GetOutputPort());
+    windowToImageFilter->ReadFrontBufferOn();
+    writer->SetInputConnection(windowToImageFilter->GetOutputPort());
+
+
+    // set up camera
+    renderer->ResetCamera();
+    vtkCamera* cam = renderer->GetActiveCamera();
+    cam->DeepCopy(sourceGuiCamera);
+    cam->ParallelProjectionOn();
+    cam->Modified();
 }
 
 
@@ -68,54 +94,31 @@ void FrameData::LoadHDF5Frame(int frameNumber)
 
 
 
-
-/*
-
-void FrameData::SetUpOffscreenRender(FrameData &guiFD, double data[10])
+void FrameData::RenderFrame(VTKVisualization::VisOpt visopt)
 {
-    this->ggd = guiFD.ggd;
-
-    // copy ranges array
-    const VTKVisualization& other = guiFD.representation;
-    std::copy(std::begin(other.ranges), std::end(other.ranges), std::begin(this->representation.ranges));
-
-    representation.VisualizingVariable = guiFD.representation.VisualizingVariable;
-
-    // set up camera
-
-    vtkCamera* camera = renderer->GetActiveCamera();
-    renderer->ResetCamera();
-    camera->ParallelProjectionOn();
-
-    camera->SetClippingRange(1e-1,1e4);
-    camera->SetViewUp(0.0, 1.0, 0.0);
-    camera->SetPosition(data[0],data[1],data[2]);
-    camera->SetFocalPoint(data[3],data[4],data[5]);
-    camera->SetParallelScale(data[6]);
-    camera->Modified();
-
-    // renderer -> offscreen
-    offscreenRenderWindow->AddRenderer(renderer);
-}
-
-void FrameData::RenderFrame(VTKVisualization::VisOpt visopt, std::string_view outputDirectory)
-{
-    LOGV("FrameData::RenderFrame");
     representation.ChangeVisualizationOption(visopt);
+
     offscreenRenderWindow->Render();
     windowToImageFilter->Modified(); // this is extra important
-    std::string renderFileName = fmt::format("{}/{:05d}.png", outputDirectory, frame);
-    LOGR("writing {}", renderFileName);
-    writerPNG->SetFileName(renderFileName.c_str());
-    mutex->lock();
-    writerPNG->Write();
-    mutex->unlock();
+    std::string renderFileName = fmt::format("{:05d}.jpg", frame);
+
+    fs::path outputDir = "output";
+    fs::path imageDir;
+    if(visopt == VTKVisualization::VisOpt::colors) imageDir = "raseter/colors";
+    else if(visopt == VTKVisualization::VisOpt::Jp_inv) imageDir = "raseter/Jpinv";
+    else if(visopt == VTKVisualization::VisOpt::P) imageDir = "raseter/P";
+    else if(visopt == VTKVisualization::VisOpt::Q) imageDir = "raseter/Q";
+    else if(visopt == VTKVisualization::VisOpt::ridges) imageDir = "raseter/Ridges";
+
+    fs::path targetPath = outputDir / imageDir;
+    fs::create_directories(targetPath);
+
+    fs::path fullPath = targetPath / renderFileName;
+
+    LOGR("FrameData::RenderFrame; writing {}", renderFileName);
+
+    writer->SetFileName(fullPath.string().c_str());
+    writer->Write();
 }
 
 
-void FrameData::LoadHDF5Frame(std::string fileName)
-{
-
-}
-
-*/

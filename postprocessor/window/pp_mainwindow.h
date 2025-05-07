@@ -70,9 +70,10 @@ private Q_SLOTS:
 
     void sliderValueChanged(int val);
 
+    void render_frame_triggered();
+    void render_all_triggered();
+
 //    void open_frame_triggered();
-//    void render_frame_triggered();
-//    void render_all_triggered();
 //    void generate_script_triggered();
 //    void load_selected_frame_triggered();
 //    void toggle_wind_visualization(bool checked);

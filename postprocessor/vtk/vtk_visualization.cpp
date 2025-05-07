@@ -73,6 +73,10 @@ void VTKVisualization::ChangeVisualizationOption(int option)
     {
         actor_text_title->SetInput("Wind speed");
     }
+    else if(option == VisOpt::ridges)
+    {
+        actor_text_title->SetInput("Ridges");
+    }
     else
     {
         actor_text_title->SetInput("-");
@@ -85,7 +89,6 @@ void VTKVisualization::ChangeVisualizationOption(int option)
 
 void VTKVisualization::SynchronizeValues()
 {
-
     const SimParams &prms = frameData.ggd.prms;
 
     const int &width = prms.InitializationImageSizeX;
@@ -164,10 +167,16 @@ void VTKVisualization::SynchronizeValues()
                 {
                     for(int k=0;k<3;k++) renderedImage[((i+ox)+(j+oy)*width)*3+k] = frameData.rgb[idx2*3+k];
                 }
-
             }
         }
 
+//    for(size_t i=0;i<width;i++)
+//        for(size_t j=0;j<height;j++)
+//        {
+//            renderedImage[(i+j*width)*3+0] = 255;
+ //           renderedImage[(i+j*width)*3+1] = 0;
+ //           renderedImage[(i+j*width)*3+2] = 0;
+ //       }
 
 
 
@@ -179,6 +188,7 @@ void VTKVisualization::SynchronizeValues()
     raster_imageData->SetSpacing(1.0, 1.0, 1.0);      // Pixel spacing
     raster_imageData->SetOrigin(0.0, 0.0, 0.0);       // Origin at (0,0,0)
     raster_imageData->GetPointData()->SetScalars(raster_scalars);
+    raster_imageData->Modified();
 
     raster_plane->SetOrigin(-h/2, -h/2, -1.0);           // Bottom-left corner
     raster_plane->SetPoint1((width-0.5)*h, -h/2, -1.0);         // Bottom-right (x-axis)
@@ -186,6 +196,7 @@ void VTKVisualization::SynchronizeValues()
     raster_plane->SetNormal(0.0, 0.0, 1.0);           // Normal along z-axis (facing forward)
 
     raster_mapper->SetInputConnection(raster_plane->GetOutputPort());
+    raster_mapper->ScalarVisibilityOff();
 
     raster_texture->SetInputData(raster_imageData);
     raster_texture->InterpolateOff(); // Smooth texture rendering
@@ -195,8 +206,6 @@ void VTKVisualization::SynchronizeValues()
 
     raster_mapper->Update();
     raster_texture->Update();
-
-
 
     // update text
 
@@ -277,196 +286,4 @@ void VTKVisualization::populateLut(ColorMap::Palette palette, vtkNew<vtkLookupTa
         table->SetTableValue(i, interpolatedColor[0], interpolatedColor[1], interpolatedColor[2], 1.0);
     }
 }
-
-
-
-/*
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    const SimParams &prms = frameData->ggd->prms;
-
-    const int &_ox = prms.ModeledRegionOffsetX;
-    const int &_oy = prms.ModeledRegionOffsetY;
-
-    const int &gx = prms.GridXTotal;
-    const int &gy = prms.GridYTotal;
-
-    const double sim_time = frameData->SimulationTime;
-    const double &h = prms.cellsize;
-
-    double range = std::pow(10,ranges[VisualizingVariable]);
-    double centerVal = 0;
-    LOGR("SynchronizeValues() {}; range {}", this->VisualizingVariable, range);
-
-    const std::array<uint8_t, 3>& seaWater {0x15, 0x1f, 0x2f};
-
-    for(int i=0;i<gx;i++)
-        for(int j=0;j<gy;j++)
-        {
-            int idx2 = (j + gy*i);
-            if(frameData->ggd->grid_status_buffer[idx2])
-            {
-                // water color
-                unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
-                pixel[0] = 0x15;
-                pixel[1] = 0x1f;
-                pixel[2] = 0x2f;
-            }
-        }
-
-
-    if(VisualizingVariable == VisOpt::Jp_inv)
-    {
-        LOGV("rendering Jp_inv");
-        for(int i=0;i<gx;i++)
-            for(int j=0;j<gy;j++)
-            {
-                int idx2 = (j + gy*i);
-                if(frameData->ggd->grid_status_buffer[idx2])
-                {
-                    uint8_t count = frameData->count[idx2];
-                    float Jp_inv = frameData->vis_Jpinv[idx2];
-
-
-                }
-            }
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(lut_Pressure);
-        scalarBar->SetLabelFormat("%.1f");
-        lut_Pressure->SetTableRange(1-range, 1+range);
-    }
-    else if(VisualizingVariable == VisOpt::colors)
-    {
-        LOGV("rendering colors");
-        scalarBar->VisibilityOff();
-
-        for(int i=0;i<gx;i++)
-            for(int j=0;j<gy;j++)
-            {
-                int idx2 = (j + gy*i);
-                if(frameData->ggd->grid_status_buffer[idx2])
-                {
-                    uint8_t count = frameData->count[idx2];
-                    std::array<uint8_t, 3> _rgb;
-                    for(int k=0;k<3;k++) _rgb[k] = frameData->rgb[idx2*3+k];
-
-                    if(count > 0)
-                    {
-                        unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
-                        for(int k=0;k<3;k++) pixel[k] = _rgb[k];
-                    }
-                }
-            }
-    }
-    else if(VisualizingVariable == VisOpt::P)
-    {
-        for(int i=0;i<gx;i++)
-            for(int j=0;j<gy;j++)
-            {
-                int idx2 = (j + gy*i);
-                if(frameData->ggd->grid_status_buffer[idx2])
-                {
-                    uint8_t count = frameData->count[idx2];
-                    float pressure = frameData->vis_P[idx2];
-                    std::array<uint8_t, 3> _rgb;
-                    for(int k=0;k<3;k++) _rgb[k] = frameData->rgb[idx2*3+k];
-
-                    if(count > 0)
-                    {
-                        float coeff2 = std::clamp(std::abs(pressure)/range, 0., 1.);
-                        coeff2 = pow(coeff2, 2);
-                        float coeff1 = 1;//std::min(count/2.,1.); // how much water surface is obscured
-                        float val = (pressure)/range + 0.5;
-                        std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, val);
-
-                        std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
-                        std::array<uint8_t, 3> c3 = ColorMap::mergeColors(seaWater, c2, coeff1);
-
-                        unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
-                        for(int k=0;k<3;k++) pixel[k] = c3[k];
-                    }
-                }
-            }
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(lut_Pressure);
-        scalarBar->SetLabelFormat("%.1e");
-        lut_Pressure->SetTableRange(-range, +range);
-    }
-    else if(VisualizingVariable == VisOpt::Q)
-    {
-        for(int i=0;i<gx;i++)
-            for(int j=0;j<gy;j++)
-            {
-                int idx2 = (j + gy*i);
-                if(frameData->ggd->grid_status_buffer[idx2])
-                {
-                    uint8_t count = frameData->count[idx2];
-                    float deviatoric_stress = frameData->vis_Q[idx2];
-                    std::array<uint8_t, 3> _rgb;
-                    for(int k=0;k<3;k++) _rgb[k] = frameData->rgb[idx2*3+k];
-
-                    if(count > 0)
-                    {
-                        float coeff2 = std::clamp(std::abs(deviatoric_stress)/range, 0., 1.);
-                        //coeff2 = pow(coeff2, 0.5);
-                        float coeff1 = 1;//std::min(count/2.,1.); // how much water surface is obscured
-                        float val = (deviatoric_stress)/range;
-                        std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, val);
-
-                        std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
-                        std::array<uint8_t, 3> c3 = ColorMap::mergeColors(seaWater, c2, coeff1);
-
-                        unsigned char* pixel = static_cast<unsigned char*>(uniformGrid->GetScalarPointer(i+_ox, j+_oy, 0));
-                        for(int k=0;k<3;k++) pixel[k] = c3[k];
-                    }
-                }
-            }
-        scalarBar->VisibilityOn();
-        scalarBar->SetLookupTable(lut_ANSYS);
-        scalarBar->SetLabelFormat("%.1e");
-        lut_ANSYS->SetTableRange(0, range);
-    }
-
-
-
-
-
-    uniformGrid->Modified();
-    mapper_uniformgrid->Update();
-
-
-
-}
-*/
-
 

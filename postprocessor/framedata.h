@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <mutex>
+#include <iostream>
 
 #include <H5Cpp.h>
 #include <spdlog/spdlog.h>
@@ -15,7 +16,7 @@
 
 #include <vtkRenderWindow.h>
 #include <vtkWindowToImageFilter.h>
-#include <vtkPNGWriter.h>
+#include <vtkJPEGWriter.h>
 #include <vtkRenderer.h>
 #include <vtkOpenGLRenderWindow.h>
 #include <vtkCamera.h>
@@ -28,7 +29,6 @@ struct FrameData
 
     GeneralGridData &ggd;
     VTKVisualization representation;
-//    vtkNew<vtkRenderer> renderer;
     double SimulationTime;
 
     std::vector<uint8_t> count;
@@ -37,19 +37,19 @@ struct FrameData
 
     void LoadHDF5Frame(int frameNumber);
 
-/*
-    void SetUpOffscreenRender(FrameData &guiFD, double camData[10]);
-    void RenderFrame(VTKVisualization::VisOpt visopt, std::string outputDirectory);
+    void SetUpOffscreenRender(const FrameData &guiFD, vtkCamera* sourceGuiCamera);
+    void RenderFrame(VTKVisualization::VisOpt visopt);
 
-*/
-
+    vtkNew<vtkRenderer> renderer;
+    int frame = 0;
 private:
     int SimulationStep;
-    int frame = 0;
 
-//    vtkNew<vtkRenderWindow> offscreenRenderWindow;
-//    vtkNew<vtkWindowToImageFilter> windowToImageFilter;
-//    vtkNew<vtkPNGWriter> writerPNG;
+
+    // offscreenrender
+    vtkNew<vtkRenderWindow> offscreenRenderWindow;
+    vtkNew<vtkWindowToImageFilter> windowToImageFilter;
+    vtkNew<vtkJPEGWriter> writer;
 };
 
 #endif // FRAMEDATA_H
