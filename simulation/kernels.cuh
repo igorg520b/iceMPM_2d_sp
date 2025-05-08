@@ -165,7 +165,7 @@ __global__ void partition_kernel_update_nodes(const t_PointReal simulation_time)
 
         // linear term
 //        const double coeff = 0.005;
-        const double coeff = 0.05;
+        const double coeff = 0.025;
         velocity = (1-coeff)*velocity + coeff*wvel;
 
         /*
@@ -472,7 +472,8 @@ const PointMatrix2r &U, const PointMatrix2r &V, const PointVector2r &vSigmaSquar
 
             // estimate the new P based on the ridge height
 //            const t_PointReal p_ridge_max = gprms.RidgeFormationCoeff * SimParams::g * gprms.IceDensity * initial_thickness * (pow(Jp_inv,1));
-            const t_PointReal p_ridge_max = gprms.RidgeFormationCoeff * SimParams::g * gprms.IceDensity * initial_thickness * (Jp_inv*Jp_inv);
+//            const t_PointReal p_ridge_max = gprms.RidgeFormationCoeff * SimParams::g * gprms.IceDensity * initial_thickness * (Jp_inv*Jp_inv);
+            const t_PointReal p_ridge_max = gprms.RidgeFormationCoeff * SimParams::g * gprms.IceDensity * initial_thickness * (Jp_inv);
 
             p_n_1 = min(p_tr, p_ridge_max);
 

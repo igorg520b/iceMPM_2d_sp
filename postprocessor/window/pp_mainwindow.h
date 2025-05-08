@@ -74,7 +74,6 @@ private Q_SLOTS:
     void render_all_triggered();
 
 //    void open_frame_triggered();
-//    void generate_script_triggered();
 //    void load_selected_frame_triggered();
 //    void toggle_wind_visualization(bool checked);
 
@@ -84,6 +83,7 @@ private:
 
 
     void OpenSnapshot(QString fileName);
+    void generate_ffmpeg_script();
 
     QString settingsFileName;       // includes current dir
     QComboBox *comboBox_visualizations;

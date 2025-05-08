@@ -237,6 +237,8 @@ void PPMainWindow::LoadFramesDirectory(QString framesDirectory)
     frameData.LoadHDF5Frame(1);
     frameData.representation.SynchronizeValues();
     renderWindow->Render();
+
+    generate_ffmpeg_script();
 }
 
 void PPMainWindow::sliderValueChanged(int val)
@@ -378,30 +380,27 @@ void PPMainWindow::render_all_triggered()
     qDebug() << "PPMainWindow::render_all_triggered() finished.";
 }
 
-/*
-void PPMainWindow::generate_script_triggered()
+void PPMainWindow::generate_ffmpeg_script()
 {
-    std::string filename = "render/genvideo.sh";
+    const int frames = ggd.countFrames;
+    const int fps = 30;
+    std::filesystem::create_directories("output/raster");
+    const std::string filename = "output/raster/genvideo.sh";
     std::ofstream scriptFile(filename);
-    int frames = ggd.countFrames;
 
-    std::string cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"P/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"P.mp4\"", frames-1);
-    scriptFile << cmd << '\n';
-    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Q/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Q.mp4\"", frames-1);
-    scriptFile << cmd << '\n';
-    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"Jp_inv/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"Jp_inv.mp4\"", frames-1);
-    scriptFile << cmd << '\n';
-    cmd = fmt::format("ffmpeg -y -r 30 -f image2 -start_number 0 -i \"colors/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"colors.mp4\"", frames-1);
-    scriptFile << cmd << '\n';
+    const std::string fmtStr = R"(ffmpeg -y -r {} -f image2 -start_number 1 -i "{}" -vframes {} -vcodec libx264 -vf "scale=1920:1080:force_original_aspect_ratio=decrease, pad=1920:1080:(ow-iw)/2:(oh-ih)/2:white" -crf 21 -pix_fmt yuv420p "{}")";
 
-    std::string concat = R"(ffmpeg -i P.mp4 -i Q.mp4 -i Jp_inv.mp4 -i colors.mp4 -filter_complex "[0:v:0][1:v:0][2:v:0][3:v:0]concat=n=4:v=1[outv]" -map "[outv]" output.mp4)";
-    scriptFile << concat;
+    std::string cmd_P = fmt::format(fmt::runtime(fmtStr), fps, R"(P/%05d.jpg)", frames, R"(P.mp4)");
+    std::string cmd_Q = fmt::format(fmt::runtime(fmtStr), fps, R"(Q/%05d.jpg)", frames, R"(Q.mp4)");
+    std::string cmd_Jp_inv = fmt::format(fmt::runtime(fmtStr), fps, R"(Jpinv/%05d.jpg)", frames, R"(Jp_inv.mp4)");
+    std::string cmd_colors = fmt::format(fmt::runtime(fmtStr), fps, R"(colors/%05d.jpg)", frames, R"(colors.mp4)");
+    std::string cmd_Ridges = fmt::format(fmt::runtime(fmtStr), fps, R"(Ridges/%05d.jpg)", frames, R"(Ridges.mp4)");
+
+    scriptFile << cmd_P << '\n' << cmd_Q << '\n' << cmd_Jp_inv << '\n' << cmd_colors << '\n' << cmd_Ridges;
     scriptFile.close();
+    int result = std::system(("chmod +x " + filename).c_str());
 
-    // Set the script as executable
-    if (std::system(("chmod +x " + filename).c_str()) != 0) {
-        std::cerr << "Error: Failed to set executable permission\n";
-    }
+    //std::string concat = R"(ffmpeg -i P.mp4 -i Q.mp4 -i Jp_inv.mp4 -i colors.mp4 -filter_complex "[0:v:0][1:v:0][2:v:0][3:v:0]concat=n=4:v=1[outv]" -map "[outv]" output.mp4)";
+//    std::string cmd1 = fmt::format("ffmpeg -y -r {} -f image2 -start_number 1 -i \"P/%05d.png\" -vframes {} -vcodec libx264 -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -crf 21  -pix_fmt yuv420p \"P.mp4\"\n", fps, frames);
 }
 
-*/

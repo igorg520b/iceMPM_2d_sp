@@ -102,13 +102,13 @@ void FrameData::RenderFrame(VTKVisualization::VisOpt visopt)
     windowToImageFilter->Modified(); // this is extra important
     std::string renderFileName = fmt::format("{:05d}.jpg", frame);
 
-    fs::path outputDir = "output";
+    fs::path outputDir = "output/raster";
     fs::path imageDir;
-    if(visopt == VTKVisualization::VisOpt::colors) imageDir = "raseter/colors";
-    else if(visopt == VTKVisualization::VisOpt::Jp_inv) imageDir = "raseter/Jpinv";
-    else if(visopt == VTKVisualization::VisOpt::P) imageDir = "raseter/P";
-    else if(visopt == VTKVisualization::VisOpt::Q) imageDir = "raseter/Q";
-    else if(visopt == VTKVisualization::VisOpt::ridges) imageDir = "raseter/Ridges";
+    if(visopt == VTKVisualization::VisOpt::colors) imageDir = "colors";
+    else if(visopt == VTKVisualization::VisOpt::Jp_inv) imageDir = "Jpinv";
+    else if(visopt == VTKVisualization::VisOpt::P) imageDir = "P";
+    else if(visopt == VTKVisualization::VisOpt::Q) imageDir = "Q";
+    else if(visopt == VTKVisualization::VisOpt::ridges) imageDir = "Ridges";
 
     fs::path targetPath = outputDir / imageDir;
     fs::create_directories(targetPath);
