@@ -11,6 +11,7 @@
 #include <Eigen/Core>
 
 #include "gui/colormap.h"
+#include "parameters_sim.h"
 
 namespace icy {class SnapshotManager; class Model;}
 
@@ -32,20 +33,25 @@ public:
 
     void SaveFrame(int SimulationStep, double SimulationTime);
 
+    void PrepareFrameArrays(); // invoked from SaveFrame
 
 
 //    void LoadWindData(std::string fileName);    // netCDF4 data
 //    void ReadSnapshot(std::string fileName);    // custom HDF5 file
+
+    std::vector<float> vis_point_density, vis_mass;
+    std::vector<float> vis_r, vis_g, vis_b, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
+    static constexpr uint8_t waterColor[3] = {0x15, 0x1f, 0x2f};
+    std::vector<uint8_t> rgb;
 
 private:
 
     ColorMap colormap;
 
     std::vector<uint8_t> count;   // used for counting points per cell and image generation
-    std::vector<uint8_t> rgb;
     std::vector<uint8_t> rgb_img_Jpinv, rgb_img, rgb_img_ridges;
-    std::vector<float> vis_r, vis_g, vis_b, vis_alpha, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
-    void PrepareFrameArrays(); // invoked from SaveFrame
+
+    void CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3]);
 
     constexpr static std::string_view pts_cache_path = "_data/point_cache";
 
@@ -55,7 +61,6 @@ private:
     static void generate_and_save(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
     static void generate_points(int gx, int gy, float points_per_cell, std::vector<std::array<float, 2>> &buffer);
 
-    static constexpr uint8_t waterColor[3] = {0x15, 0x1f, 0x2f};
     void FillModelledAreaWithBlueColor();
     void SavePointColors();
     void ReadPointColors();

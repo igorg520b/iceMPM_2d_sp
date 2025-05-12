@@ -249,7 +249,7 @@ void MainWindow::limits_changed(double val_)
 {
     int idx = (int)representation.VisualizingVariable;
     representation.ranges[idx] = val_;
-    representation.SynchronizeValues();
+    representation.SynchronizeTopology();
     renderWindow->Render();
 }
 
@@ -341,7 +341,7 @@ void MainWindow::updateGUI()
     }
     else
     {
-        representation.SynchronizeValues();
+        representation.SynchronizeTopology();
     }
     renderWindow->Render();
 

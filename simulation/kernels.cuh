@@ -165,7 +165,7 @@ __global__ void partition_kernel_update_nodes(const t_PointReal simulation_time)
 
         // linear term
 //        const double coeff = 0.005;
-        const double coeff = 0.025;
+        const double coeff = 0.010;
         velocity = (1-coeff)*velocity + coeff*wvel;
 
         /*

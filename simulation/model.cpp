@@ -43,6 +43,7 @@ bool icy::Model::Step()
     accessing_point_data.lock();
 
     gpu.transfer_from_device();
+    snapshot.PrepareFrameArrays();
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
     LOGR("finished {:>8.1f} of {:>8.1f} ({}); host pts {}; cap {}; err {:#x}", prms.SimulationTime, prms.SimulationEndTime,
@@ -215,6 +216,7 @@ void icy::Model::LoadParameterFile(std::string fileName, std::string resumeSnaps
         prms.UseCurrentData = true;
         wac_interpolator.OpenCustomHDF5(additionalFiles["InputFlowVelocity"]);
     }
+    snapshot.PrepareFrameArrays();
 
     //    if(additionalFiles.count("InputWindData")) model.snapshot.LoadWindData(additionalFiles["InputWindData"]);
 }

@@ -118,14 +118,14 @@ void icy::SnapshotManager::PrepareGrid(std::string fileNamePNG, std::string file
             model->gpu.grid_boundary_normals[idx_host] = (t_GridReal)normals[idx1].x();
             model->gpu.grid_boundary_normals[idx_host + gx*gy] = (t_GridReal)normals[idx1].y();
         }
-
+    LOGV("PrepareGrid done \n");
 }
 
 
 
 void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5, bool onlyGenerateCache)
 {
-    LOGR("icy::SnapshotManager::PopulatePoints: {}", fileNameModelledAreaHDF5);
+    LOGR("\nicy::SnapshotManager::PopulatePoints: {}", fileNameModelledAreaHDF5);
 
     // (0) params
     const int &width = model->prms.InitializationImageSizeX;
@@ -222,7 +222,11 @@ void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5, 
         p.setValue(SimParams::idx_Jp_inv, 1.f);
         p.setValue(SimParams::idx_Qp, 1.f);
         for(int idx=0; idx<SimParams::dim; idx++)
+        {
             p.setValue(SimParams::Fe00+idx*2+idx, 1.f);
+            p.setValue(SimParams::velx+0, 0.f);
+            p.setValue(SimParams::velx+1, 0.f);
+        }
     }
     LOGV("Points transferred to HSSOA");
 
@@ -237,6 +241,7 @@ void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5, 
         SavePointColors();
         SaveSnapshot(0, 0);
     }
+    LOGV("PopulatePoints done \n");
 }
 
 
@@ -319,6 +324,7 @@ void icy::SnapshotManager::ReadPointsFromSnapshot(std::string fileNameSnapshotHD
 
     FillModelledAreaWithBlueColor();
     ReadPointColors();
+    PrepareFrameArrays();
     LOGR("ReadPointsFromSnapshot; hssoa capacity {}; size {}", model->gpu.hssoa.capacity, model->gpu.hssoa.size);
 }
 
@@ -575,10 +581,29 @@ bool icy::SnapshotManager::attempt_to_fill_from_cache(int gx, int gy, std::vecto
 
 // =============================  READ AND WRITE SNAPSHOTS
 
+
+void icy::SnapshotManager::CalculateWeightCoeffs(const PointVector2r &pos, PointArray2r ww[3])
+{
+    // optimized method of computing the quadratic (!) weight function (no conditional operators)
+    PointArray2r arr_v0 = 0.5 - pos.array();
+    PointArray2r arr_v1 = pos.array();
+    PointArray2r arr_v2 = pos.array() + 0.5;
+    ww[0] = 0.5*arr_v0*arr_v0;
+    ww[1] = 0.75-arr_v1*arr_v1;
+    ww[2] = 0.5*arr_v2*arr_v2;
+}
+
+
 void icy::SnapshotManager::PrepareFrameArrays()
 {
+    LOGR("PrepareFrameArrays() {} x {}", model->prms.GridXTotal, model->prms.GridYTotal);
     const int gridSize = model->prms.GridXTotal*model->prms.GridYTotal;
-    count.assign(gridSize,0); // in case we render a 3-channel image
+
+//    std::lock_guard<std::mutex> lg(model->accessing_point_data);
+    count.assign(gridSize,0);
+
+    vis_point_density.assign(gridSize, 0);
+    vis_mass.assign(gridSize, 0);
     vis_vx.assign(gridSize,0);
     vis_vy.assign(gridSize,0);
     vis_r.assign(gridSize,0);
@@ -587,7 +612,6 @@ void icy::SnapshotManager::PrepareFrameArrays()
     vis_Jpinv.assign(gridSize,0);
     vis_P.assign(gridSize,0);
     vis_Q.assign(gridSize,0);
-    vis_alpha.assign(gridSize,0);
     rgb.assign(gridSize*3,0);
 
     const int nPts = model->gpu.hssoa.size;
@@ -595,12 +619,24 @@ void icy::SnapshotManager::PrepareFrameArrays()
     for(int i=0;i<nPts;i++)
     {
         SOAIterator s = model->gpu.hssoa.begin()+i;
+        bool disabled = s->getDisabledStatus();
+        if(disabled) continue;
         //PointVector2r pos = s->getPos(model->prms.cellsize);
-        int cellIdx = s->getCellIndex(model->prms.GridYTotal);
+        const int GridY = model->prms.GridYTotal;
+        int cellIdx = s->getCellIndex(GridY);
+        Eigen::Vector2i cell(cellIdx/GridY, cellIdx % GridY);
+        PointVector2r pos;
+        pos.x() = s->getValue(SimParams::posx+0);
+        pos.y() = s->getValue(SimParams::posx+1);
+        const t_PointReal vx = s->getValue(SimParams::velx+0);
+        const t_PointReal vy = s->getValue(SimParams::velx+1);
 
-        count[cellIdx]++;
-        vis_vx[cellIdx] += static_cast<float>(s->getValue(SimParams::velx+0));
-        vis_vy[cellIdx] += static_cast<float>(s->getValue(SimParams::velx+1));
+        const t_PointReal Jpinv = s->getValue(SimParams::idx_Jp_inv);
+        const t_PointReal P = s->getValue(SimParams::idx_P);
+        const t_PointReal Q = s->getValue(SimParams::idx_Q);
+
+        const t_PointReal thickness = s->getValue(SimParams::idx_thickness);
+        const double particle_mass = model->prms.ParticleMass * thickness;
 
         int pt_idx = s->getValueInt(SimParams::integer_point_idx);
         uint32_t rgb = model->gpu.point_colors_rgb[pt_idx];
@@ -608,42 +644,64 @@ void icy::SnapshotManager::PrepareFrameArrays()
         uint8_t g = (rgb >> 8) & 0xff;
         uint8_t b = rgb & 0xff;
 
-        vis_r[cellIdx] += r/255.;
-        vis_g[cellIdx] += g/255.;
-        vis_b[cellIdx] += b/255.;
+        PointArray2r ww[3];
+        CalculateWeightCoeffs(pos, ww);
 
-        vis_Jpinv[cellIdx] += static_cast<float>(s->getValue(SimParams::idx_Jp_inv));
-        vis_P[cellIdx] += static_cast<float>(s->getValue(SimParams::idx_P));
-        vis_Q[cellIdx] += static_cast<float>(s->getValue(SimParams::idx_Q));
+        for (int i = -1; i <= 1; i++)
+            for (int j = -1; j <= 1; j++)
+            {
+                const size_t idx_gridnode = (j+cell[1]) + (i+cell[0])*GridY;
+                const t_PointReal Wip = ww[i+1][0]*ww[j+1][1];
+
+                const t_PointReal incM = Wip*particle_mass;
+                vis_point_density[idx_gridnode] += Wip;
+                vis_mass[idx_gridnode] += incM;
+                vis_vx[idx_gridnode] += incM*vx;
+                vis_vy[idx_gridnode] += incM*vy;
+
+                vis_Jpinv[idx_gridnode] += Wip*Jpinv;
+                vis_P[idx_gridnode] += Wip * P;
+                vis_Q[idx_gridnode] += Wip * Q;
+
+                vis_r[idx_gridnode] += Wip * (float)r;
+                vis_g[idx_gridnode] += Wip * (float)g;
+                vis_b[idx_gridnode] += Wip * (float)b;
+            }
+        count[cellIdx]++;
     }
+
 
 #pragma omp parallel for
     for(int i=0;i<gridSize;i++)
     {
-        int n = count[i];
-        if(n>0)
+        float density = vis_point_density[i];
+        float mass = vis_mass[i];
+        float c = count[i];
+        if(density>0)
         {
-            float coeff = 1./n;
-            vis_vx[i] *= coeff;
-            vis_vy[i] *= coeff;
+            const float coeff = 1./density;
+
+            vis_vx[i] /= mass;
+            vis_vy[i] /= mass;
+
             vis_r[i] *= coeff;
             vis_g[i] *= coeff;
             vis_b[i] *= coeff;
+
             vis_Jpinv[i] *= coeff;
+            vis_Jpinv[i] -= 1.0;
             vis_P[i] *= coeff;
             vis_Q[i] *= coeff;
 
             // Scale the float values to the range [0, 255]
-            uint8_t red = static_cast<uint8_t>(vis_r[i] * 255.0f);
-            uint8_t green = static_cast<uint8_t>(vis_g[i] * 255.0f);
-            uint8_t blue = static_cast<uint8_t>(vis_b[i] * 255.0f);
-            rgb[i*3+0] = red;
-            rgb[i*3+1] = green;
-            rgb[i*3+2] = blue;
+            rgb[i*3+0] = static_cast<uint8_t>(std::clamp(vis_r[i],0.f,255.f));
+            rgb[i*3+1] = static_cast<uint8_t>(std::clamp(vis_g[i],0.f,255.f));
+            rgb[i*3+2] = static_cast<uint8_t>(std::clamp(vis_b[i],0.f,255.f));
         }
         else
         {
             vis_vx[i] = vis_vy[i] = vis_Jpinv[i] = vis_P[i] = vis_Q[i] = 0;
+            vis_Jpinv[i] = 1;
             rgb[i*3+0] = rgb[i*3+1] = rgb[i*3+2] = 0;
         }
     }
@@ -655,63 +713,6 @@ void icy::SnapshotManager::PrepareFrameArrays()
     const int &ox = model->prms.ModeledRegionOffsetX;
     const int &oy = model->prms.ModeledRegionOffsetY;
 
-
-    rgb_img.resize(gridSize*3);
-    rgb_img_Jpinv.resize(gridSize*3);
-    rgb_img_ridges.resize(gridSize*3);
-
-#pragma omp parallel for
-    for(int i=0;i<gx;i++)
-        for(int j=0;j<gy;j++)
-        {
-            const int img_idx = (i+gx*(gy-1-j))*3;
-            const int idx = j + gy*i;
-
-            uint8_t status = model->gpu.grid_status_buffer[idx];
-            uint8_t pts_count = count[idx];
-            if(status == 100 && pts_count)
-            {
-                // modelled area and points present
-                std::array<uint8_t, 3> _rgb;
-
-                _rgb[0] = static_cast<uint8_t>(vis_r[idx] * 255.0f);
-                _rgb[1] = static_cast<uint8_t>(vis_g[idx] * 255.0f);
-                _rgb[2] = static_cast<uint8_t>(vis_b[idx] * 255.0f);
-
-                const float Jp_inv = vis_Jpinv[idx];
-                const double range = 0.1;
-                const float val = (Jp_inv-1.)/range + 0.5;
-                std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, val);
-                float coeff2 = std::clamp(std::abs(Jp_inv-1)/range, 0., 1.);
-                if(Jp_inv>1.) coeff2 = std::clamp(std::abs(Jp_inv-1)*0.5/range, 0., 1.);
-                std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
-
-                // colors for ridges
-                const float val_ridges = (Jp_inv-1.)/range;
-                double alpha = val_ridges > 0 ? 1 : 0;
-                std::array<uint8_t, 3> c3 = colormap.getColor(ColorMap::Palette::Ridges, val_ridges);
-                std::array<uint8_t, 3> c4 = colormap.mergeColors(_rgb, c3, alpha);
-
-                for(int k=0;k<3;k++)
-                {
-                    rgb_img[img_idx+k] = _rgb[k];
-                    rgb_img_Jpinv[img_idx+k] = c2[k];
-                    rgb_img_ridges[img_idx+k] = c4[k];
-                }
-
-            }
-            else
-            {
-                // static area
-                for(int k=0;k<3;k++)
-                {
-                    const int idx_special = ((i+ox) + (j+oy)*width)*3+k;
-                    const uint8_t val_color = model->gpu.original_image_colors_rgb[idx_special];
-                    rgb_img[img_idx + k] = rgb_img_Jpinv[img_idx + k] = val_color;
-                    rgb_img_ridges[img_idx + k] = val_color;
-                }
-            }
-        }
 }
 
 
@@ -719,9 +720,8 @@ void icy::SnapshotManager::PrepareFrameArrays()
 void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
 {
     LOGR("SnapshotManager::SaveFrame: step {}, time {}", SimulationStep, SimulationTime);
-    PrepareFrameArrays();
     const int frame = SimulationStep / model->prms.UpdateEveryNthStep;
-    SaveImagesJGP(frame);
+    // SaveImagesJGP(frame);
 
     // save as HDF5
     fs::path outputDir = "output";
@@ -777,6 +777,9 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
     ds_count.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &SimulationStep);
     ds_count.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
 }
+
+
+
 
 void icy::SnapshotManager::SaveImagesJGP(const int frame)
 {

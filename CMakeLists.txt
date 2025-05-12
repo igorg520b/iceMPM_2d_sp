@@ -112,6 +112,8 @@ add_executable(cm2
     simulation/gpu_partition.h
     simulation/gpu_partition.cpp
     simulation/kernels.cuh
+    simulation/kernels_visualization.cuh
+
 
     simulation/data_manager/snapshotmanager.h
     simulation/data_manager/snapshotmanager.cpp
@@ -126,7 +128,7 @@ add_executable(cm2
 )
 set_source_files_properties(simulation/gpu_partition.cpp PROPERTIES LANGUAGE CUDA)
 
-set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89;61")
+set_target_properties(cm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
 set_target_properties(cm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 target_link_libraries(cm2 PRIVATE Eigen3::Eigen spdlog::spdlog)
@@ -142,6 +144,9 @@ else()
 endif()
 
 target_include_directories(cm2 PRIVATE ${HDF5_INCLUDE_DIRS})
+
+target_compile_options(cm2 PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
+target_link_libraries(cm2 PRIVATE gomp)
 
 endif()
 
@@ -297,6 +302,7 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/gpu_partition.h
         simulation/gpu_partition.cpp
         simulation/kernels.cuh
+        simulation/kernels_visualization.cuh
         
         simulation/data_manager/snapshotmanager.h
         simulation/data_manager/snapshotmanager.cpp
@@ -317,7 +323,7 @@ FetchContent_MakeAvailable(PBrowser)
     target_include_directories(gm2 PRIVATE ${PBrowser_SOURCE_DIR}/objectpropertybrowser)
     target_link_libraries(gm2 PRIVATE PBrowser)
 
-    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89;61")
+    set_target_properties(gm2 PROPERTIES CUDA_ARCHITECTURES "80;89")
     set_target_properties(gm2 PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
     target_include_directories(gm2 PRIVATE gui gui/windows gui/vtk simulation simulation/hssoa simulation/data_manager External External/rapidjson)
@@ -341,10 +347,9 @@ FetchContent_MakeAvailable(PBrowser)
 
 
     # OpenMP
-#[[
-        target_compile_options(iceMPM_GUI PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
-        target_link_libraries(iceMPM_GUI PRIVATE gomp)
-]]
+    target_compile_options(gm2 PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
+    target_link_libraries(gm2 PRIVATE gomp)
+
     vtk_module_autoinit(
     TARGETS gm2
     MODULES ${VTK_LIBRARIES}

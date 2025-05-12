@@ -52,12 +52,13 @@ public:
     icy::Model *model;
     double wind_visualization_time;
 
-    enum VisOpt { none, status, Jp_inv, P, Q, color, v_u, v_v, v_norm, thickness, regions, ridges};
+    enum VisOpt { none, status, Jp_inv, P, Q, color, v_u, v_v, v_norm, thickness, regions, ridges,
+                  grid_Jpinv, grid_mass, grid_pointdensity, grid_P, grid_Q, grid_colors,
+                  grid_vnorm};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};
 
-    void SynchronizeValues();
     void SynchronizeTopology();
     void ChangeVisualizationOption(int option);  // invoked from GUI/main thread
 
@@ -68,6 +69,7 @@ public:
 
 private:
     ColorMap colormap;
+    void SynchronizeValues();
 
     vtkNew<vtkLookupTable> lut_Pressure, lut_P2, lut_ANSYS, lut_Ridges;
     void populateLut(ColorMap::Palette palette, vtkNew<vtkLookupTable>& table);
