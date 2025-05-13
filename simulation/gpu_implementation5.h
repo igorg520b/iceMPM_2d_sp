@@ -4,7 +4,6 @@
 
 #include "gpu_partition.h"
 #include "parameters_sim.h"
-#include "point.h"
 #include "host_side_soa.h"
 
 #include <Eigen/Core>

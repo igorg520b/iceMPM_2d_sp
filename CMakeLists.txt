@@ -23,6 +23,7 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
+find_package(OpenJPEG REQUIRED)
 
 
 if(BUILD_PREPARER)
@@ -95,8 +96,6 @@ add_executable(cm2
     simulation/parameters_sim.cpp
     simulation/model.cpp
     simulation/model.h
-    simulation/point.h
-    simulation/point.cpp
 
     simulation/givens.cuh
     simulation/helper_math.cuh
@@ -112,7 +111,6 @@ add_executable(cm2
     simulation/gpu_partition.h
     simulation/gpu_partition.cpp
     simulation/kernels.cuh
-    simulation/kernels_visualization.cuh
 
 
     simulation/data_manager/snapshotmanager.h
@@ -144,6 +142,9 @@ else()
 endif()
 
 target_include_directories(cm2 PRIVATE ${HDF5_INCLUDE_DIRS})
+
+target_include_directories(cm2 PRIVATE ${OPENJPEG_INCLUDE_DIRS})
+target_link_libraries(cm2 PRIVATE ${OPENJPEG_LIBRARIES})
 
 target_compile_options(cm2 PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
 target_link_libraries(cm2 PRIVATE gomp)
@@ -197,6 +198,30 @@ if(BUILD_POSTPROCESSOR)
 
         gui/colormap.h
         gui/colormap.cpp
+
+
+
+        simulation/model.cpp
+        simulation/model.h
+
+        simulation/givens.cuh
+        simulation/helper_math.cuh
+        simulation/gpu_implementation5.h
+        simulation/gpu_implementation5.cpp
+
+        simulation/hssoa/host_side_soa.h
+        simulation/hssoa/host_side_soa.cpp
+        simulation/hssoa/proxypoint2d.h
+        simulation/hssoa/proxypoint2d.cpp
+
+        simulation/gpu_partition.h
+        simulation/gpu_partition.cpp
+        simulation/kernels.cuh
+
+        simulation/data_manager/snapshotmanager.h
+        simulation/data_manager/snapshotmanager.cpp
+        simulation/data_manager/windandcurrentinterpolator.cpp
+        simulation/data_manager/windandcurrentinterpolator.h
     )
 
     target_include_directories(pp PRIVATE postprocessor postprocessor/window postprocessor/vtk gui External)
@@ -221,6 +246,13 @@ if(BUILD_POSTPROCESSOR)
     TARGETS pp
     MODULES ${VTK_LIBRARIES}
     )
+
+    target_include_directories(pp PRIVATE ${OPENJPEG_INCLUDE_DIRS})
+    target_link_libraries(pp PRIVATE ${OPENJPEG_LIBRARIES})
+
+    set_target_properties(pp PROPERTIES CUDA_ARCHITECTURES "80;89")
+    set_target_properties(pp PROPERTIES CUDA_SEPARABLE_COMPILATION ON CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+
 
     target_compile_options(pp PRIVATE -fopenmp -Wno-stringop-overflow -Wno-invalid-offsetof)
     target_link_libraries(pp PRIVATE gomp)
@@ -285,8 +317,6 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/parameters_sim.cpp
         simulation/model.cpp
         simulation/model.h
-        simulation/point.h
-        simulation/point.cpp
 
         simulation/givens.cuh
         simulation/helper_math.cuh
@@ -302,7 +332,6 @@ FetchContent_MakeAvailable(PBrowser)
         simulation/gpu_partition.h
         simulation/gpu_partition.cpp
         simulation/kernels.cuh
-        simulation/kernels_visualization.cuh
         
         simulation/data_manager/snapshotmanager.h
         simulation/data_manager/snapshotmanager.cpp
@@ -344,6 +373,9 @@ FetchContent_MakeAvailable(PBrowser)
 
     # spdlog
     target_link_libraries(gm2 PRIVATE spdlog::spdlog)
+
+    target_include_directories(gm2 PRIVATE ${OPENJPEG_INCLUDE_DIRS})
+    target_link_libraries(gm2 PRIVATE ${OPENJPEG_LIBRARIES})
 
 
     # OpenMP

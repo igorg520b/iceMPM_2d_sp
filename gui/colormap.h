@@ -33,6 +33,7 @@ public:
                                               const std::array<uint8_t, 3>& colorArray2, float alpha);
 
 
+    inline static constexpr std::array<uint8_t, 3> rgb_water = {0x15, 0x1f, 0x2f};
 };
 
 

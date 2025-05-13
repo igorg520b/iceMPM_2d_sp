@@ -139,9 +139,6 @@ void icy::VisualRepresentation::SynchronizeTopology()
                     _rgb[1] = model->snapshot.rgb[idx2*3+1];
                     _rgb[2] = model->snapshot.rgb[idx2*3+2];
 
-                    float alpha = model->snapshot.vis_point_density[idx2]/range;
-                    std::array<uint8_t, 3> c = ColorMap::mergeColors(_rgb_water, _rgb, alpha);
-//                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
                     for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = _rgb[k];
                 }
                 else if(VisualizingVariable == VisOpt::grid_Jpinv)
@@ -155,7 +152,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
                     _rgb[1] = model->snapshot.rgb[idx2*3+1];
                     _rgb[2] = model->snapshot.rgb[idx2*3+2];
 
-                    float alpha = model->snapshot.vis_point_density[idx2]/0.5;
+                    float alpha = model->snapshot.mass_mask[idx2] ? 1 : 0;
                     std::array<uint8_t, 3> c = ColorMap::mergeColors(_rgb_water, _rgb, alpha);
 
                     float val = model->snapshot.vis_Jpinv[idx2];
@@ -169,7 +166,6 @@ void icy::VisualRepresentation::SynchronizeTopology()
                 else if(VisualizingVariable == VisOpt::grid_pointdensity)
                 {
                     if(!model->snapshot.vis_Jpinv.size()) continue;
-                    // visualize Jpinv from the prepared grid / visual array
                     size_t idx2 = j + i*gy;
                     float val = model->snapshot.vis_point_density[idx2]/SimParams::MPM_points_per_cell/range;
                     std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, val);
@@ -178,10 +174,8 @@ void icy::VisualRepresentation::SynchronizeTopology()
                 else if(VisualizingVariable == VisOpt::grid_P)
                 {
                     if(!model->snapshot.vis_Jpinv.size()) continue;
-                    // visualize Jpinv from the prepared grid / visual array
                     size_t idx2 = j + i*gy;
-                    float alpha = model->snapshot.vis_point_density[idx2]/SimParams::MPM_points_per_cell;
-                    alpha = std::clamp(alpha, 0.f, 1.f);
+                    float alpha = model->snapshot.mass_mask[idx2] ? 1 : 0;
                     float val = model->snapshot.vis_P[idx2];
                     std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, 0.5*val/range+0.5);
                     std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb_water, c, alpha);
@@ -190,10 +184,8 @@ void icy::VisualRepresentation::SynchronizeTopology()
                 else if(VisualizingVariable == VisOpt::grid_Q)
                 {
                     if(!model->snapshot.vis_Jpinv.size()) continue;
-                    // visualize Jpinv from the prepared grid / visual array
                     size_t idx2 = j + i*gy;
-                    float alpha = model->snapshot.vis_point_density[idx2]/SimParams::MPM_points_per_cell;
-                    alpha = std::clamp(alpha, 0.f, 1.f);
+                    float alpha = model->snapshot.mass_mask[idx2] ? 1 : 0;
                     float val = model->snapshot.vis_Q[idx2];
                     std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, val/range);
                     std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb_water, c, alpha);
@@ -217,7 +209,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
                     std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, vnorm/range);
 
 
-                    float alpha = model->snapshot.vis_point_density[idx2]/0.5;
+                    float alpha = model->snapshot.mass_mask[idx2] ? 1 : 0;
                     std::array<uint8_t, 3> c3 = ColorMap::mergeColors(_rgb_water, c2, alpha);
 
                     for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c3[k];

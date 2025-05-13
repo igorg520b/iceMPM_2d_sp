@@ -58,6 +58,10 @@ void FrameData::LoadHDF5Frame(int frameNumber)
     //f00001.h5
     std::string fileName = fmt::format(fmt::runtime("{}/f{:05d}.h5"), ggd.frameDirectory, frame);
 
+    snapshot.LoadFrameCompressed(fileName, SimulationStep, SimulationTime);
+
+
+    /*
     size_t gridSize = ggd.prms.GridXTotal*ggd.prms.GridYTotal;
     count.resize(gridSize);
     vis_vx.resize(gridSize);
@@ -90,6 +94,7 @@ void FrameData::LoadHDF5Frame(int frameNumber)
     file.openDataSet("rgb").read(rgb.data(), H5::PredType::NATIVE_UINT8);
     file.close();
     LOGR("FrameData::LoadHDF5Frame (done): {}", frameNumber);
+*/
 }
 
 

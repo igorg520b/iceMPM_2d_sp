@@ -14,8 +14,18 @@
 #include <utility>
 #include <type_traits>
 
+#include <cmath>        // For std::round, std::abs, std::isnormal, M_PI
+#include <limits>       // For std::numeric_limits
+#include <stdexcept>    // For std::runtime_error
+#include <iostream>     // For LOGR placeholder
+#include <cstring>      // For memcpy
+#include <map>          // For HDF5 attribute maps
+
+
 #include <fmt/format.h>
 #include <fmt/std.h>
+
+#include <openjpeg.h>
 
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -219,6 +229,8 @@ void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5, 
         if(status == 1) val |= 0x10000;     // crushed
         p.setValueInt(SimParams::idx_utility_data, val);
 
+        p.setValue(SimParams::idx_P, 0.f);
+        p.setValue(SimParams::idx_Q, 0.f);
         p.setValue(SimParams::idx_Jp_inv, 1.f);
         p.setValue(SimParams::idx_Qp, 1.f);
         for(int idx=0; idx<SimParams::dim; idx++)
@@ -599,7 +611,6 @@ void icy::SnapshotManager::PrepareFrameArrays()
     LOGR("PrepareFrameArrays() {} x {}", model->prms.GridXTotal, model->prms.GridYTotal);
     const int gridSize = model->prms.GridXTotal*model->prms.GridYTotal;
 
-//    std::lock_guard<std::mutex> lg(model->accessing_point_data);
     count.assign(gridSize,0);
 
     vis_point_density.assign(gridSize, 0);
@@ -612,7 +623,15 @@ void icy::SnapshotManager::PrepareFrameArrays()
     vis_Jpinv.assign(gridSize,0);
     vis_P.assign(gridSize,0);
     vis_Q.assign(gridSize,0);
-    rgb.assign(gridSize*3,0);
+    rgb.assign(gridSize*3,255);
+    mass_mask.assign(gridSize,0);
+
+    const int &width = model->prms.InitializationImageSizeX;
+    const int &height = model->prms.InitializationImageSizeY;
+    const int &ox = model->prms.ModeledRegionOffsetX;
+    const int &oy = model->prms.ModeledRegionOffsetY;
+    const int &gx = model->prms.GridXTotal;
+    const int &gy = model->prms.GridYTotal;
 
     const int nPts = model->gpu.hssoa.size;
 
@@ -676,7 +695,6 @@ void icy::SnapshotManager::PrepareFrameArrays()
     {
         float density = vis_point_density[i];
         float mass = vis_mass[i];
-        float c = count[i];
         if(density>0)
         {
             const float coeff = 1./density;
@@ -694,25 +712,28 @@ void icy::SnapshotManager::PrepareFrameArrays()
             vis_Q[i] *= coeff;
 
             // Scale the float values to the range [0, 255]
-            rgb[i*3+0] = static_cast<uint8_t>(std::clamp(vis_r[i],0.f,255.f));
-            rgb[i*3+1] = static_cast<uint8_t>(std::clamp(vis_g[i],0.f,255.f));
-            rgb[i*3+2] = static_cast<uint8_t>(std::clamp(vis_b[i],0.f,255.f));
+          //  rgb[i*3+0] = static_cast<uint8_t>(std::clamp(vis_r[i],0.f,255.f));
+          //  rgb[i*3+1] = static_cast<uint8_t>(std::clamp(vis_g[i],0.f,255.f));
+          //  rgb[i*3+2] = static_cast<uint8_t>(std::clamp(vis_b[i],0.f,255.f));
         }
-        else
+
+        const float epsilon = 1e-1;
+        mass_mask[i] = density > epsilon ? 1 : 0;
+
+        if(!mass_mask[i] || model->gpu.grid_status_buffer[i] != 100)
         {
+            vis_point_density[i] = 0;
+            vis_mass[i] = 0;
             vis_vx[i] = vis_vy[i] = vis_Jpinv[i] = vis_P[i] = vis_Q[i] = 0;
-            vis_Jpinv[i] = 1;
-            rgb[i*3+0] = rgb[i*3+1] = rgb[i*3+2] = 0;
+            vis_Jpinv[i] = 0;
         }
+
+        // special treatment for rgb
+        float alpha = std::clamp(density, 0.f, 1.f);
+        rgb[i*3+0] = alpha*(static_cast<uint8_t>(std::clamp(vis_r[i],0.f,255.f))) + (1-alpha)*ColorMap::rgb_water[0];
+        rgb[i*3+1] = alpha*(static_cast<uint8_t>(std::clamp(vis_g[i],0.f,255.f))) + (1-alpha)*ColorMap::rgb_water[1];
+        rgb[i*3+2] = alpha*(static_cast<uint8_t>(std::clamp(vis_b[i],0.f,255.f))) + (1-alpha)*ColorMap::rgb_water[2];
     }
-
-    const int &gx = model->prms.GridXTotal;
-    const int &gy = model->prms.GridYTotal;
-    const int &width = model->prms.InitializationImageSizeX;
-    const int &height = model->prms.InitializationImageSizeY;
-    const int &ox = model->prms.ModeledRegionOffsetX;
-    const int &oy = model->prms.ModeledRegionOffsetY;
-
 }
 
 
@@ -776,40 +797,796 @@ void icy::SnapshotManager::SaveFrame(int SimulationStep, double SimulationTime)
     H5::DataSpace att_dspace(H5S_SCALAR);
     ds_count.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, att_dspace).write(H5::PredType::NATIVE_INT, &SimulationStep);
     ds_count.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, att_dspace).write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
+
+   // SaveFrameCompressed(SimulationStep, SimulationTime);
 }
 
 
 
 
-void icy::SnapshotManager::SaveImagesJGP(const int frame)
+
+
+
+
+
+
+
+
+
+
+
+// ==================================== saving frame with OpenJPEG
+
+
+// Write callback: writes data to the buffer and resizes it if necessary
+OPJ_SIZE_T icy::SnapshotManager::mem_stream_write(void* p_buffer, OPJ_SIZE_T size, void* p_user_data) {
+    MemoryStream* mem = reinterpret_cast<MemoryStream*>(p_user_data);
+    size_t required_size = mem->position + size;
+    if (required_size > mem->buffer->size())
+        mem->buffer->resize(required_size);
+
+    std::memcpy(mem->buffer->data() + mem->position, p_buffer, size);
+    mem->position += size;
+    return size;
+}
+
+// Skip callback (used by OpenJPEG)
+OPJ_OFF_T icy::SnapshotManager::mem_stream_skip(OPJ_OFF_T n, void* p_user_data) {
+    MemoryStream* mem = reinterpret_cast<MemoryStream*>(p_user_data);
+    mem->position += n;
+    return n;
+}
+
+// Seek callback
+OPJ_BOOL icy::SnapshotManager::mem_stream_seek(OPJ_OFF_T pos, void* p_user_data) {
+    MemoryStream* mem = reinterpret_cast<MemoryStream*>(p_user_data);
+    if (pos < 0) return OPJ_FALSE;
+    mem->position = static_cast<size_t>(pos);
+    return OPJ_TRUE;
+}
+
+// Main compression function
+bool icy::SnapshotManager::compress_grayscale_jp2(const uint16_t* data_ptr,
+                                                  const int width, const int height,
+                            std::vector<uint8_t>& out_compressed_data) const
 {
-    fs::path outputDir = "output";
-    fs::path imageDir1 = "images/rgb";
-    fs::path imageDir2 = "images/Jpinv";
-    fs::path imageDir3 = "images/ridges";
-    fs::path targetPath1 = outputDir / SimulationTitle / imageDir1;
-    fs::path targetPath2 = outputDir / SimulationTitle / imageDir2;
-    fs::path targetPath3 = outputDir / SimulationTitle / imageDir3;
-    fs::create_directories(targetPath1);
-    fs::create_directories(targetPath2);
-    fs::create_directories(targetPath3);
+    opj_image_cmptparm_t cmptparm{};
+    cmptparm.dx = 1;
+    cmptparm.dy = 1;
+    cmptparm.w = width;
+    cmptparm.h = height;
+    cmptparm.sgnd = 0;
+    cmptparm.prec = DEFAULT_DISCRETIZATION_BITS;
 
-    std::string baseName = fmt::format(fmt::runtime("i{:05d}.jpg"), frame);
+    opj_image_t* image = opj_image_create(1, &cmptparm, OPJ_CLRSPC_GRAY);
+    if (!image)  throw std::runtime_error("icy::SnapshotManager::compress_grayscale_jp2: Failed to create OpenJPEG image.");
+    image->x1 = width;
+    image->y1 = height;
 
-    fs::path fullPath1 = targetPath1 / baseName;
-    fs::path fullPath2 = targetPath2 / baseName;
-    fs::path fullPath3 = targetPath3 / baseName;
+    // Copy pixel data
+    // OpenJPEG's image->comps[c].data is OPJ_INT32*
+    for(int i = 0; i < width * height; ++i) {
+        image->comps[0].data[i] = static_cast<OPJ_INT32>(data_ptr[i]);
+    }
 
-    const int &gx = model->prms.GridXTotal;
-    const int &gy = model->prms.GridYTotal;
+    opj_cparameters_t prms;
+    opj_set_default_encoder_parameters(&prms);
+    prms.tcp_rates[0] = DEFAULT_OPENJPEG_COMPRESSION_RATE;
+    prms.tcp_numlayers = 1;
+    prms.cp_disto_alloc = 1;
+    prms.irreversible = 1;
+    prms.cod_format = 1; // JP2 format
 
-    int success1 = stbi_write_jpg(fullPath1.string().c_str(), gx, gy, 3, rgb_img.data(), 80);
-    int success2 = stbi_write_jpg(fullPath2.string().c_str(), gx, gy, 3, rgb_img_Jpinv.data(), 80);
-    int success3 = stbi_write_jpg(fullPath3.string().c_str(), gx, gy, 3, rgb_img_ridges.data(), 80);
+    opj_codec_t* codec = opj_create_compress(OPJ_CODEC_JP2);
+    if (!codec) throw std::runtime_error("Failed to create OpenJPEG codec.");
 
-    if(!success1 || !success2 || !success3)
-    {
-        LOGV("failed saving frame images as JPG");
+    if (!opj_setup_encoder(codec, &prms, image)) throw std::runtime_error("Failed to setup OpenJPEG encoder.");
+
+
+    opj_stream_t* stream = opj_stream_create(OPJ_J2K_STREAM_CHUNK_SIZE, OPJ_FALSE);
+    if(!stream) throw std::runtime_error("Failed to create OpenJPEG stream.");
+
+    out_compressed_data.clear(); // Ensure output vector is clean
+    out_compressed_data.reserve(static_cast<size_t>(width) * height * (DEFAULT_DISCRETIZATION_BITS + 7) / 8);
+
+    MemoryStream mem_stream_user_data;
+    mem_stream_user_data.buffer = &out_compressed_data;
+    mem_stream_user_data.position = 0;
+
+
+    opj_stream_set_user_data(stream, &mem_stream_user_data, nullptr);
+    opj_stream_set_write_function(stream, mem_stream_write);
+    opj_stream_set_skip_function(stream, mem_stream_skip);
+    opj_stream_set_seek_function(stream, mem_stream_seek);
+    opj_stream_set_user_data_length(stream, static_cast<OPJ_UINT64>(width * height * 2)); // conservative
+
+    bool success = opj_start_compress(codec, image, stream)
+                   && opj_encode(codec, stream)
+                   && opj_end_compress(codec, stream);
+
+    if (!success) throw std::runtime_error("Compression failed.");
+
+    out_compressed_data.resize(mem_stream_user_data.position);
+
+    opj_stream_destroy(stream);
+    opj_destroy_codec(codec);
+    opj_image_destroy(image);
+
+    return success;
+}
+
+
+bool icy::SnapshotManager::compress_rgb_jp2(const uint8_t* data_ptr,
+                                            const int width, const int height,
+                                            std::vector<uint8_t>& out_compressed_data) const
+{
+    // Optional parameter validation
+    if (!data_ptr || width <= 0 || height <= 0) {
+        throw std::invalid_argument("icy::SnapshotManager::compress_rgb_jp2: Invalid parameters.");
+    }
+
+    const int num_components = 3;
+
+    // 1. Setup component parameters for R, G, B
+    opj_image_cmptparm_t cmptparms[num_components]; // Array for 3 components
+    for (int i = 0; i < num_components; ++i) {
+        std::memset(&cmptparms[i], 0, sizeof(opj_image_cmptparm_t)); // Use std::memset
+        cmptparms[i].dx = 1; // Sample spacing horizontal
+        cmptparms[i].dy = 1; // Sample spacing vertical
+        cmptparms[i].w = width;
+        cmptparms[i].h = height;
+        cmptparms[i].sgnd = 0; // Unsigned
+        cmptparms[i].prec = 8; // 8 bits per channel
+    }
+
+    // 2. Create the OpenJPEG image structure for sRGB
+    opj_image_t* image = opj_image_create(num_components, cmptparms, OPJ_CLRSPC_SRGB);
+    if (!image) {
+        throw std::runtime_error("icy::SnapshotManager::compress_rgb_jp2: Failed to create OpenJPEG image.");
+    }
+    // If program terminates on throw, image is leaked until termination.
+
+    // Set image canvas dimensions (optional but good practice)
+    image->x0 = 0;
+    image->y0 = 0;
+    image->x1 = width;
+    image->y1 = height;
+
+    // 3. De-interleave pixel data from input (RGBRGB...) to planar (RRR..., GGG..., BBB...)
+    // OpenJPEG's image->comps[c].data is OPJ_INT32*
+    for (int i = 0; i < width * height; ++i) {
+        image->comps[0].data[i] = static_cast<OPJ_INT32>(data_ptr[num_components * i + 0]); // R
+        image->comps[1].data[i] = static_cast<OPJ_INT32>(data_ptr[num_components * i + 1]); // G
+        image->comps[2].data[i] = static_cast<OPJ_INT32>(data_ptr[num_components * i + 2]); // B
+    }
+
+    // 4. Setup compression parameters
+    opj_cparameters_t prms;
+    opj_set_default_encoder_parameters(&prms);
+    prms.tcp_rates[0] = DEFAULT_OPENJPEG_COMPRESSION_RATE_RGB; // Target compression ratio
+    prms.tcp_numlayers = 1;
+    prms.cp_disto_alloc = 1; // Rate distortion allocation
+    prms.irreversible = 1;   // Use lossy (irreversible) transforms
+    prms.cod_format = 1;     // JP2 file format
+
+    // 5. Create the compressor codec
+    opj_codec_t* codec = opj_create_compress(OPJ_CODEC_JP2);
+    if (!codec) {
+        opj_image_destroy(image); // Manual cleanup before throw
+        throw std::runtime_error("icy::SnapshotManager::compress_rgb_jp2: Failed to create OpenJPEG codec.");
+    }
+    // If program terminates on throw, codec (and image) leaked until termination.
+
+    // 6. Setup the encoder
+    if (!opj_setup_encoder(codec, &prms, image)) {
+        opj_destroy_codec(codec); // Manual cleanup
+        opj_image_destroy(image); // Manual cleanup
+        throw std::runtime_error("icy::SnapshotManager::compress_rgb_jp2: Failed to setup OpenJPEG encoder.");
+    }
+    // If program terminates on throw, codec and image leaked until termination.
+
+    // 7. Create the output stream
+    opj_stream_t* stream = opj_stream_create(OPJ_J2K_STREAM_CHUNK_SIZE, OPJ_FALSE); // OPJ_FALSE for writing
+    if(!stream) {
+        opj_destroy_codec(codec); // Manual cleanup
+        opj_image_destroy(image); // Manual cleanup
+        throw std::runtime_error("icy::SnapshotManager::compress_rgb_jp2: Failed to create OpenJPEG stream.");
+    }
+    // If program terminates on throw, stream, codec, image leaked until termination.
+
+    // 8. Prepare output buffer and MemoryStream user data
+    out_compressed_data.clear();
+    // Reserve based on uncompressed size (W * H * 3 components * 1 byte/component)
+    out_compressed_data.reserve(static_cast<size_t>(width) * height * num_components);
+
+    MemoryStream mem_stream_user_data; // Assumes icy::SnapshotManager::MemoryStream
+    mem_stream_user_data.buffer = &out_compressed_data;
+    mem_stream_user_data.position = 0;
+
+    // 9. Configure the stream with callbacks and user data
+    opj_stream_set_user_data(stream, &mem_stream_user_data, nullptr /* no custom free function */);
+    opj_stream_set_write_function(stream, icy::SnapshotManager::mem_stream_write); // Static member
+    opj_stream_set_skip_function(stream, icy::SnapshotManager::mem_stream_skip);   // Static member
+    opj_stream_set_seek_function(stream, icy::SnapshotManager::mem_stream_seek);   // Static member
+    // opj_stream_set_user_data_length(stream, estimated_length); // Optional
+
+    // 10. Perform the compression
+    bool success = opj_start_compress(codec, image, stream)
+                   && opj_encode(codec, stream)
+                   && opj_end_compress(codec, stream);
+
+    // 11. Handle compression result
+    if (!success) {
+        opj_stream_destroy(stream); // Manual cleanup before throw
+        opj_destroy_codec(codec);   // Manual cleanup
+        opj_image_destroy(image); // Manual cleanup
+        throw std::runtime_error("icy::SnapshotManager::compress_rgb_jp2: Compression encoding failed.");
+    }
+
+    // 12. Resize output vector to actual compressed size
+    out_compressed_data.resize(mem_stream_user_data.position);
+
+    // 13. Cleanup resources on successful path
+    opj_stream_destroy(stream);
+    opj_destroy_codec(codec);
+    opj_image_destroy(image);
+
+    return success;
+}
+
+
+// --- Float Data Processing ---
+void icy::SnapshotManager::normalize_and_discretize(const std::vector<float>& input,
+                                                    std::vector<uint16_t>& output,
+                                                    float& minVal, float& maxVal,
+                                                    int bits) const
+{
+    auto mm = std::minmax_element(input.begin(), input.end());
+    minVal = *mm.first;
+    maxVal = *mm.second;
+
+    output.resize(input.size());
+    float range = maxVal - minVal;
+    const uint16_t max_discrete_val = static_cast<uint16_t>((1 << bits) - 1);
+    for (size_t i = 0; i < input.size(); ++i) {
+        output[i] = static_cast<uint16_t>(
+            std::round((input[i] - minVal) / range * max_discrete_val)
+            );
     }
 }
 
+
+
+
+void icy::SnapshotManager::save_compressed_float_array_hdf5(H5::H5File &file, const std::string& dataset_name,
+                                                            const std::vector<float>& data_vec,
+                                                            int width, int height) const
+{
+    // 1. Discretize the float data
+    std::vector<uint16_t> discretized_data;
+    float min_val, max_val;
+    normalize_and_discretize(data_vec, discretized_data, min_val, max_val, DEFAULT_DISCRETIZATION_BITS);
+
+    // 2. Compress the discretized data using OpenJPEG
+    std::vector<uint8_t> compressed_blob;
+    bool success = compress_grayscale_jp2(discretized_data.data(),
+                                          width, height,
+                                          compressed_blob);
+    if (!success) {
+        throw std::runtime_error("icy::SnapshotManager::save_compressed_float_array_hdf5: Failed to compress float array: " + dataset_name);
+    }
+
+    // 3. Write the compressed blob as an HDF5 dataset
+    hsize_t dims_blob[1] = {compressed_blob.size()};
+    H5::DataSpace blob_space(1, dims_blob);
+
+    // Create dataset - no chunking/filtering needed for the pre-compressed blob
+    H5::DataSet dataset = file.createDataSet(dataset_name, H5::PredType::NATIVE_UINT8, blob_space);
+
+    // Write the data (handle potentially empty blob if input was empty)
+    if (!compressed_blob.empty()) {
+        dataset.write(compressed_blob.data(), H5::PredType::NATIVE_UINT8);
+    }
+
+    // 4. Write attributes directly to the dataset
+    H5::DataSpace att_space(H5S_SCALAR); // Dataspace for scalar attributes
+
+    // Attribute: original_width
+    H5::Attribute attr_width = dataset.createAttribute("original_width", H5::PredType::NATIVE_INT, att_space);
+    attr_width.write(H5::PredType::NATIVE_INT, &width);
+
+    // Attribute: original_height
+    H5::Attribute attr_height = dataset.createAttribute("original_height", H5::PredType::NATIVE_INT, att_space);
+    attr_height.write(H5::PredType::NATIVE_INT, &height);
+
+    // Attribute: discretization_bits
+    int disc_bits = DEFAULT_DISCRETIZATION_BITS; // Use the constant value
+    H5::Attribute attr_bits = dataset.createAttribute("discretization_bits", H5::PredType::NATIVE_INT, att_space);
+    attr_bits.write(H5::PredType::NATIVE_INT, &disc_bits);
+
+    // Attribute: min_value
+    H5::Attribute attr_min = dataset.createAttribute("min_value", H5::PredType::NATIVE_FLOAT, att_space);
+    attr_min.write(H5::PredType::NATIVE_FLOAT, &min_val);
+
+    // Attribute: max_value
+    H5::Attribute attr_max = dataset.createAttribute("max_value", H5::PredType::NATIVE_FLOAT, att_space);
+    attr_max.write(H5::PredType::NATIVE_FLOAT, &max_val);
+
+    // Attributes are now written. No need to close them individually unless reusing the variable name.
+    LOGR("dataset {}: {}", dataset_name, compressed_blob.size());
+}
+
+
+void icy::SnapshotManager::save_compressed_rgb_array_hdf5(H5::H5File &file, const std::string& dataset_name,
+                                                          const std::vector<uint8_t>& rgb_data, // interleaved RGB
+                                                          int width, int height) const
+{
+    // 1. Compress the RGB data using OpenJPEG
+    std::vector<uint8_t> compressed_blob;
+    bool success = compress_rgb_jp2(rgb_data.data(), width, height, compressed_blob);
+    if (!success) {
+        throw std::runtime_error("icy::SnapshotManager::save_compressed_rgb_array_hdf5: Failed to compress RGB array: " + dataset_name);
+    }
+
+    // 2. Write the compressed blob as an HDF5 dataset
+    hsize_t dims_blob[1] = {compressed_blob.size()};
+    H5::DataSpace blob_space(1, dims_blob);
+
+    // Create dataset - no chunking/filtering needed for the pre-compressed blob
+    H5::DataSet dataset = file.createDataSet(dataset_name, H5::PredType::NATIVE_UINT8, blob_space);
+
+    // Write the data (handle potentially empty blob if input was empty)
+    if (!compressed_blob.empty()) {
+        dataset.write(compressed_blob.data(), H5::PredType::NATIVE_UINT8);
+    }
+
+    // 3. Write attributes directly to the dataset
+    H5::DataSpace att_space(H5S_SCALAR); // Dataspace for scalar attributes
+
+    // Attribute: original_width
+    H5::Attribute attr_width = dataset.createAttribute("original_width", H5::PredType::NATIVE_INT, att_space);
+    attr_width.write(H5::PredType::NATIVE_INT, &width);
+
+    // Attribute: original_height
+    H5::Attribute attr_height = dataset.createAttribute("original_height", H5::PredType::NATIVE_INT, att_space);
+    attr_height.write(H5::PredType::NATIVE_INT, &height);
+    LOGR("dataset {}: {}", dataset_name, compressed_blob.size());
+}
+
+
+
+
+void icy::SnapshotManager::SaveFrameCompressed(int SimulationStep, double SimulationTime)
+{
+
+    LOGR("SnapshotManager::SaveFrameCompressed: step {}, time {}", SimulationStep, SimulationTime);
+    const int frame = SimulationStep / model->prms.UpdateEveryNthStep;
+
+    fs::path outputDir = "output_compressed";
+    fs::path framesDir = "frames";
+    fs::path targetPath = outputDir / SimulationTitle / framesDir;
+    fs::create_directories(targetPath);
+
+    std::string baseName = fmt::format(fmt::runtime("f{:05d}.h5"), frame);
+    fs::path fullPath = targetPath / baseName;
+
+    H5::H5File file(fullPath.string(), H5F_ACC_TRUNC);
+    const int grid_w = model->prms.GridXTotal;
+    const int grid_h = model->prms.GridYTotal;
+
+//    save_compressed_float_array_hdf5(file, "vis_point_density", vis_point_density, grid_w, grid_h);
+//    save_compressed_float_array_hdf5(file, "vis_mass", vis_mass, grid_w, grid_h);
+    save_compressed_float_array_hdf5(file, "vis_Jpinv", vis_Jpinv, grid_w, grid_h);
+    save_compressed_float_array_hdf5(file, "vis_P", vis_P, grid_w, grid_h);
+    save_compressed_float_array_hdf5(file, "vis_Q", vis_Q, grid_w, grid_h);
+    save_compressed_float_array_hdf5(file, "vis_vx", vis_vx, grid_w, grid_h);
+    save_compressed_float_array_hdf5(file, "vis_vy", vis_vy, grid_w, grid_h);
+
+    if (!rgb.empty()) save_compressed_rgb_array_hdf5(file, "rgb", rgb, grid_w, grid_h);
+
+    H5::DataSet vis_mass_dataset = file.openDataSet("vis_Jpinv");
+    H5::DataSpace scalar_space(H5S_SCALAR);
+
+    H5::Attribute attr_step = vis_mass_dataset.createAttribute("SimulationStep", H5::PredType::NATIVE_INT, scalar_space);
+    attr_step.write(H5::PredType::NATIVE_INT, &SimulationStep);
+
+    H5::Attribute attr_time = vis_mass_dataset.createAttribute("SimulationTime", H5::PredType::NATIVE_DOUBLE, scalar_space);
+    attr_time.write(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
+
+
+    // save mass mask
+    hsize_t dims_mask_array[2] = {(hsize_t)grid_w, (hsize_t)grid_h};
+    H5::DataSpace dataspace_mass_mask(2, dims_mask_array); // Rank 2
+
+    H5::DSetCreatPropList proplist_mass_mask;
+    // Define chunk dimensions, ensuring they are not larger than dataset dimensions
+    hsize_t chunk_dims_mm[2] = {
+        std::min((hsize_t)128, dims_mask_array[0]),
+        std::min((hsize_t)128, dims_mask_array[1])
+    };
+
+    proplist_mass_mask.setChunk(2, chunk_dims_mm); // Rank 2
+    proplist_mass_mask.setDeflate(9); // Compression level (e.g., 6)
+
+    H5::DataSet ds_mass_mask = file.createDataSet("mass_mask",
+                                                  H5::PredType::NATIVE_UINT8,
+                                                  dataspace_mass_mask,
+                                                  proplist_mass_mask);
+    ds_mass_mask.write(mass_mask.data(), H5::PredType::NATIVE_UINT8);
+
+
+    LOGR("Successfully saved compressed frame: {}", fullPath.string());
+}
+
+
+
+
+
+
+
+
+
+// =========================== FRAME load
+
+OPJ_SIZE_T icy::SnapshotManager::mem_stream_read(void* p_buffer, OPJ_SIZE_T size, void* p_user_data) {
+    MemoryStream* mem = reinterpret_cast<MemoryStream*>(p_user_data);
+    if (!mem || !mem->buffer) return (OPJ_SIZE_T)-1;
+
+    OPJ_SIZE_T remaining_bytes = mem->buffer->size() - mem->position;
+    OPJ_SIZE_T bytes_to_read = std::min(size, remaining_bytes);
+
+    if (bytes_to_read > 0) {
+        std::memcpy(p_buffer, mem->buffer->data() + mem->position, bytes_to_read);
+        mem->position += bytes_to_read;
+    }
+    // If bytes_to_read < size it means EOF was reached.
+    // OpenJPEG expects the number of bytes actually read, or -1 on error/true EOF condition.
+    return bytes_to_read == 0 && size > 0 ? (OPJ_SIZE_T)-1 : bytes_to_read;
+}
+
+OPJ_OFF_T icy::SnapshotManager::mem_stream_read_skip(OPJ_OFF_T n, void* p_user_data) {
+    MemoryStream* mem = reinterpret_cast<MemoryStream*>(p_user_data);
+    if (!mem || !mem->buffer) return -1;
+
+    OPJ_OFF_T current_pos_offt = static_cast<OPJ_OFF_T>(mem->position);
+    OPJ_OFF_T new_pos_offt = current_pos_offt + n;
+
+    if (new_pos_offt < 0) { // Trying to skip before beginning
+        mem->position = 0;
+        return -current_pos_offt; // Actual amount skipped back
+    }
+    // Check if skipping beyond buffer end
+    if (static_cast<size_t>(new_pos_offt) > mem->buffer->size()) {
+        OPJ_OFF_T actual_skip = static_cast<OPJ_OFF_T>(mem->buffer->size()) - current_pos_offt;
+        mem->position = mem->buffer->size();
+        return actual_skip; // Return actual amount skipped forward
+    }
+
+    mem->position = static_cast<size_t>(new_pos_offt);
+    return n; // Return requested skip amount
+}
+
+OPJ_BOOL icy::SnapshotManager::mem_stream_read_seek(OPJ_OFF_T pos, void* p_user_data) {
+    MemoryStream* mem = reinterpret_cast<MemoryStream*>(p_user_data);
+    if (!mem || !mem->buffer) return OPJ_FALSE;
+    if (pos < 0 || static_cast<size_t>(pos) > mem->buffer->size()) {
+        // Cannot seek outside buffer bounds for reading
+        return OPJ_FALSE;
+    }
+    mem->position = static_cast<size_t>(pos);
+    return OPJ_TRUE;
+}
+
+
+// --- Decompression Functions ---
+
+bool icy::SnapshotManager::decompress_grayscale_jp2(std::vector<uint8_t>& compressed_data,
+                                                    std::vector<uint16_t>& out_data,
+                                                    int& width, int& height, int& bits_per_sample) const
+{
+    if (compressed_data.empty()) {
+        throw std::invalid_argument("icy::SnapshotManager::decompress_grayscale_jp2: No compressed data provided.");
+    }
+
+    opj_stream_t* stream = opj_stream_create(OPJ_J2K_STREAM_CHUNK_SIZE, OPJ_TRUE); // OPJ_TRUE for reading
+    if (!stream) throw std::runtime_error("icy::SnapshotManager::decompress_grayscale_jp2: Failed to create OpenJPEG stream.");
+
+    MemoryStream mem_stream_user_data;
+    mem_stream_user_data.buffer = &compressed_data;
+    mem_stream_user_data.position = 0;
+
+    opj_stream_set_user_data(stream, &mem_stream_user_data, nullptr);
+    opj_stream_set_read_function(stream, mem_stream_read);
+    opj_stream_set_skip_function(stream, mem_stream_read_skip);
+    opj_stream_set_seek_function(stream, mem_stream_read_seek);
+    opj_stream_set_user_data_length(stream, compressed_data.size());
+
+    opj_codec_t* codec = opj_create_decompress(OPJ_CODEC_JP2); // Assuming JP2 format was used for encoding
+    if (!codec) {
+        opj_stream_destroy(stream);
+        throw std::runtime_error("icy::SnapshotManager::decompress_grayscale_jp2: Failed to create OpenJPEG codec.");
+    }
+
+    opj_dparameters_t prms;
+    opj_set_default_decoder_parameters(&prms);
+    // Optional: prms.decod_format = 1; // Set if needed, usually auto-detected for JP2
+
+    if (!opj_setup_decoder(codec, &prms)) {
+        opj_destroy_codec(codec);
+        opj_stream_destroy(stream);
+        throw std::runtime_error("icy::SnapshotManager::decompress_grayscale_jp2: Failed to setup OpenJPEG decoder.");
+    }
+
+    opj_image_t* image = nullptr;
+    if (!opj_read_header(stream, codec, &image) || !image) {
+        if (image) opj_image_destroy(image); // Destroy image if partially created
+        opj_destroy_codec(codec);
+        opj_stream_destroy(stream);
+        throw std::runtime_error("icy::SnapshotManager::decompress_grayscale_jp2: Failed to read OpenJPEG header.");
+    }
+
+    // Optional: Set decoding area if needed via opj_set_decode_area
+
+    if (!opj_decode(codec, stream, image) || !opj_end_decompress(codec, stream)) {
+        opj_image_destroy(image);
+        opj_destroy_codec(codec);
+        opj_stream_destroy(stream);
+        throw std::runtime_error("icy::SnapshotManager::decompress_grayscale_jp2: OpenJPEG decompression failed.");
+    }
+
+    if (image->numcomps != 1) {
+        opj_image_destroy(image); opj_destroy_codec(codec); opj_stream_destroy(stream);
+        throw std::runtime_error("icy::SnapshotManager::decompress_grayscale_jp2: Expected 1 component for grayscale.");
+    }
+
+    opj_image_comp_t* comp = &image->comps[0];
+    width = comp->w;
+    height = comp->h;
+    bits_per_sample = comp->prec; // Precision from the codestream
+
+    out_data.resize(static_cast<size_t>(width) * height);
+    for (int i = 0; i < width * height; ++i) {
+        // Data in comp->data is OPJ_INT32. Cast to uint16_t.
+        // Add checks/handling for comp->sgnd if signed data is possible.
+        out_data[i] = static_cast<uint16_t>(comp->data[i]);
+    }
+
+    opj_image_destroy(image);
+    opj_destroy_codec(codec);
+    opj_stream_destroy(stream);
+
+    return true;
+}
+
+
+bool icy::SnapshotManager::decompress_rgb_jp2(std::vector<uint8_t>& compressed_data,
+                                              std::vector<uint8_t>& out_data, // Interleaved RGB
+                                              int& width, int& height) const
+{
+    if (compressed_data.empty()) {
+        throw std::invalid_argument("icy::SnapshotManager::decompress_rgb_jp2: No compressed data provided.");
+    }
+
+    opj_stream_t* stream = opj_stream_create(OPJ_J2K_STREAM_CHUNK_SIZE, OPJ_TRUE); // Read mode
+    if (!stream) throw std::runtime_error("icy::SnapshotManager::decompress_rgb_jp2: Failed to create OpenJPEG stream.");
+
+    MemoryStream mem_stream_user_data;
+    mem_stream_user_data.buffer = &compressed_data;
+    mem_stream_user_data.position = 0;
+
+    opj_stream_set_user_data(stream, &mem_stream_user_data, nullptr);
+    opj_stream_set_read_function(stream, mem_stream_read);
+    opj_stream_set_skip_function(stream, mem_stream_read_skip);
+    opj_stream_set_seek_function(stream, mem_stream_read_seek);
+    opj_stream_set_user_data_length(stream, compressed_data.size());
+
+    opj_codec_t* codec = opj_create_decompress(OPJ_CODEC_JP2);
+    if (!codec) { opj_stream_destroy(stream); throw std::runtime_error("Failed to create codec."); }
+
+    opj_dparameters_t prms;
+    opj_set_default_decoder_parameters(&prms);
+
+    if (!opj_setup_decoder(codec, &prms)) { opj_destroy_codec(codec); opj_stream_destroy(stream); throw std::runtime_error("Failed setup decoder."); }
+
+    opj_image_t* image = nullptr;
+    if (!opj_read_header(stream, codec, &image) || !image) {
+        if(image) opj_image_destroy(image); opj_destroy_codec(codec); opj_stream_destroy(stream);
+        throw std::runtime_error("Failed read header.");
+    }
+
+    if (!opj_decode(codec, stream, image) || !opj_end_decompress(codec, stream)) {
+        opj_image_destroy(image); opj_destroy_codec(codec); opj_stream_destroy(stream);
+        throw std::runtime_error("Decompression failed.");
+    }
+
+    if (image->numcomps < 3) { // Allow 3 (RGB) or 4 (RGBA, ignore A)
+        opj_image_destroy(image); opj_destroy_codec(codec); opj_stream_destroy(stream);
+        throw std::runtime_error("Expected at least 3 components for RGB.");
+    }
+    // Check precision (should be 8 for standard RGB)
+    if (image->comps[0].prec != 8 || image->comps[1].prec != 8 || image->comps[2].prec != 8) {
+        // Log warning or throw? For now, proceed but data might be misinterpreted.
+    }
+
+    width = image->comps[0].w;
+    height = image->comps[0].h;
+    const size_t num_pixels = static_cast<size_t>(width) * height;
+    const int num_components_out = 3; // Outputting RGB
+    out_data.resize(num_pixels * num_components_out);
+
+    // Interleave planar components back into RGB
+    for (size_t i = 0; i < num_pixels; ++i) {
+        out_data[num_components_out * i + 0] = static_cast<uint8_t>(image->comps[0].data[i]); // R
+        out_data[num_components_out * i + 1] = static_cast<uint8_t>(image->comps[1].data[i]); // G
+        out_data[num_components_out * i + 2] = static_cast<uint8_t>(image->comps[2].data[i]); // B
+    }
+
+    opj_image_destroy(image);
+    opj_destroy_codec(codec);
+    opj_stream_destroy(stream);
+    return true;
+}
+
+
+// --- Float Restoration ---
+
+void icy::SnapshotManager::restore_from_discretized(std::vector<uint16_t>& input,
+                                                    std::vector<float>& output,
+                                                    float minVal, float maxVal,
+                                                    int bits) const
+{
+    output.resize(input.size());
+    float range = maxVal - minVal;
+    const float max_discrete_val_float = static_cast<float>((1 << bits) - 1);
+
+    // Handle potential division by zero if range is extremely small
+    // Check if max_discrete_val_float is zero (only if bits <= 0, should not happen)
+    if (range < 1e-9f || max_discrete_val_float == 0.0f) {
+        // If range is near zero, all values should be minVal (or maxVal)
+        std::fill(output.begin(), output.end(), minVal);
+    } else {
+        for (size_t i = 0; i < input.size(); ++i) {
+            output[i] = minVal + (static_cast<float>(input[i]) / max_discrete_val_float) * range;
+        }
+    }
+}
+
+
+// --- HDF5 Loaders ---
+
+void icy::SnapshotManager::load_compressed_float_array_hdf5(H5::H5File &file, const std::string& dataset_name,
+                                                            std::vector<float>& data_vec) const
+{
+    // 1. Open dataset and read compressed blob
+    H5::DataSet dataset = file.openDataSet(dataset_name);
+    H5::DataSpace filespace = dataset.getSpace();
+    hsize_t dims_out[1];
+    filespace.getSimpleExtentDims(dims_out, nullptr);
+    std::vector<uint8_t> compressed_blob(dims_out[0]);
+    if (!compressed_blob.empty()) {
+        dataset.read(compressed_blob.data(), H5::PredType::NATIVE_UINT8);
+    }
+
+    // 2. Read attributes
+    int width, height, bits;
+    float min_val, max_val;
+    H5::Attribute attr_width = dataset.openAttribute("original_width");
+    attr_width.read(H5::PredType::NATIVE_INT, &width);
+    H5::Attribute attr_height = dataset.openAttribute("original_height");
+    attr_height.read(H5::PredType::NATIVE_INT, &height);
+    H5::Attribute attr_bits = dataset.openAttribute("discretization_bits");
+    attr_bits.read(H5::PredType::NATIVE_INT, &bits);
+    H5::Attribute attr_min = dataset.openAttribute("min_value");
+    attr_min.read(H5::PredType::NATIVE_FLOAT, &min_val);
+    H5::Attribute attr_max = dataset.openAttribute("max_value");
+    attr_max.read(H5::PredType::NATIVE_FLOAT, &max_val);
+
+    // 3. Decompress
+    std::vector<uint16_t> discretized_data;
+    int decomp_w, decomp_h, decomp_bits;
+    bool success = decompress_grayscale_jp2(compressed_blob, discretized_data, decomp_w, decomp_h, decomp_bits);
+
+    if (!success) {
+        throw std::runtime_error("load_compressed_float_array_hdf5: Decompression failed for " + dataset_name);
+    }
+    // Optional: Check if decomp_w/h match attributes width/height
+    if (decomp_w != width || decomp_h != height) {
+        throw std::runtime_error("load_compressed_float_array_hdf5: Dimension mismatch for " + dataset_name);
+    }
+    // Optional: Check decomp_bits vs bits (though 'bits' from attribute is more reliable for restoration)
+
+    // 4. Restore float values
+    restore_from_discretized(discretized_data, data_vec, min_val, max_val, bits);
+
+    // Ensure final size matches dimensions read from attributes
+    // (Should already be correct if decompression worked, but good check)
+    data_vec.resize(static_cast<size_t>(width) * height);
+}
+
+
+void icy::SnapshotManager::load_compressed_rgb_array_hdf5(H5::H5File &file, const std::string& dataset_name,
+                                                          std::vector<uint8_t>& rgb_data) const
+{
+    // 1. Open dataset and read compressed blob
+    H5::DataSet dataset = file.openDataSet(dataset_name);
+    H5::DataSpace filespace = dataset.getSpace();
+    hsize_t dims_out[1];
+    filespace.getSimpleExtentDims(dims_out, nullptr);
+    std::vector<uint8_t> compressed_blob(dims_out[0]);
+    if (!compressed_blob.empty()) {
+        dataset.read(compressed_blob.data(), H5::PredType::NATIVE_UINT8);
+    }
+
+    // 2. Read attributes (optional if relying solely on JP2 header)
+    int width, height;
+    H5::Attribute attr_width = dataset.openAttribute("original_width");
+    attr_width.read(H5::PredType::NATIVE_INT, &width);
+    H5::Attribute attr_height = dataset.openAttribute("original_height");
+    attr_height.read(H5::PredType::NATIVE_INT, &height);
+
+    // 3. Decompress
+    int decomp_w, decomp_h;
+    bool success = decompress_rgb_jp2(compressed_blob, rgb_data, decomp_w, decomp_h);
+
+    if (!success) {
+        throw std::runtime_error("load_compressed_rgb_array_hdf5: Decompression failed for " + dataset_name);
+    }
+    // Optional: Check if decomp_w/h match attributes width/height
+    if (decomp_w != width || decomp_h != height) {
+        throw std::runtime_error("load_compressed_rgb_array_hdf5: Dimension mismatch for " + dataset_name);
+    }
+
+    // Ensure final size matches dimensions read from attributes
+    rgb_data.resize(static_cast<size_t>(width) * height * 3);
+}
+
+
+bool icy::SnapshotManager::LoadFrameCompressed(const std::string& fileNameSnapshotHDF5, int& outSimulationStep, double& outSimulationTime)
+{
+    LOGR("SnapshotManager::LoadFrameCompressed from: {}", fileNameSnapshotHDF5);
+
+    // H5::H5File uses RAII
+    H5::H5File file(fileNameSnapshotHDF5, H5F_ACC_RDONLY);
+
+    // Assume model->prms is valid for expected dimensions later if needed,
+    // but width/height are read from attributes here.
+
+    // Load float arrays - relies on exceptions for missing datasets
+//    load_compressed_float_array_hdf5(file, "vis_point_density", vis_point_density);
+//    load_compressed_float_array_hdf5(file, "vis_mass", vis_mass);
+    load_compressed_float_array_hdf5(file, "vis_Jpinv", vis_Jpinv);
+    load_compressed_float_array_hdf5(file, "vis_P", vis_P);
+    load_compressed_float_array_hdf5(file, "vis_Q", vis_Q);
+    load_compressed_float_array_hdf5(file, "vis_vx", vis_vx);
+    load_compressed_float_array_hdf5(file, "vis_vy", vis_vy);
+
+    // Load RGB image data - relies on exception if "rgb" dataset missing
+    load_compressed_rgb_array_hdf5(file, "rgb", rgb);
+
+    // Load simulation step and time from attributes on "vis_mass" dataset
+    // Relies on exception if dataset or attributes are missing
+    H5::DataSet vis_mass_dataset = file.openDataSet("vis_Jpinv");
+
+    H5::Attribute attr_step = vis_mass_dataset.openAttribute("SimulationStep");
+    attr_step.read(H5::PredType::NATIVE_INT, &outSimulationStep);
+
+    H5::Attribute attr_time = vis_mass_dataset.openAttribute("SimulationTime");
+    attr_time.read(H5::PredType::NATIVE_DOUBLE, &outSimulationTime);
+
+
+    // load mask
+    H5::DataSet ds_mass_mask = file.openDataSet("mass_mask");
+    H5::DataSpace filespace_mask = ds_mass_mask.getSpace();
+
+    hsize_t dims_mask_read[2]; // Assuming rank 2
+    filespace_mask.getSimpleExtentDims(dims_mask_read, nullptr);
+
+    // Resize the member vector mass_mask
+    // dims_mask_read[0] corresponds to grid_h, dims_mask_read[1] to grid_w
+    mass_mask.resize(dims_mask_read[0] * dims_mask_read[1]);
+
+    ds_mass_mask.read(mass_mask.data(), H5::PredType::NATIVE_UINT8);
+
+    LOGR("Successfully loaded compressed frame. Step: {}, Time: {}", outSimulationStep, outSimulationTime);
+    return true; // Return true if no exceptions were thrown
+}

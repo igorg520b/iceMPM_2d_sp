@@ -69,10 +69,6 @@ void VTKVisualization::ChangeVisualizationOption(int option)
     {
         actor_text_title->SetInput("Rel.surf.dens.");
     }
-    else if(option == VisOpt::wind_norm)
-    {
-        actor_text_title->SetInput("Wind speed");
-    }
     else if(option == VisOpt::ridges)
     {
         actor_text_title->SetInput("Ridges");
@@ -108,7 +104,7 @@ void VTKVisualization::SynchronizeValues()
     // modify the image
 
 
-    double range = std::pow(10,ranges[(int)VisualizingVariable]);
+    const double range = std::pow(10,ranges[(int)VisualizingVariable]);
     LOGR("VTKVisualization::SynchronizeValues(), grid [{} x {}], h {}; VV {}; range {:>6.2}", width, height, h,
         VisualizingVariable, range);
 
@@ -120,63 +116,109 @@ void VTKVisualization::SynchronizeValues()
             if(status == 1000)
             {
                 size_t idx2 = j + i*gy;
-                uint8_t count = frameData.count[idx2];
                 std::array<uint8_t, 3> _rgb;
-                for(int k=0;k<3;k++) _rgb[k] = frameData.rgb[idx2*3+k];
+                for(int k=0;k<3;k++) _rgb[k] = frameData.snapshot.rgb[idx2*3+k];
 
-                if(VisualizingVariable == Jp_inv && count > 0)
-                {
-                    float Jp_inv = frameData.vis_Jpinv[idx2];
-                    const float val = (Jp_inv-1.)/range + 0.5;
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, val);
 
-                    float coeff2 = std::clamp(std::abs(Jp_inv-1)/range, 0., 1.);
-                    if(Jp_inv>1.) coeff2 = std::clamp(std::abs(Jp_inv-1)*0.5/range, 0., 1.);
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
+                if(VisualizingVariable == Jp_inv)
+                {
+                    // visualize Jpinv from the prepared grid / visual array
+                    size_t idx2 = j + i*gy;
 
-                    for(int k=0;k<3;k++) renderedImage[((i+ox)+(j+oy)*width)*3+k] = c2[k];
+                    std::array<uint8_t, 3> _rgb;
+                    _rgb[0] = frameData.snapshot.rgb[idx2*3+0];
+                    _rgb[1] = frameData.snapshot.rgb[idx2*3+1];
+                    _rgb[2] = frameData.snapshot.rgb[idx2*3+2];
+
+                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
+                    std::array<uint8_t, 3> c = ColorMap::mergeColors(ColorMap::rgb_water, _rgb, alpha);
+
+                    float val = frameData.snapshot.vis_Jpinv[idx2];
+                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::Pressure, 0.5*val/range + 0.5);
+
+                    const float mix_original_color = std::abs(val/range*alpha);
+
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(c, c1, mix_original_color);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c2[k];
                 }
-                if(VisualizingVariable == ridges && count > 0)
+                if(VisualizingVariable == ridges)
                 {
-                    float Jp_inv = frameData.vis_Jpinv[idx2];
-                    const float val = (Jp_inv-1.)/range;
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Ridges, val);
-                    float coeff2 = val > 0 ? 1 : 0;
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, coeff2);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox)+(j+oy)*width)*3+k] = c2[k];
+                    // visualize Jpinv from the prepared grid / visual array
+                    size_t idx2 = j + i*gy;
+
+                    std::array<uint8_t, 3> _rgb;
+                    _rgb[0] = frameData.snapshot.rgb[idx2*3+0];
+                    _rgb[1] = frameData.snapshot.rgb[idx2*3+1];
+                    _rgb[2] = frameData.snapshot.rgb[idx2*3+2];
+
+                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
+                    std::array<uint8_t, 3> c = ColorMap::mergeColors(ColorMap::rgb_water, _rgb, alpha);
+
+                    float val = frameData.snapshot.vis_Jpinv[idx2];
+                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::Ridges, val/range);
+
+                    const float mix_original_color = val > 0 ? alpha * val/range : 0;
+
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(c, c1, mix_original_color);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c2[k];
                 }
-                else if(VisualizingVariable == P && count > 0)
+
+                else if(VisualizingVariable == P)
                 {
-                    float P = frameData.vis_P[idx2];
-                    const float val0 = std::clamp(P/range, -1., 1.);
-                    const float val = val0*0.5 + 0.5;
-                    float visibility_coeff = std::abs(val0);
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, val);
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, visibility_coeff);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox)+(j+oy)*width)*3+k] = c2[k];
+                    size_t idx2 = j + i*gy;
+                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
+                    float val = frameData.snapshot.vis_P[idx2];
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, 0.5*val/range+0.5);
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(ColorMap::rgb_water, c, alpha);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c2[k];
                 }
-                else if(VisualizingVariable == Q && count > 0)
+
+                else if(VisualizingVariable == Q)
                 {
-                    float Q = frameData.vis_Q[idx2];
-                    const float val = std::clamp(Q/range, 0., 1.);
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, val);
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, val);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox)+(j+oy)*width)*3+k] = c2[k];
+                    size_t idx2 = j + i*gy;
+                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
+                    float val = frameData.snapshot.vis_Q[idx2];
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, val/range);
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(ColorMap::rgb_water, c, alpha);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c2[k];
                 }
-                else if(VisualizingVariable == colors && count > 0)
+
+                else if(VisualizingVariable == grid_vnorm)
                 {
-                    for(int k=0;k<3;k++) renderedImage[((i+ox)+(j+oy)*width)*3+k] = frameData.rgb[idx2*3+k];
+                    // visualize Jpinv from the prepared grid / visual array
+                    size_t idx2 = j + i*gy;
+                    float val_x = frameData.snapshot.vis_vx[idx2];
+                    float val_y = frameData.snapshot.vis_vy[idx2];
+                    float vnorm = std::sqrt(val_x*val_x + val_y*val_y);
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, vnorm/range);
+
+                    std::array<uint8_t, 3> _rgb;
+                    _rgb[0] = frameData.snapshot.rgb[idx2*3+0];
+                    _rgb[1] = frameData.snapshot.rgb[idx2*3+1];
+                    _rgb[2] = frameData.snapshot.rgb[idx2*3+2];
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, vnorm/range);
+
+                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
+                    std::array<uint8_t, 3> c3 = ColorMap::mergeColors(ColorMap::rgb_water, c2, alpha);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c3[k];
                 }
+
+                else if(VisualizingVariable == colors)
+                {
+                    // visualize Jpinv from the prepared grid / visual array
+                    size_t idx2 = j + i*gy;
+
+                    std::array<uint8_t, 3> _rgb;
+                    _rgb[0] = frameData.snapshot.rgb[idx2*3+0];
+                    _rgb[1] = frameData.snapshot.rgb[idx2*3+1];
+                    _rgb[2] = frameData.snapshot.rgb[idx2*3+2];
+
+                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
+                    std::array<uint8_t, 3> c = ColorMap::mergeColors(ColorMap::rgb_water, _rgb, alpha);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
+              }
             }
         }
-
-//    for(size_t i=0;i<width;i++)
-//        for(size_t j=0;j<height;j++)
-//        {
-//            renderedImage[(i+j*width)*3+0] = 255;
- //           renderedImage[(i+j*width)*3+1] = 0;
- //           renderedImage[(i+j*width)*3+2] = 0;
- //       }
 
 
 

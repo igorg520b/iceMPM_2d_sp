@@ -19,7 +19,6 @@
 #include <filesystem>
 
 #include "parameters_sim.h"
-#include "point.h"
 #include "gpu_implementation5.h"
 #include "windandcurrentinterpolator.h"
 #include "snapshotmanager.h"

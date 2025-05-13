@@ -6,7 +6,6 @@
 #include <cuda_runtime.h>
 
 #include "parameters_sim.h"
-#include "point.h"
 
 
 

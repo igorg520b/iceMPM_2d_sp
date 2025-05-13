@@ -58,7 +58,7 @@ public:
 
     double wind_visualization_time;
 
-    enum VisOpt { none, count, colors, Jp_inv, P, Q, wind_u, wind_v, wind_norm, ridges};
+    enum VisOpt { none, density, colors, Jp_inv, P, Q, grid_vnorm, ridges};
     Q_ENUM(VisOpt)
     VisOpt VisualizingVariable = VisOpt::none;
     double ranges[30] = {};

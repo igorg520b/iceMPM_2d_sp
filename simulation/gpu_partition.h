@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "parameters_sim.h"
-#include "point.h"
 #include "host_side_soa.h"
 #include "windandcurrentinterpolator.h"
 

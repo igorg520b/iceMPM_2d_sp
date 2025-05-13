@@ -147,7 +147,9 @@ void icy::Model::SaveThread() {
                 if (prms.SimulationTime >= prms.SimulationEndTime) saveSnapshot = true;
                 accessing_point_data.lock();
                 if(saveSnapshot) snapshot.SaveSnapshot(saving_SimulationStep, saving_SimulationTime);
+                snapshot.SaveFrameCompressed(saving_SimulationStep, saving_SimulationTime);
                 snapshot.SaveFrame(saving_SimulationStep, saving_SimulationTime);
+
                 accessing_point_data.unlock();
 
                 saving_SimulationStep = -1;

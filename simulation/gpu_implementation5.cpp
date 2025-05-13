@@ -1,6 +1,5 @@
 #include "gpu_implementation5.h"
 #include "parameters_sim.h"
-#include "point.h"
 #include "model.h"
 
 #include <iostream>

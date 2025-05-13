@@ -21,6 +21,8 @@
 #include <vtkOpenGLRenderWindow.h>
 #include <vtkCamera.h>
 
+#include "snapshotmanager.h"
+
 
 
 struct FrameData
@@ -29,11 +31,8 @@ struct FrameData
 
     GeneralGridData &ggd;
     VTKVisualization representation;
+    icy::SnapshotManager snapshot;
     double SimulationTime;
-
-    std::vector<uint8_t> count;
-    std::vector<float> vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
-    std::vector<uint8_t> rgb;
 
     void LoadHDF5Frame(int frameNumber);
 
