@@ -59,11 +59,11 @@ void VTKVisualization::ChangeVisualizationOption(int option)
     VisualizingVariable = (VisOpt)option;
     if(option == VisOpt::P)
     {
-        actor_text_title->SetInput("Hydrostatic pressure");
+        actor_text_title->SetInput("Pressure");
     }
     else if(option == VisOpt::Q)
     {
-        actor_text_title->SetInput("Deviatoric stress");
+        actor_text_title->SetInput("Dev. stress");
     }
     else if(option == VisOpt::Jp_inv)
     {
@@ -72,6 +72,10 @@ void VTKVisualization::ChangeVisualizationOption(int option)
     else if(option == VisOpt::ridges)
     {
         actor_text_title->SetInput("Ridges");
+    }
+    else if(option == VisOpt::grid_vnorm)
+    {
+        actor_text_title->SetInput("Vel.mag.");
     }
     else
     {
@@ -282,9 +286,15 @@ void VTKVisualization::SynchronizeValues()
     }
     else if(VisualizingVariable == Q)
     {
-        lut_Pressure->SetTableRange(0, range);
+        lut_ANSYS->SetTableRange(0, range);
         scalarBar->SetLookupTable(lut_ANSYS);
         scalarBar->SetLabelFormat("%.1e");
+    }
+    else if(VisualizingVariable == grid_vnorm)
+    {
+        lut_ANSYS->SetTableRange(0, range);
+        scalarBar->SetLookupTable(lut_ANSYS);
+        scalarBar->SetLabelFormat("%.2f");
     }
     else
     {

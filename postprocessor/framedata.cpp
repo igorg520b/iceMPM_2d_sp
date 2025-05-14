@@ -56,45 +56,12 @@ void FrameData::LoadHDF5Frame(int frameNumber)
 {
     this->frame = frameNumber;
     //f00001.h5
-    std::string fileName = fmt::format(fmt::runtime("{}/f{:05d}.h5"), ggd.frameDirectory, frame);
+    std::string fileName = fmt::format(fmt::runtime("f{:05d}.h5"), frame);
 
-    snapshot.LoadFrameCompressed(fileName, SimulationStep, SimulationTime);
+    fs::path outputDir = ggd.frameDirectory;
+    fs::path fullPath = outputDir / fileName;
 
-
-    /*
-    size_t gridSize = ggd.prms.GridXTotal*ggd.prms.GridYTotal;
-    count.resize(gridSize);
-    vis_vx.resize(gridSize);
-    vis_vy.resize(gridSize);
-    vis_Jpinv.resize(gridSize);
-    vis_P.resize(gridSize);
-    vis_Q.resize(gridSize);
-    rgb.resize(gridSize*3);
-
-    LOGR("FrameData::LoadHDF5Frame {}",fileName);
-    H5::H5File file(fileName, H5F_ACC_RDONLY);
-
-    H5::DataSet ds_count = file.openDataSet("count");
-    ds_count.openAttribute("SimulationStep").read(H5::PredType::NATIVE_INT, &SimulationStep);
-    ds_count.openAttribute("SimulationTime").read(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
-
-    hsize_t dims[2];
-    ds_count.getSpace().getSimpleExtentDims(dims, nullptr);
-    if(dims[0] != ggd.prms.GridXTotal || dims[1] != ggd.prms.GridYTotal)
-        throw std::runtime_error("LoadHDF5Frame frame grid size mismatch");
-    ds_count.read(count.data(), H5::PredType::NATIVE_UINT8);
-
-    file.openDataSet("vis_vx").read(vis_vx.data(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("vis_vy").read(vis_vy.data(), H5::PredType::NATIVE_FLOAT);
-
-    file.openDataSet("vis_Jpinv").read(vis_Jpinv.data(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("vis_P").read(vis_P.data(), H5::PredType::NATIVE_FLOAT);
-    file.openDataSet("vis_Q").read(vis_Q.data(), H5::PredType::NATIVE_FLOAT);
-
-    file.openDataSet("rgb").read(rgb.data(), H5::PredType::NATIVE_UINT8);
-    file.close();
-    LOGR("FrameData::LoadHDF5Frame (done): {}", frameNumber);
-*/
+    snapshot.LoadFrameCompressed(fullPath.string(), SimulationStep, SimulationTime);
 }
 
 
@@ -114,6 +81,8 @@ void FrameData::RenderFrame(VTKVisualization::VisOpt visopt)
     else if(visopt == VTKVisualization::VisOpt::P) imageDir = "P";
     else if(visopt == VTKVisualization::VisOpt::Q) imageDir = "Q";
     else if(visopt == VTKVisualization::VisOpt::ridges) imageDir = "Ridges";
+    else if(visopt == VTKVisualization::VisOpt::grid_vnorm) imageDir = "velocity";
+
 
     fs::path targetPath = outputDir / imageDir;
     fs::create_directories(targetPath);

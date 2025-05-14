@@ -283,6 +283,7 @@ void icy::SnapshotManager::SplitIntoPartitionsAndTransferToDevice()
 {
     // particle volume and mass
     model->prms.ComputeHelperVariables();
+    model->prms.Printout();
 
     // allocate GPU partitions
     model->gpu.initialize();
@@ -1113,7 +1114,7 @@ void icy::SnapshotManager::save_compressed_float_array_hdf5(H5::H5File &file, co
     attr_max.write(H5::PredType::NATIVE_FLOAT, &max_val);
 
     // Attributes are now written. No need to close them individually unless reusing the variable name.
-    LOGR("dataset {}: {}", dataset_name, compressed_blob.size());
+    //LOGR("dataset {}: {}", dataset_name, compressed_blob.size());
 }
 
 
@@ -1150,7 +1151,7 @@ void icy::SnapshotManager::save_compressed_rgb_array_hdf5(H5::H5File &file, cons
     // Attribute: original_height
     H5::Attribute attr_height = dataset.createAttribute("original_height", H5::PredType::NATIVE_INT, att_space);
     attr_height.write(H5::PredType::NATIVE_INT, &height);
-    LOGR("dataset {}: {}", dataset_name, compressed_blob.size());
+    //LOGR("dataset {}: {}", dataset_name, compressed_blob.size());
 }
 
 
@@ -1215,7 +1216,7 @@ void icy::SnapshotManager::SaveFrameCompressed(int SimulationStep, double Simula
     ds_mass_mask.write(mass_mask.data(), H5::PredType::NATIVE_UINT8);
 
 
-    LOGR("Successfully saved compressed frame: {}", fullPath.string());
+    //LOGR("Successfully saved compressed frame: {}", fullPath.string());
 }
 
 

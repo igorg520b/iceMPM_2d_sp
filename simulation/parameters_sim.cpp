@@ -15,12 +15,14 @@ void SimParams::Reset()
 
     nPtsInitial = 0;
     windDragCoeff_airDensity = 0.0025 * 1.2;
-//    currentDragCoeff_waterDensity = 0.0025 * 1025;
-    currentDragCoeff_waterDensity = 0.15 * 1025;
+
+    waterDragEffectiveLinear = 0.01;
+    waterDragEffectiveQuadratic = 0.01;
 
     InitialTimeStep = 3.e-5;
     YoungsModulus = 5.e8;
     ParticleViewSize = 2.5f;
+    sea_water_density = 1030;
 
     SimulationEndTime = 20000;
     AnimationFramePeriod = 200;
@@ -101,6 +103,9 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("DP_phi")) DP_phi = doc["DP_phi"].GetDouble();
     if(doc.HasMember("DP_threshold_p")) DP_threshold_p = doc["DP_threshold_p"].GetDouble();
     if(doc.HasMember("RidgeFormationCoeff")) RidgeFormationCoeff = doc["RidgeFormationCoeff"].GetDouble();
+
+    if(doc.HasMember("waterDragEffectiveLinear")) waterDragEffectiveLinear = doc["waterDragEffectiveLinear"].GetDouble();
+    if(doc.HasMember("waterDragEffectiveQuadratic")) waterDragEffectiveQuadratic = doc["waterDragEffectiveQuadratic"].GetDouble();
 
     if(doc.HasMember("tpb_P2G")) tpb_P2G = doc["tpb_P2G"].GetInt();
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();

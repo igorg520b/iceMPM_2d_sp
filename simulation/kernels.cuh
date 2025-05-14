@@ -142,64 +142,25 @@ __global__ void partition_kernel_update_nodes(const t_PointReal simulation_time)
         t_GridReal vcx = partition_buffer_grid[SimParams::grid_idx_current_vx*partition_pitch_grid + idx];
         t_GridReal vcy = partition_buffer_grid[SimParams::grid_idx_current_vy*partition_pitch_grid + idx];
 
-        GridVector2r wvel(vcx, vcy);
-        wvel *= (1+min(simulation_time/(3600*10), 3.));
+        GridVector2r v_w(vcx, vcy);
+        v_w *= (1+min(simulation_time/(3600*2), 2.));
+        const double &h = gprms.cellsize;                       // cell size
+        const double &rho_w = gprms.sea_water_density;     // water density
+        const double &dt = gprms.InitialTimeStep;               // time step
 
-//        wvel.x() = 0.1;
-//        wvel.y() = -0.3;
+        const double kL = gprms.waterDragEffectiveLinear * gprms.InitialTimeStep; // linear param
+        const double kQp = gprms.waterDragEffectiveQuadratic * gprms.InitialTimeStep; // quadratic
 
-        // quadratic term
-/*
-        GridVector2r vrel = wvel - velocity;
-        const t_GridReal Density_coeff_A = gprms.currentDragCoeff_waterDensity * hsq;
-        t_GridReal dragForce = vrel.squaredNorm() * Density_coeff_A;
-        vrel.normalize();
-//        vrel *= dragForce * dt / mass;
-        vrel *= dragForce * dt;
+        GridVector2r U_rel = (v_w - velocity);  // relative velocity
+        const double U_rel_mag = U_rel.norm();  // magnitude
 
-        const double vmax2 = vmax*0.01;
-        if(vrel.norm() > vmax2) vrel = vrel.normalized()*vmax2;
-
-        velocity += vrel;
-*/
-
-        // linear term
-//        const double coeff = 0.005;
-        const double coeff = 0.010;
-        velocity = (1-coeff)*velocity + coeff*wvel;
-
-        /*
-        GridVector2r wvel2 = wvel-velocity;
-        wvel2 = wvel2 * wvel2.norm();
-        const double coeff2 = 0.01;
-        velocity += coeff2*wvel2;
-
-        GridVector2r wvel3 = (wvel-velocity)*1000*hsq*dt/mass;
-        //wvel3 = wvel3 * wvel3.norm();
-        if(wvel3.norm() > vmax*0.1) wvel3 = wvel3.normalized()*vmax*0.1;
-        const double coeff3 = 0.01;
-        velocity += coeff3*wvel3;
-*/
+        double k = kL + kQp*U_rel_mag;
+        k = min(k, 0.1);   // k cannot exceed 0.1
 
 
-        //interpolation_coeff_w
-
-//        float lat = gprms.LatMin + (gprms.LatMax-gprms.LatMin)*(float)gi.y()/(float)gprms.GridY;
-//        float lon = gprms.LonMin + (gprms.LonMax-gprms.LonMin)*(float)gi.x()/(float)gprms.GridXTotal;
-//        vWind = get_wind_vector(lat, lon, interpolation_coeff);
+        velocity += k*U_rel;
 
 
-/*
-        // wind drag
-        //t_GridReal hsq = gprms.cellsize * gprms.cellsize;
-        vWind *= 10 * wvel.norm();
-        vrel = vWind - velocity;
-        const t_GridReal airDensity_coeff_A = gprms.windDragCoeff_airDensity * hsq;
-        dragForce = vrel.squaredNorm() * airDensity_coeff_A;
-        vrel.normalize();
-        vrel *= dragForce * dt / mass;
-        velocity = (1-coeff2)*velocity + coeff2*(velocity+vrel);
-*/
 
     }
 

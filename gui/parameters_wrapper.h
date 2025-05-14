@@ -63,12 +63,6 @@ public:
     double getKappa() {return prms->kappa;}
 
 
-    Q_PROPERTY(double p_cdcoeff READ getcurrentDragCoeff_waterDensity NOTIFY propertyChanged)
-    double getcurrentDragCoeff_waterDensity() {return prms->currentDragCoeff_waterDensity;}
-
-
-
-
     // ice block
     Q_PROPERTY(int b_PtInitial READ getPointCountActual NOTIFY propertyChanged)
     int getPointCountActual() {return prms->nPtsInitial;}

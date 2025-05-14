@@ -295,7 +295,8 @@ void PPMainWindow::render_all_triggered()
         VTKVisualization::VisOpt::colors,
         VTKVisualization::VisOpt::P,
         VTKVisualization::VisOpt::Q,
-        VTKVisualization::VisOpt::ridges
+        VTKVisualization::VisOpt::ridges,
+        VTKVisualization::VisOpt::grid_vnorm
     };
 
     if (visOptsToRender.empty()) {
@@ -395,8 +396,9 @@ void PPMainWindow::generate_ffmpeg_script()
     std::string cmd_Jp_inv = fmt::format(fmt::runtime(fmtStr), fps, R"(Jpinv/%05d.jpg)", frames, R"(Jp_inv.mp4)");
     std::string cmd_colors = fmt::format(fmt::runtime(fmtStr), fps, R"(colors/%05d.jpg)", frames, R"(colors.mp4)");
     std::string cmd_Ridges = fmt::format(fmt::runtime(fmtStr), fps, R"(Ridges/%05d.jpg)", frames, R"(Ridges.mp4)");
+    std::string cmd_vel = fmt::format(fmt::runtime(fmtStr), fps, R"(velocity/%05d.jpg)", frames, R"(velocity.mp4)");
 
-    scriptFile << cmd_P << '\n' << cmd_Q << '\n' << cmd_Jp_inv << '\n' << cmd_colors << '\n' << cmd_Ridges;
+    scriptFile << cmd_P << '\n' << cmd_Q << '\n' << cmd_Jp_inv << '\n' << cmd_colors << '\n' << cmd_Ridges << '\n' << cmd_vel;
     scriptFile.close();
     int result = std::system(("chmod +x " + filename).c_str());
 

@@ -92,8 +92,10 @@ public:
 
     // wind and/or current data
     double windDragCoeff_airDensity;
-    double currentDragCoeff_waterDensity;
     bool UseWindData, UseCurrentData;
+    double sea_water_density;
+    double waterDragEffectiveLinear, waterDragEffectiveQuadratic;
+
 
     // material properties
     double IceDensity, PoissonsRatio, YoungsModulus;
@@ -102,6 +104,7 @@ public:
     double RidgeFormationCoeff;
     double cellsize;
     double ParticleVolume, ParticleViewSize;
+
 
     // computed parameters/properties
     double dt_vol_Dpinv, vmax;
