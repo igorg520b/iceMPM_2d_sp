@@ -1,3 +1,5 @@
+// generalgriddata.h
+
 #ifndef GENERALGRIDDATA_H
 #define GENERALGRIDDATA_H
 

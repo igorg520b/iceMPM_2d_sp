@@ -1,3 +1,5 @@
+// snapshotmanager.h
+
 #ifndef SNAPSHOTMANAGER_H
 #define SNAPSHOTMANAGER_H
 
@@ -6,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <filesystem>
+#include <thread>
 
 #include <H5Cpp.h>
 #include <Eigen/Core>
@@ -21,9 +24,16 @@ namespace icy {class SnapshotManager; class Model;}
 class icy::SnapshotManager
 {
 public:
+    SnapshotManager();
+    SnapshotManager(const icy::SnapshotManager &other) {};
+    ~SnapshotManager();
+
     icy::Model *model;
     std::string SimulationTitle;
-
+    int SimulationStep;    // only used when reading frame from file
+    double SimulationTime; // only used when reading frame from file
+    int FrameNumber = -1;       // used when loading frame
+    std::atomic<bool> data_ready_flag_;
 
     void PrepareGrid(std::string fileNamePNG, std::string fileNameModelledAreaHDF5);
     void PopulatePoints(std::string fileNameModelledAreaHDF5, bool onlyGenerateCache);
@@ -34,7 +44,8 @@ public:
 
     void SaveFrame(int SimulationStep, double SimulationTime);
     void SaveFrameCompressed(int SimulationStep, double SimulationTime);
-    bool LoadFrameCompressed(const std::string&fileNameSnapshotHDF5, int& outSimulationStep, double& outSimulationTime);
+    bool LoadFrameCompressed(const std::string&fileNameSnapshotHDF5);
+    void StartLoadFrameCompressedAsync(std::filesystem::path outputDir, int frameIndex);
 
 //    void LoadWindData(std::string fileName);    // netCDF4 data
 //    void ReadSnapshot(std::string fileName);    // custom HDF5 file
@@ -46,6 +57,7 @@ public:
 
 
 private:
+    std::thread decoding_thread_;   // for StartLoadFrameCompressedAsync
 
     ColorMap colormap;
     std::vector<uint8_t> count;   // used for counting points per cell and image generation

@@ -1,3 +1,5 @@
+// pp_mainwindow.h
+
 #ifndef PPMAINWINDOW_H
 #define PPMAINWINDOW_H
 

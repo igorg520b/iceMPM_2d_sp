@@ -1,3 +1,5 @@
+// framedata.h
+
 #ifndef FRAMEDATA_H
 #define FRAMEDATA_H
 
@@ -27,23 +29,24 @@
 
 struct FrameData
 {
-    FrameData(GeneralGridData &ggd_);
+    FrameData(GeneralGridData &ggd_, int prefetch_buffer_size_);
 
     GeneralGridData &ggd;
     VTKVisualization representation;
-    icy::SnapshotManager snapshot;
-    double SimulationTime;
-
-    void LoadHDF5Frame(int frameNumber);
 
     void SetUpOffscreenRender(const FrameData &guiFD, vtkCamera* sourceGuiCamera);
     void RenderFrame(VTKVisualization::VisOpt visopt);
+    void UpdateQueue(int frameNumber, int frameTo);
+
+    double getSimulationTime() {return frontSnapShot().SimulationTime;};
+    icy::SnapshotManager& frontSnapShot() {return snapshot_pool[circular_buffer_top];}; // for rendering
 
     vtkNew<vtkRenderer> renderer;
-    int frame = 0;
-private:
-    int SimulationStep;
 
+private:
+    const int PREFETCH_BUFFER_SIZE;
+    int circular_buffer_top;    // which snapshot is the front of the queue
+    std::vector<icy::SnapshotManager> snapshot_pool;
 
     // offscreenrender
     vtkNew<vtkRenderWindow> offscreenRenderWindow;

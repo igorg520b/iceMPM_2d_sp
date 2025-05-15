@@ -1,3 +1,5 @@
+// generalgriddata.cpp
+
 #include "generalgriddata.h"
 
 #include <map>

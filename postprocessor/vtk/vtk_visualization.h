@@ -1,3 +1,5 @@
+// vtk_visualization.h
+
 #ifndef VTKVISUALIZATION_H
 #define VTKVISUALIZATION_H
 

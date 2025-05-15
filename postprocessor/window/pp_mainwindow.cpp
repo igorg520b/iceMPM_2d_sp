@@ -1,3 +1,5 @@
+// pp_mainwindow.cpp
+
 #include <QFileDialog>
 #include <QList>
 #include <QPointF>
@@ -20,7 +22,7 @@
 PPMainWindow::~PPMainWindow() {delete ui;}
 
 PPMainWindow::PPMainWindow(QWidget *parent)
-    : QMainWindow(parent), frameData(ggd)
+    : QMainWindow(parent), frameData(ggd,1)
     , ui(new Ui::PPMainWindow)
 {
     ui->setupUi(this);
@@ -234,7 +236,7 @@ void PPMainWindow::LoadFramesDirectory(QString framesDirectory)
     qsbFrameFrom->setMaximum(ggd.countFrames-1);
     qsbFrameFrom->setValue(1);
 
-    frameData.LoadHDF5Frame(1);
+    frameData.UpdateQueue(1, ggd.countFrames-1);
     frameData.representation.SynchronizeValues();
     renderWindow->Render();
 
@@ -244,7 +246,7 @@ void PPMainWindow::LoadFramesDirectory(QString framesDirectory)
 void PPMainWindow::sliderValueChanged(int val)
 {
     qDebug() << "slider set to " << val;
-    frameData.LoadHDF5Frame(val);
+    frameData.UpdateQueue(val, ggd.countFrames-1);
     frameData.representation.SynchronizeValues();
     renderWindow->Render();
 }
@@ -265,12 +267,12 @@ void PPMainWindow::render_frame_triggered()
     qDebug() << "render_frame_triggered() " << selectedFrame;
 
 
-    FrameData fd(ggd);
+    FrameData fd(ggd,1);
 
     vtkCamera *cam = renderer->GetActiveCamera();
 
     fd.SetUpOffscreenRender(this->frameData, cam);
-    fd.LoadHDF5Frame(selectedFrame);
+    fd.UpdateQueue(selectedFrame, ggd.countFrames-1);
     fd.RenderFrame(frameData.representation.VisualizingVariable);
 
 }
@@ -305,7 +307,8 @@ void PPMainWindow::render_all_triggered()
         return;
     }
 
-    FrameData fd(ggd);
+    const int prefetch_buffer_size = 4;
+    FrameData fd(ggd,prefetch_buffer_size);
     vtkCamera* currentGuiCamera = this->renderer->GetActiveCamera();
     fd.SetUpOffscreenRender(this->frameData, currentGuiCamera); // Sets up canonical camera for fd.renderer
 
@@ -333,7 +336,7 @@ void PPMainWindow::render_all_triggered()
         QCoreApplication::processEvents();
 
         qDebug() << "--- Loading HDF5 data for frame:" << frameNum << "---";
-        fd.LoadHDF5Frame(frameNum); // Load frame data ONCE per frame
+        fd.UpdateQueue(frameNum, frameTo); // Load frame data ONCE per frame
 
         // Inner loop: Iterate through visualization options for the current frame
         for (VTKVisualization::VisOpt currentVisOpt : visOptsToRender) {

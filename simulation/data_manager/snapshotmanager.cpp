@@ -1,3 +1,5 @@
+// snapshotmanager.cpp
+
 #include "snapshotmanager.h"
 #include "model.h"
 #include "poisson_disk_sampling.h"
@@ -36,6 +38,18 @@
 #include "stb_image_write.h"
 
 namespace fs = std::filesystem;
+
+
+icy::SnapshotManager::SnapshotManager()
+{
+    data_ready_flag_.store(false);
+}
+
+icy::SnapshotManager::~SnapshotManager()
+{
+    if (decoding_thread_.joinable()) decoding_thread_.join();
+}
+
 
 
 void icy::SnapshotManager::PrepareGrid(std::string fileNamePNG, std::string fileNameModelledArea)
@@ -1542,19 +1556,39 @@ void icy::SnapshotManager::load_compressed_rgb_array_hdf5(H5::H5File &file, cons
 }
 
 
-bool icy::SnapshotManager::LoadFrameCompressed(const std::string& fileNameSnapshotHDF5, int& outSimulationStep, double& outSimulationTime)
+
+void icy::SnapshotManager::StartLoadFrameCompressedAsync(std::filesystem::path outputDir, int frame)
+{
+    this->FrameNumber = frame;
+    std::string fileName = fmt::format(fmt::runtime("f{:05d}.h5"), frame);
+
+    fs::path fullPath = outputDir / fileName;
+    std::string fileNameSnapshotHDF5 = fullPath.string();
+
+    // 1. Ensure any previous decoding thread is finished before starting a new one.
+    if (decoding_thread_.joinable()) decoding_thread_.join();
+
+    // 2. Reset the ready flag. The operation is not yet complete.
+    //    memory_order_relaxed is fine for setting, as the acquire barrier will be on read.
+    data_ready_flag_.store(false, std::memory_order_relaxed);
+
+    // 3. Launch the new decoding thread.
+    decoding_thread_ = std::thread([this, fileNameSnapshotHDF5]() {
+        bool success = this->LoadFrameCompressed(fileNameSnapshotHDF5);
+        this->data_ready_flag_.store(true, std::memory_order_release);
+        this->data_ready_flag_.notify_one(); // Add for good measure
+    });
+}
+
+
+bool icy::SnapshotManager::LoadFrameCompressed(const std::string& fileNameSnapshotHDF5)
 {
     LOGR("SnapshotManager::LoadFrameCompressed from: {}", fileNameSnapshotHDF5);
 
     // H5::H5File uses RAII
     H5::H5File file(fileNameSnapshotHDF5, H5F_ACC_RDONLY);
 
-    // Assume model->prms is valid for expected dimensions later if needed,
-    // but width/height are read from attributes here.
-
     // Load float arrays - relies on exceptions for missing datasets
-//    load_compressed_float_array_hdf5(file, "vis_point_density", vis_point_density);
-//    load_compressed_float_array_hdf5(file, "vis_mass", vis_mass);
     load_compressed_float_array_hdf5(file, "vis_Jpinv", vis_Jpinv);
     load_compressed_float_array_hdf5(file, "vis_P", vis_P);
     load_compressed_float_array_hdf5(file, "vis_Q", vis_Q);
@@ -1569,11 +1603,10 @@ bool icy::SnapshotManager::LoadFrameCompressed(const std::string& fileNameSnapsh
     H5::DataSet vis_mass_dataset = file.openDataSet("vis_Jpinv");
 
     H5::Attribute attr_step = vis_mass_dataset.openAttribute("SimulationStep");
-    attr_step.read(H5::PredType::NATIVE_INT, &outSimulationStep);
+    attr_step.read(H5::PredType::NATIVE_INT, &SimulationStep);
 
     H5::Attribute attr_time = vis_mass_dataset.openAttribute("SimulationTime");
-    attr_time.read(H5::PredType::NATIVE_DOUBLE, &outSimulationTime);
-
+    attr_time.read(H5::PredType::NATIVE_DOUBLE, &SimulationTime);
 
     // load mask
     H5::DataSet ds_mass_mask = file.openDataSet("mass_mask");
@@ -1588,6 +1621,6 @@ bool icy::SnapshotManager::LoadFrameCompressed(const std::string& fileNameSnapsh
 
     ds_mass_mask.read(mass_mask.data(), H5::PredType::NATIVE_UINT8);
 
-    LOGR("Successfully loaded compressed frame. Step: {}, Time: {}", outSimulationStep, outSimulationTime);
+    LOGR("Successfully loaded compressed frame. Step: {}, Time: {}, frame {}", SimulationStep, SimulationTime, FrameNumber);
     return true; // Return true if no exceptions were thrown
 }

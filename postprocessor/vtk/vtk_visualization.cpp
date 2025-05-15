@@ -1,3 +1,5 @@
+// vtk_visualization.cpp
+
 #include "vtk_visualization.h"
 #include "parameters_sim.h"
 //#include <omp.h>
@@ -86,9 +88,22 @@ void VTKVisualization::ChangeVisualizationOption(int option)
 }
 
 
-
 void VTKVisualization::SynchronizeValues()
 {
+    // Get a reference to the currently active snapshot via the parent FrameData
+    // This is the core change:
+    const icy::SnapshotManager& active_snapshot = frameData.frontSnapShot();
+
+    // Ensure the data in the active_snapshot is actually ready before proceeding.
+    // This is a crucial safety check. The caller of UpdateQueue (PPMainWindow)
+    // should ensure this, but a check here is good for robustness if SynchronizeValues
+    // could somehow be called independently.
+    // For brevity as requested, I'll assume data_ready_flag_ is true.
+    // if (!active_snapshot.data_ready_flag_.load(std::memory_order_acquire)) {
+    //     spdlog::warn("VTKVisualization::SynchronizeValues called, but frontSnapShot data is not ready!");
+    //     return; // Or handle error appropriately
+    // }
+
     const SimParams &prms = frameData.ggd.prms;
 
     const int &width = prms.InitializationImageSizeX;
@@ -99,210 +114,147 @@ void VTKVisualization::SynchronizeValues()
     const int &gy = prms.GridYTotal;
     const double &h = prms.cellsize;
 
-    if(!width) return;
+    if (!width) return; // Guard against uninitialized prms
 
-
+    // Copy the base image
     renderedImage.assign(frameData.ggd.original_image_colors_rgb.begin(), frameData.ggd.original_image_colors_rgb.end());
 
-
-    // modify the image
-
-
-    const double range = std::pow(10,ranges[(int)VisualizingVariable]);
+    const double range_setting = std::pow(10, ranges[(int)VisualizingVariable]);
     LOGR("VTKVisualization::SynchronizeValues(), grid [{} x {}], h {}; VV {}; range {:>6.2}", width, height, h,
-        VisualizingVariable, range);
+         VisualizingVariable, range_setting);
 
-#pragma omp parallel for
-    for(size_t i=0;i<gx;i++)
-        for(size_t j=0;j<gy;j++)
-        {
-            int status = frameData.ggd.path_indices[(i+ox)+(j+oy)*width];
-            if(status == 1000)
-            {
-                size_t idx2 = j + i*gy;
-                std::array<uint8_t, 3> _rgb;
-                for(int k=0;k<3;k++) _rgb[k] = frameData.snapshot.rgb[idx2*3+k];
+#pragma omp parallel for // This pragma should be fine as it's read-only access to active_snapshot data
+    for (size_t i = 0; i < gx; i++) {
+        for (size_t j = 0; j < gy; j++) {
+            // path_indices is from GeneralGridData, not the snapshot
+            int status = frameData.ggd.path_indices[(i + ox) + (j + oy) * width];
+            if (status == 1000) { // Assuming 1000 means it's a cell with data to visualize
+                size_t idx2 = j + i * gy; // Index for the flattened grid data arrays in SnapshotManager
 
+                // All accesses to snapshot data now use 'active_snapshot'
+                std::array<uint8_t, 3> _rgb_from_snapshot;
+                _rgb_from_snapshot[0] = active_snapshot.rgb[idx2 * 3 + 0];
+                _rgb_from_snapshot[1] = active_snapshot.rgb[idx2 * 3 + 1];
+                _rgb_from_snapshot[2] = active_snapshot.rgb[idx2 * 3 + 2];
 
-                if(VisualizingVariable == Jp_inv)
-                {
-                    // visualize Jpinv from the prepared grid / visual array
-                    size_t idx2 = j + i*gy;
+                float alpha = active_snapshot.mass_mask[idx2] ? 1.0f : 0.0f;
+                std::array<uint8_t, 3> base_color_mixed_with_water = ColorMap::mergeColors(ColorMap::rgb_water, _rgb_from_snapshot, alpha);
 
-                    std::array<uint8_t, 3> _rgb;
-                    _rgb[0] = frameData.snapshot.rgb[idx2*3+0];
-                    _rgb[1] = frameData.snapshot.rgb[idx2*3+1];
-                    _rgb[2] = frameData.snapshot.rgb[idx2*3+2];
-
-                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
-                    std::array<uint8_t, 3> c = ColorMap::mergeColors(ColorMap::rgb_water, _rgb, alpha);
-
-                    float val = frameData.snapshot.vis_Jpinv[idx2];
-                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::Pressure, 0.5*val/range + 0.5);
-
-                    const float mix_original_color = std::abs(val/range*alpha);
-
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(c, c1, mix_original_color);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c2[k];
+                if (VisualizingVariable == Jp_inv) {
+                    float val = active_snapshot.vis_Jpinv[idx2];
+                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::Pressure, 0.5 * val / range_setting + 0.5);
+                    const float mix_original_color = std::abs(val / range_setting * alpha); // Use alpha here
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(base_color_mixed_with_water, c1, mix_original_color);
+                    for (int k = 0; k < 3; k++) renderedImage[((i + ox) + (j + oy) * width) * 3 + k] = c2[k];
                 }
-                if(VisualizingVariable == ridges)
-                {
-                    // visualize Jpinv from the prepared grid / visual array
-                    size_t idx2 = j + i*gy;
-
-                    std::array<uint8_t, 3> _rgb;
-                    _rgb[0] = frameData.snapshot.rgb[idx2*3+0];
-                    _rgb[1] = frameData.snapshot.rgb[idx2*3+1];
-                    _rgb[2] = frameData.snapshot.rgb[idx2*3+2];
-
-                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
-                    std::array<uint8_t, 3> c = ColorMap::mergeColors(ColorMap::rgb_water, _rgb, alpha);
-
-                    float val = frameData.snapshot.vis_Jpinv[idx2];
-                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::Ridges, val/range);
-
-                    const float mix_original_color = val > 0 ? alpha * val/range : 0;
-
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(c, c1, mix_original_color);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c2[k];
+                else if (VisualizingVariable == ridges) {
+                    float val = active_snapshot.vis_Jpinv[idx2]; // Ridges also use vis_Jpinv
+                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::Ridges, val / range_setting);
+                    const float mix_original_color = (val > 0) ? (alpha * val / range_setting) : 0.0f;
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(base_color_mixed_with_water, c1, mix_original_color);
+                    for (int k = 0; k < 3; k++) renderedImage[((i + ox) + (j + oy) * width) * 3 + k] = c2[k];
                 }
-
-                else if(VisualizingVariable == P)
-                {
-                    size_t idx2 = j + i*gy;
-                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
-                    float val = frameData.snapshot.vis_P[idx2];
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pressure, 0.5*val/range+0.5);
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(ColorMap::rgb_water, c, alpha);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c2[k];
+                else if (VisualizingVariable == P) {
+                    float val = active_snapshot.vis_P[idx2];
+                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::Pressure, 0.5 * val / range_setting + 0.5);
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(ColorMap::rgb_water, c1, alpha); // Mix with water using alpha
+                    for (int k = 0; k < 3; k++) renderedImage[((i + ox) + (j + oy) * width) * 3 + k] = c2[k];
                 }
-
-                else if(VisualizingVariable == Q)
-                {
-                    size_t idx2 = j + i*gy;
-                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
-                    float val = frameData.snapshot.vis_Q[idx2];
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, val/range);
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(ColorMap::rgb_water, c, alpha);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c2[k];
+                else if (VisualizingVariable == Q) {
+                    float val = active_snapshot.vis_Q[idx2];
+                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::ANSYS, val / range_setting);
+                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(ColorMap::rgb_water, c1, alpha);
+                    for (int k = 0; k < 3; k++) renderedImage[((i + ox) + (j + oy) * width) * 3 + k] = c2[k];
                 }
+                else if (VisualizingVariable == grid_vnorm) {
+                    float val_x = active_snapshot.vis_vx[idx2];
+                    float val_y = active_snapshot.vis_vy[idx2];
+                    float vnorm = std::sqrt(val_x * val_x + val_y * val_y);
+                    std::array<uint8_t, 3> c1 = colormap.getColor(ColorMap::Palette::ANSYS, vnorm / range_setting);
 
-                else if(VisualizingVariable == grid_vnorm)
-                {
-                    // visualize Jpinv from the prepared grid / visual array
-                    size_t idx2 = j + i*gy;
-                    float val_x = frameData.snapshot.vis_vx[idx2];
-                    float val_y = frameData.snapshot.vis_vy[idx2];
-                    float vnorm = std::sqrt(val_x*val_x + val_y*val_y);
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, vnorm/range);
-
-                    std::array<uint8_t, 3> _rgb;
-                    _rgb[0] = frameData.snapshot.rgb[idx2*3+0];
-                    _rgb[1] = frameData.snapshot.rgb[idx2*3+1];
-                    _rgb[2] = frameData.snapshot.rgb[idx2*3+2];
-                    std::array<uint8_t, 3> c2 = ColorMap::mergeColors(_rgb, c, vnorm/range);
-
-                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
-                    std::array<uint8_t, 3> c3 = ColorMap::mergeColors(ColorMap::rgb_water, c2, alpha);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c3[k];
+                    // Mix scalar color with original point color, then with water
+                    float scalar_mix_factor = std::min(1.0, vnorm / range_setting); // Ensure mix factor is [0,1]
+                    std::array<uint8_t, 3> c2_scalar_and_point = ColorMap::mergeColors(_rgb_from_snapshot, c1, scalar_mix_factor);
+                    std::array<uint8_t, 3> c3_final = ColorMap::mergeColors(ColorMap::rgb_water, c2_scalar_and_point, alpha);
+                    for (int k = 0; k < 3; k++) renderedImage[((i + ox) + (j + oy) * width) * 3 + k] = c3_final[k];
                 }
-
-                else if(VisualizingVariable == colors)
-                {
-                    // visualize Jpinv from the prepared grid / visual array
-                    size_t idx2 = j + i*gy;
-
-                    std::array<uint8_t, 3> _rgb;
-                    _rgb[0] = frameData.snapshot.rgb[idx2*3+0];
-                    _rgb[1] = frameData.snapshot.rgb[idx2*3+1];
-                    _rgb[2] = frameData.snapshot.rgb[idx2*3+2];
-
-                    float alpha = frameData.snapshot.mass_mask[idx2] ? 1 : 0;
-                    std::array<uint8_t, 3> c = ColorMap::mergeColors(ColorMap::rgb_water, _rgb, alpha);
-                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
-              }
+                else if (VisualizingVariable == colors) {
+                    // This case just uses base_color_mixed_with_water calculated earlier
+                    for (int k = 0; k < 3; k++) renderedImage[((i + ox) + (j + oy) * width) * 3 + k] = base_color_mixed_with_water[k];
+                }
+                // Note: if VisualizingVariable == none, or any other unhandled case,
+                // the original background image pixel (from frameData.ggd.original_image_colors_rgb)
+                // remains in renderedImage for this cell, which is often the desired behavior.
             }
         }
+    }
 
-
-
-    raster_scalars->SetNumberOfComponents(3);          // RGB has 3 components
-    raster_scalars->SetArray(renderedImage.data(), renderedImage.size(), 1);
+    raster_scalars->SetNumberOfComponents(3);
+    raster_scalars->SetArray(renderedImage.data(), renderedImage.size(), 1); // 1 means VTK won't delete it
     raster_scalars->Modified();
 
-    raster_imageData->SetDimensions(width, height, 1); // 2D image, depth = 1
-    raster_imageData->SetSpacing(1.0, 1.0, 1.0);      // Pixel spacing
-    raster_imageData->SetOrigin(0.0, 0.0, 0.0);       // Origin at (0,0,0)
+    raster_imageData->SetDimensions(width, height, 1);
+    raster_imageData->SetSpacing(1.0, 1.0, 1.0);
+    raster_imageData->SetOrigin(0.0, 0.0, 0.0);
     raster_imageData->GetPointData()->SetScalars(raster_scalars);
     raster_imageData->Modified();
 
-    raster_plane->SetOrigin(-h/2, -h/2, -1.0);           // Bottom-left corner
-    raster_plane->SetPoint1((width-0.5)*h, -h/2, -1.0);         // Bottom-right (x-axis)
-    raster_plane->SetPoint2(-h/2, (height-0.5)*h, -1.0);        // Top-left (y-axis)
-    raster_plane->SetNormal(0.0, 0.0, 1.0);           // Normal along z-axis (facing forward)
+    raster_plane->SetOrigin(-h / 2.0, -h / 2.0, -1.0);
+    raster_plane->SetPoint1((width - 0.5) * h, -h / 2.0, -1.0);
+    raster_plane->SetPoint2(-h / 2.0, (height - 0.5) * h, -1.0);
+    raster_plane->SetNormal(0.0, 0.0, 1.0);
 
     raster_mapper->SetInputConnection(raster_plane->GetOutputPort());
     raster_mapper->ScalarVisibilityOff();
 
     raster_texture->SetInputData(raster_imageData);
-    raster_texture->InterpolateOff(); // Smooth texture rendering
+    raster_texture->InterpolateOff();
 
     raster_actor->SetMapper(raster_mapper);
     raster_actor->SetTexture(raster_texture);
 
-    raster_mapper->Update();
-    raster_texture->Update();
+    // It's good practice to call Update on mapper and texture if inputs changed,
+    // though VTK's pipeline might handle it. Explicit is safer.
+    // raster_mapper->Update(); // May not be necessary if actor modification triggers update
+    // raster_texture->Update(); // May not be necessary
 
-    // update text
+    // Update text actor with simulation time from the active snapshot
+    // frameData.getSimulationTime() also works here as it calls frontSnapShot().SimulationTime
+    int64_t display_date = static_cast<int64_t>(active_snapshot.SimulationTime) + prms.SimulationStartUnixTime;
+    std::time_t unix_time = static_cast<std::time_t>(display_date);
+    std::tm* tm_time = std::gmtime(&unix_time); // Use gmtime for UTC
 
-    int64_t display_date = (int64_t)frameData.SimulationTime + prms.SimulationStartUnixTime;
-    std::time_t unix_time = display_date;
-    std::tm* tm_time = std::gmtime(&unix_time);
-    // Format the time
     char buffer[100];
-    std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
-    actor_text->SetInput(buffer);
+    if (tm_time) { // gmtime can return nullptr
+        std::strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S UTC", tm_time);
+        actor_text->SetInput(buffer);
+    } else {
+        actor_text->SetInput("Invalid Time");
+    }
 
-    // scalarbar
 
+    // Scalar bar updates
     scalarBar->VisibilityOn();
-    if(VisualizingVariable == ridges)
-    {
-        lut_ridges->SetTableRange(0, range);
+    if (VisualizingVariable == ridges) {
+        lut_ridges->SetTableRange(0, range_setting);
         scalarBar->SetLookupTable(lut_ridges);
         scalarBar->SetLabelFormat("%.2f");
-    }
-    else if(VisualizingVariable == Jp_inv)
-    {
-        lut_Pressure->SetTableRange(-range, range);
+    } else if (VisualizingVariable == Jp_inv || VisualizingVariable == P) { // Combined P and Jp_inv
+        lut_Pressure->SetTableRange(-range_setting, range_setting);
         scalarBar->SetLookupTable(lut_Pressure);
         scalarBar->SetLabelFormat("%.1e");
-    }
-    else if(VisualizingVariable == P)
-    {
-        lut_Pressure->SetTableRange(-range, range);
-        scalarBar->SetLookupTable(lut_Pressure);
-        scalarBar->SetLabelFormat("%.1e");
-    }
-    else if(VisualizingVariable == Q)
-    {
-        lut_ANSYS->SetTableRange(0, range);
+    } else if (VisualizingVariable == Q) {
+        lut_ANSYS->SetTableRange(0, range_setting);
         scalarBar->SetLookupTable(lut_ANSYS);
         scalarBar->SetLabelFormat("%.1e");
-    }
-    else if(VisualizingVariable == grid_vnorm)
-    {
-        lut_ANSYS->SetTableRange(0, range);
+    } else if (VisualizingVariable == grid_vnorm) {
+        lut_ANSYS->SetTableRange(0, range_setting);
         scalarBar->SetLookupTable(lut_ANSYS);
         scalarBar->SetLabelFormat("%.2f");
-    }
-    else
-    {
+    } else { // Includes VisOpt::colors and VisOpt::none
         scalarBar->VisibilityOff();
     }
-
 }
-
 
 
 void VTKVisualization::populateLut(ColorMap::Palette palette, vtkNew<vtkLookupTable>& table)

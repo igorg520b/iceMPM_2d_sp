@@ -1,3 +1,5 @@
+// framedata.cpp
+
 #include "framedata.h"
 #include <fmt/format.h>
 #include <fmt/std.h>
@@ -8,14 +10,46 @@
 namespace fs = std::filesystem;
 
 
-FrameData::FrameData(GeneralGridData &ggd_) : ggd(ggd_), representation(*this)
+FrameData::FrameData(GeneralGridData &ggd_, int prefetch_buffer_size_) : ggd(ggd_),
+    representation(*this), PREFETCH_BUFFER_SIZE(prefetch_buffer_size_)
 {
     std::cout << "VTK Version (from macros):" << std::endl;
     std::cout << "  Full Version String (VTK_VERSION): " << VTK_VERSION << std::endl;
     std::cout << "  Major Version (VTK_MAJOR_VERSION): " << VTK_MAJOR_VERSION << std::endl;
     std::cout << "  Minor Version (VTK_MINOR_VERSION): " << VTK_MINOR_VERSION << std::endl;
     std::cout << "  Build Version (VTK_BUILD_VERSION): " << VTK_BUILD_VERSION << std::endl;
+    snapshot_pool.resize(PREFETCH_BUFFER_SIZE);
 }
+
+void FrameData::UpdateQueue(int frameNumber, int frameTo)
+{
+    circular_buffer_top++;
+    circular_buffer_top %= snapshot_pool.size();
+
+    // frameNumber must end up on "top" of the queue
+    if(this->frontSnapShot().FrameNumber != frameNumber)
+    {
+        circular_buffer_top = 0;
+        for(int i=0;i<snapshot_pool.size();i++)
+            if(i+frameNumber <= frameTo)
+            {
+                LOGR("invoking StartLoadFrameCompressedAsync; i {}; frame {}", i, i+frameNumber);
+                snapshot_pool[i].StartLoadFrameCompressedAsync(ggd.frameDirectory, i+frameNumber);
+            }
+    }
+    else
+    {
+        const int frame_to_load = frameNumber + PREFETCH_BUFFER_SIZE - 1;
+        if(frame_to_load <= frameTo)
+        {
+            int last_in_queue = (circular_buffer_top + PREFETCH_BUFFER_SIZE - 1) % snapshot_pool.size();
+            snapshot_pool[last_in_queue].StartLoadFrameCompressedAsync(ggd.frameDirectory, frame_to_load);
+        }
+    }
+    frontSnapShot().data_ready_flag_.wait(false); // wait until flag is set to true
+    LOGV("UpdateQueue done");
+}
+
 
 void FrameData::SetUpOffscreenRender(const FrameData &guiFD, vtkCamera* sourceGuiCamera)
 {
@@ -52,27 +86,13 @@ void FrameData::SetUpOffscreenRender(const FrameData &guiFD, vtkCamera* sourceGu
 }
 
 
-void FrameData::LoadHDF5Frame(int frameNumber)
-{
-    this->frame = frameNumber;
-    //f00001.h5
-    std::string fileName = fmt::format(fmt::runtime("f{:05d}.h5"), frame);
-
-    fs::path outputDir = ggd.frameDirectory;
-    fs::path fullPath = outputDir / fileName;
-
-    snapshot.LoadFrameCompressed(fullPath.string(), SimulationStep, SimulationTime);
-}
-
-
-
 void FrameData::RenderFrame(VTKVisualization::VisOpt visopt)
 {
     representation.ChangeVisualizationOption(visopt);
 
     offscreenRenderWindow->Render();
     windowToImageFilter->Modified(); // this is extra important
-    std::string renderFileName = fmt::format("{:05d}.jpg", frame);
+    std::string renderFileName = fmt::format("{:05d}.jpg", frontSnapShot().FrameNumber);
 
     fs::path outputDir = "output/raster";
     fs::path imageDir;
