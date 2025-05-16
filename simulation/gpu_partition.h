@@ -74,10 +74,11 @@ struct GPU_Partition
 
     void update_current_field(const WindAndCurrentInterpolator &wac);
 
-    void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset);
+    void transfer_from_device(HostSideSOA &hssoa, int point_idx_offset, std::vector<t_GridReal> &boundary_forces);
 
     // simulation cycle
     void reset_grid();
+    void clear_force_accumulator();
     void p2g();
     void update_nodes(float simulation_time, const GridVector2r vWind, const float interpolation_coeff);
     void g2p(const bool recordPQ, const bool enablePointTransfer, int applyGlensLaw);
@@ -94,6 +95,8 @@ struct GPU_Partition
 
     size_t nPts_partition;    // number of points including disabled
     size_t GridX_partition;   // size of the portion of the grid for which this partition is "responsible"
+    size_t GridX_offset;      // index where the grid starts in this partition
+
 
     // stream and events
     cudaStream_t streamCompute;

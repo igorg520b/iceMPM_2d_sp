@@ -10,7 +10,7 @@
 "SnapshotPeriod":30,
 
 "SimulationStartUnixTime":1717988400,
-"SimulationEndTime":200000,
+"SimulationEndTime":1200000,
 "AnimationFramePeriod":200,
 
 "InitialTimeStep":0.07,
@@ -25,7 +25,10 @@
 "IceShearStrength":2.5e6,
 "DP_phi":62,
 "DP_threshold_p":-1e4,
-"RidgeFormationCoeff":45,
+"RidgeFormationCoeff":0.5,
+
+"waterDragEffectiveLinear":0.00,
+"waterDragEffectiveQuadratic":0.20,
 
 "tpb_P2G":256,
 "tpb_Upd":512,

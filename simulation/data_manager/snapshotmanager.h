@@ -33,7 +33,7 @@ public:
     int SimulationStep;    // only used when reading frame from file
     double SimulationTime; // only used when reading frame from file
     int FrameNumber = -1;       // used when loading frame
-    std::atomic<bool> data_ready_flag_;
+    std::atomic<bool> data_ready_flag_; // for postprocessor
 
     void PrepareGrid(std::string fileNamePNG, std::string fileNameModelledAreaHDF5);
     void PopulatePoints(std::string fileNameModelledAreaHDF5, bool onlyGenerateCache);
@@ -54,6 +54,7 @@ public:
     std::vector<float> vis_r, vis_g, vis_b, vis_Jpinv, vis_P, vis_Q, vis_vx, vis_vy;
     static constexpr uint8_t waterColor[3] = {0x15, 0x1f, 0x2f};
     std::vector<uint8_t> rgb, mass_mask;
+    Eigen::Vector2f forces_per_region[SimParams::MAX_REGIONS];
 
 
 private:
@@ -76,7 +77,7 @@ private:
 
 
 
-    // Open JPEG
+    // Open JPEG - for saving raster data in compressed way
     const int DEFAULT_DISCRETIZATION_BITS = 12;
     const float DEFAULT_OPENJPEG_COMPRESSION_RATE = 15.f;
     const float DEFAULT_OPENJPEG_COMPRESSION_RATE_RGB = 15.f;

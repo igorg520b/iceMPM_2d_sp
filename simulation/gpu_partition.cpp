@@ -14,7 +14,7 @@ SimParams *GPU_Partition::prms;
 
 
 
-void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offset)
+void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offset, std::vector<t_GridReal> &boundary_forces)
 {
     cudaError_t err;
     err = cudaSetDevice(Device);
@@ -46,6 +46,16 @@ void GPU_Partition::transfer_from_device(HostSideSOA &hssoa, int point_idx_offse
     err = cudaMemcpyFromSymbolAsync(&disabled_points_count, gpu_disabled_points_count,
                                     sizeof(disabled_points_count), 0, cudaMemcpyDeviceToHost, streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("transfer_from_device; disabled_points_count");
+
+
+    // transfer grid data (accumulated forces)
+    const size_t bytes_to_transfer = prms->GridYTotal * GridX_partition * sizeof(t_GridReal);
+    for(int j=0;j<2;j++)
+    {
+        const t_GridReal *ptr_src = grid_array + nGridPitch*(SimParams::grid_idx_fx + j);
+        t_GridReal *ptr_dest = boundary_forces.data() + prms->GridYTotal*(j*prms->GridXTotal + GridX_offset);
+        err = cudaMemcpyAsync(ptr_dest, ptr_src, bytes_to_transfer, cudaMemcpyDeviceToHost, streamCompute);
+    }
 }
 
 
@@ -197,6 +207,8 @@ GPU_Partition::GPU_Partition()
     pts_array = nullptr;
     grid_array = nullptr;
     grid_status_array = nullptr;
+
+    GridX_offset = 0;
 }
 
 GPU_Partition::~GPU_Partition()
@@ -294,6 +306,18 @@ void GPU_Partition::reset_grid()
     err = cudaMemsetAsync(grid_array, 0, gridArraySize, streamCompute);
     if(err != cudaSuccess) throw std::runtime_error("cuda_reset_grid error");
 }
+
+void GPU_Partition::clear_force_accumulator()
+{
+    cudaError_t err = cudaSetDevice(Device);
+    if(err != cudaSuccess) throw std::runtime_error("GPU_Partition::clear_force_accumulator(): cudaSetDevice");
+
+    const size_t arrays_to_clear = 2;   // fx, fy
+    size_t bytes_to_clear = nGridPitch * arrays_to_clear * sizeof(t_GridReal);
+    err = cudaMemsetAsync(grid_array + nGridPitch*SimParams::grid_idx_fx, 0, bytes_to_clear, streamCompute);
+    if(err != cudaSuccess) throw std::runtime_error("clear_force_accumulator() cudaMemsetAsync");
+}
+
 
 void GPU_Partition::p2g()
 {

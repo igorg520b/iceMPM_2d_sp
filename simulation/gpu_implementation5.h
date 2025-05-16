@@ -31,7 +31,7 @@ public:
     std::vector<uint32_t> point_colors_rgb;     // rgb values of original point colors
     std::vector<uint8_t> grid_status_buffer;    // land (0), modeled area (>0)
     std::vector<uint8_t> original_image_colors_rgb;
-    std::vector<t_GridReal> grid_boundary_normals;
+    std::vector<t_GridReal> grid_boundary_normals, grid_boundary_forces;
 
 
     void allocate_host_arrays_grid();
@@ -46,12 +46,13 @@ public:
     void transfer_to_device();
     void transfer_wind_and_current_data_to_device();
 
-    void transfer_from_device();
+    void transfer_from_device(const int elapsed_cycles);
 
     void synchronize(); // call before terminating the main thread
     void update_constants();
     void reset_grid();
     void reset_timings();
+    void clear_force_accumulator();
 
     void p2g();
     void update_nodes(float simulation_time, float windSpeed, float windAngle);

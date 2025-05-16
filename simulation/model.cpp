@@ -6,15 +6,14 @@
 
 bool icy::Model::Step()
 {
-//    if(prms.SimulationStep == 0 && prms.SaveSnapshots) SaveFrameRequest(prms.SimulationStep, prms.SimulationTime);
-
     std::cout << '\n';
     LOGR("step {} ({}) started; sim_time {:>6.3}; host pts {}; cap {}",
                  prms.SimulationStep, prms.AnimationFrameNumber(), prms.SimulationTime, gpu.hssoa.size, gpu.hssoa.capacity);
 
-    int count_unupdated_steps = 0;
     gpu.reset_timings();
+    gpu.clear_force_accumulator();
     double simulation_time;
+    int count_unupdated_steps = 0;
 
     do
     {
@@ -42,7 +41,7 @@ bool icy::Model::Step()
     processing_current_cycle_data.lock();   // if locked, previous results are not yet processed by the host
     accessing_point_data.lock();
 
-    gpu.transfer_from_device();
+    gpu.transfer_from_device(count_unupdated_steps);
     snapshot.PrepareFrameArrays();
     prms.SimulationTime = simulation_time;
     prms.SimulationStep += count_unupdated_steps;
@@ -118,9 +117,9 @@ void icy::Model::SaveFrameRequest(int SimulationStep, double SimulationTime)
 icy::Model::~Model()
 {
     {
-    std::lock_guard<std::mutex> lock(frame_mutex);
-    done = true; // Signal that we're done
-    saving_SimulationStep = -1;
+        std::lock_guard<std::mutex> lock(frame_mutex);
+        done = true; // Signal that we're done
+        saving_SimulationStep = -1;
     }
     frame_cv.notify_one(); // Notify the saver thread
     saver_thread.join();   // Wait for the thread to finish
@@ -154,9 +153,7 @@ void icy::Model::SaveThread() {
 
                 saving_SimulationStep = -1;
             }
-
         }
-
     }
 }
 

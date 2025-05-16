@@ -127,18 +127,19 @@ __global__ void partition_kernel_update_nodes(const t_PointReal simulation_time)
     const Vector2i gi(idx/gridY, idx%gridY);   // integer x-y index of the grid node
     const GridVector2r gnpos = gi.cast<t_GridReal>()*cellsize;    // position of the grid node in the whole grid
 
-    GridVector2r velocity(vx, vy);
-    velocity /= mass;
+    GridVector2r momentum(vx, vy);  // at this point it is momentum
+    GridVector2r velocity = momentum/mass;
 
     uint8_t is_modeled_area = partition_grid_status[idx];
     if(is_modeled_area != 100)
     {
         velocity.setZero();
+        partition_buffer_grid[SimParams::grid_idx_fx*partition_pitch_grid + idx] += momentum[0];
+        partition_buffer_grid[SimParams::grid_idx_fy*partition_pitch_grid + idx] += momentum[1];
     }
     else
     {
         //grid_water_current
-
         t_GridReal vcx = partition_buffer_grid[SimParams::grid_idx_current_vx*partition_pitch_grid + idx];
         t_GridReal vcy = partition_buffer_grid[SimParams::grid_idx_current_vy*partition_pitch_grid + idx];
 
@@ -157,15 +158,11 @@ __global__ void partition_kernel_update_nodes(const t_PointReal simulation_time)
         double k = kL + kQp*U_rel_mag;
         k = min(k, 0.1);   // k cannot exceed 0.1
 
-
         velocity += k*U_rel;
-
-
-
     }
 
     // write the updated grid velocity back to memory
-    if(velocity.squaredNorm() > vmax*vmax*0.1*0.1) velocity.setZero();
+    if(velocity.squaredNorm() > vmax*vmax*0.1) velocity.setZero();
     partition_buffer_grid[SimParams::grid_idx_px*partition_pitch_grid + idx] = velocity[0];
     partition_buffer_grid[SimParams::grid_idx_py*partition_pitch_grid + idx] = velocity[1];
 
@@ -204,7 +201,6 @@ __global__ void partition_kernel_g2p(const bool recordPQ)
     }
     const t_PointReal initial_thickness = partition_buffer_pts[pt_idx + partition_pitch_pts*SimParams::idx_thickness];
     t_PointReal Jp_inv = partition_buffer_pts[pt_idx + partition_pitch_pts*SimParams::idx_Jp_inv];
-    t_PointReal qp = partition_buffer_pts[pt_idx + partition_pitch_pts*SimParams::idx_Qp];
 
     uint32_t cell = *reinterpret_cast<const uint32_t*>(&partition_buffer_pts[pt_idx + partition_pitch_pts*SimParams::integer_cell_idx]);
     // coords of grid node for point
@@ -293,7 +289,6 @@ __global__ void partition_kernel_g2p(const bool recordPQ)
     }
 
     partition_buffer_pts[pt_idx + partition_pitch_pts*SimParams::idx_Jp_inv] = Jp_inv;
-    partition_buffer_pts[pt_idx + partition_pitch_pts*SimParams::idx_Qp] = qp;
 
     // save crushed/disabled status
     *reinterpret_cast<uint32_t*>(&partition_buffer_pts[pt_idx + partition_pitch_pts*SimParams::idx_utility_data]) = utility_data;

@@ -17,16 +17,26 @@ using namespace Eigen;
 
 void GPU_Implementation5::reset_grid()
 {
-    cudaError_t err;
     for(GPU_Partition &p : partitions)
     {
-        err = cudaSetDevice(p.Device);
+        cudaError_t err = cudaSetDevice(p.Device);
         if(err != cudaSuccess) throw std::runtime_error("reset_grid set device");
         err = cudaEventRecord(p.event_10_cycle_start, p.streamCompute);
         if(err != cudaSuccess) throw std::runtime_error("reset_grid event");
         p.reset_grid();
     }
 }
+
+void GPU_Implementation5::clear_force_accumulator()
+{
+    for(GPU_Partition &p : partitions)
+    {
+        cudaError_t err = cudaSetDevice(p.Device);
+        if(err != cudaSuccess) throw std::runtime_error("reset_grid set device");
+        p.clear_force_accumulator();
+    }
+}
+
 
 void GPU_Implementation5::p2g()
 {
@@ -139,6 +149,7 @@ void GPU_Implementation5::allocate_host_arrays_grid()
     grid_status_buffer.resize(modeled_grid_total);
     grid_boundary_normals.resize(2*modeled_grid_total);
     original_image_colors_rgb.resize(3*initial_image_total);
+    grid_boundary_forces.resize(2*modeled_grid_total);
 
     LOGV("GPU_Implementation5::allocate_host_arrays_grid() completed");
 }
@@ -174,7 +185,7 @@ void GPU_Implementation5::transfer_to_device()
 
 
 
-void GPU_Implementation5::transfer_from_device()
+void GPU_Implementation5::transfer_from_device(const int elapsed_cycles)
 {
     unsigned offset_pts = 0;
     for(int i=0;i<partitions.size();i++)
@@ -187,8 +198,7 @@ void GPU_Implementation5::transfer_from_device()
                              hssoa.capacity, capacity_required, p.PartitionID);
             throw std::runtime_error("transfer_from_device capacity exceeded");
         }
-
-        p.transfer_from_device(hssoa, offset_pts);
+        p.transfer_from_device(hssoa, offset_pts, grid_boundary_forces);
         offset_pts += p.nPts_partition;
     }
     hssoa.size = offset_pts;
@@ -206,6 +216,9 @@ void GPU_Implementation5::transfer_from_device()
             LOGR("P {}; error code {}; this error code {}", p.PartitionID, p.error_code, this->error_code);
         }
     }
+#pragma omp parallel for
+    for(size_t i=0;i<grid_boundary_forces.size();i++)
+        grid_boundary_forces[i]/=(elapsed_cycles*model->prms.InitialTimeStep);
 
     if(transfer_completion_callback) transfer_completion_callback();
 }

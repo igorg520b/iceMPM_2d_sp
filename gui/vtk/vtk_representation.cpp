@@ -87,6 +87,9 @@ void icy::VisualRepresentation::SynchronizeTopology()
         for(size_t j=0;j<gy;j++)
         {
             uint8_t status = model->gpu.grid_status_buffer[j + i*gy];
+
+
+
             if(status == 100)
             {
                 if(VisualizingVariable == VisOpt::v_norm)
@@ -96,9 +99,8 @@ void icy::VisualRepresentation::SynchronizeTopology()
                     t_GridReal vx = model->wac_interpolator.current_flow_data[idx2];
                     t_GridReal vy = model->wac_interpolator.current_flow_data[idx2 + gx*gy];
                     float norm = sqrt(vx*vx + vy*vy);
-                    norm /= 0.3;
 
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, norm);
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, norm/range);
                     for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
                 }
                 else if(VisualizingVariable == VisOpt::v_u)
@@ -106,7 +108,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
                     // visualize current flow
                     size_t idx2 = j + i*gy;
                     t_GridReal vx = model->wac_interpolator.current_flow_data[idx2];
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, 0.5+vx/0.3);
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, 0.5+vx/range);
                     for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
                 }
                 else if(VisualizingVariable == VisOpt::v_v)
@@ -114,7 +116,7 @@ void icy::VisualRepresentation::SynchronizeTopology()
                     // visualize current flow
                     size_t idx2 = j + i*gy;
                     t_GridReal vy = model->wac_interpolator.current_flow_data[idx2 + gx*gy];
-                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, 0.5+vy/0.3);
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, 0.5+vy/range);
                     for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
                 }
 
@@ -225,6 +227,17 @@ void icy::VisualRepresentation::SynchronizeTopology()
                     uint8_t region_id = model->gpu.grid_status_buffer[idx2];
                     float val = (region_id % 13) / 12.;
                     std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::Pastel, val);
+                    for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
+                }
+
+                if(VisualizingVariable == VisOpt::grid_force)
+                {
+                    size_t idx2 = j + i*gy;
+                    t_GridReal fx = model->gpu.grid_boundary_forces[idx2];
+                    t_GridReal fy = model->gpu.grid_boundary_forces[idx2 + gx*gy];
+                    float norm = sqrt(fx*fx + fy*fy);
+
+                    std::array<uint8_t, 3> c = colormap.getColor(ColorMap::Palette::ANSYS, norm/range);
                     for(int k=0;k<3;k++) renderedImage[((i+ox) + (j+oy)*width)*3+k] = c[k];
                 }
             }

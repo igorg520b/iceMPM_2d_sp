@@ -246,7 +246,6 @@ void icy::SnapshotManager::PopulatePoints(std::string fileNameModelledAreaHDF5, 
         p.setValue(SimParams::idx_P, 0.f);
         p.setValue(SimParams::idx_Q, 0.f);
         p.setValue(SimParams::idx_Jp_inv, 1.f);
-        p.setValue(SimParams::idx_Qp, 1.f);
         for(int idx=0; idx<SimParams::dim; idx++)
         {
             p.setValue(SimParams::Fe00+idx*2+idx, 1.f);
@@ -749,6 +748,20 @@ void icy::SnapshotManager::PrepareFrameArrays()
         rgb[i*3+1] = alpha*(static_cast<uint8_t>(std::clamp(vis_g[i],0.f,255.f))) + (1-alpha)*ColorMap::rgb_water[1];
         rgb[i*3+2] = alpha*(static_cast<uint8_t>(std::clamp(vis_b[i],0.f,255.f))) + (1-alpha)*ColorMap::rgb_water[2];
     }
+
+
+    for(int i=0;i<SimParams::MAX_REGIONS;i++)
+        forces_per_region[i].setZero();
+
+    // forces per regions
+    for(int i=0;i<gridSize;i++)
+    {
+        uint8_t region = model->gpu.grid_status_buffer[i];
+        int idx = region >=100 ? (region-99) : region;
+        forces_per_region[idx].x() += model->gpu.grid_boundary_forces[i];
+        forces_per_region[idx].y() += model->gpu.grid_boundary_forces[i+gx*gy];
+    }
+
 }
 
 
@@ -1230,6 +1243,61 @@ void icy::SnapshotManager::SaveFrameCompressed(int SimulationStep, double Simula
     ds_mass_mask.write(mass_mask.data(), H5::PredType::NATIVE_UINT8);
 
 
+
+    // save forces
+    fs::path fullPathForces = targetPath / "forces.h5";
+    bool file_exists = std::filesystem::exists(fullPathForces);
+    H5::H5File file_forces(fullPathForces.string(), file_exists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
+    H5::DataSet ds_forces;
+    if(!file_exists)
+    {
+        hsize_t initial_dims[3] = {0, (hsize_t)SimParams::MAX_REGIONS, 2}; // Initially 0 frames
+        hsize_t max_dims[3] = {H5S_UNLIMITED, (hsize_t)SimParams::MAX_REGIONS, 2}; // Frames are unlimited
+        H5::DataSpace file_dataspace_for_creation(3, initial_dims, max_dims);
+
+        // Define dataset creation property list for chunking and compression.
+        H5::DSetCreatPropList dcpl;
+        // Chunk dimensions: Store one full frame slice per chunk for efficient access.
+        hsize_t chunk_dims[3] = {1, (hsize_t)SimParams::MAX_REGIONS, 2};
+        dcpl.setChunk(3, chunk_dims);
+        ds_forces = file_forces.createDataSet("ds_forces", H5::PredType::NATIVE_FLOAT, file_dataspace_for_creation, dcpl);
+
+        H5::DataSpace scalar_space(H5S_SCALAR);
+        H5::Attribute attr = ds_forces.createAttribute("cellsize", H5::PredType::NATIVE_DOUBLE, scalar_space);
+        attr.write(H5::PredType::NATIVE_DOUBLE, &model->prms.cellsize);
+    }
+    else
+    {
+        ds_forces = file_forces.openDataSet("ds_forces");
+    }
+
+    // 1. Get current dataspace and dimensions from the dataset
+    H5::DataSpace file_space = ds_forces.getSpace();
+    hsize_t current_dims_on_file[3];
+    file_space.getSimpleExtentDims(current_dims_on_file);
+
+    // 2. Determine if extension is needed for the current 'frame' (0-based index)
+    hsize_t required_frame_capacity = static_cast<hsize_t>(frame) + 1;
+    if (required_frame_capacity > current_dims_on_file[0]) {
+        hsize_t new_dims[3] = {required_frame_capacity,
+                               static_cast<hsize_t>(SimParams::MAX_REGIONS),
+                               2};
+        ds_forces.extend(new_dims);
+        file_space = ds_forces.getSpace(); // Refresh dataspace after extension
+    }
+
+    // 3. Define the hyperslab in the file for writing this frame's data
+    hsize_t offset[3] = {static_cast<hsize_t>(frame), 0, 0};
+    hsize_t slab_dims[3] = {1, static_cast<hsize_t>(SimParams::MAX_REGIONS), 2};
+    file_space.selectHyperslab(H5S_SELECT_SET, slab_dims, offset);
+
+    // 4. Define memory dataspace (matches the slab we're writing)
+    H5::DataSpace memory_space(3, slab_dims);
+
+    // 5. Write the data
+    // forces_per_region[0].data() gives a float* to the contiguous data of the Eigen::Vector2f array
+    ds_forces.write(forces_per_region[0].data(), H5::PredType::NATIVE_FLOAT,
+                    memory_space, file_space);
     //LOGR("Successfully saved compressed frame: {}", fullPath.string());
 }
 

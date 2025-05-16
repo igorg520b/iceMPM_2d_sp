@@ -307,7 +307,7 @@ void PPMainWindow::render_all_triggered()
         return;
     }
 
-    const int prefetch_buffer_size = 4;
+    const int prefetch_buffer_size = 3;
     FrameData fd(ggd,prefetch_buffer_size);
     vtkCamera* currentGuiCamera = this->renderer->GetActiveCamera();
     fd.SetUpOffscreenRender(this->frameData, currentGuiCamera); // Sets up canonical camera for fd.renderer

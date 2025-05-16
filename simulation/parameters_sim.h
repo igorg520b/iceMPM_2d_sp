@@ -43,6 +43,7 @@ public:
     constexpr static double g = 9.8;
 
     constexpr static int dim = 2;
+    constexpr static int MAX_REGIONS = 100;
 
     // layout of the grid arrays
     constexpr static size_t grid_idx_mass           = 0;
@@ -52,11 +53,13 @@ public:
     constexpr static size_t grid_idx_bc_normal_ny   = 4;
     constexpr static size_t grid_idx_current_vx     = 5;
     constexpr static size_t grid_idx_current_vy     = 6;
-    constexpr static size_t grid_idx_wind1_vx       = 7;
-    constexpr static size_t grid_idx_wind1_vy       = 8;
-    constexpr static size_t grid_idx_wind2_vx       = 9;
-    constexpr static size_t grid_idx_wind2_vy       = 10;
-    constexpr static size_t nGridArrays             = 11;
+    constexpr static size_t grid_idx_fx             = 7;
+    constexpr static size_t grid_idx_fy             = 8;
+    constexpr static size_t nGridArrays             = 9;
+//    constexpr static size_t grid_idx_wind1_vx       = 7;
+//    constexpr static size_t grid_idx_wind1_vy       = 8;
+//    constexpr static size_t grid_idx_wind2_vx       = 9;
+//    constexpr static size_t grid_idx_wind2_vy       = 10;
 
     // index of the corresponding array in SoA
     constexpr static size_t idx_utility_data = 0;
@@ -65,8 +68,7 @@ public:
     constexpr static size_t idx_P = integer_point_idx + 1;
     constexpr static size_t idx_Q = idx_P + 1;
     constexpr static size_t idx_Jp_inv = idx_Q + 1;
-    constexpr static size_t idx_Qp = idx_Jp_inv + 1;    // accumulated plastic shear
-    constexpr static size_t posx = idx_Qp + 1;
+    constexpr static size_t posx = idx_Jp_inv + 1;
     constexpr static size_t velx = posx + 2;
     constexpr static size_t Fe00 = velx + 2;
     constexpr static size_t Bp00 = Fe00 + 4;
