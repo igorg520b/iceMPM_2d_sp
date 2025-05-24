@@ -76,6 +76,7 @@ public:
     constexpr static size_t nPtsArrays = idx_thickness + 1;
 
     int tpb_P2G, tpb_Upd, tpb_G2P;  // threads per block for each operation
+    unsigned nPartitions;           // number of partitions split between GPU devices
 
     int nPtsInitial;
     int64_t SimulationStartUnixTime;

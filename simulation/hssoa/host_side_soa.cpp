@@ -62,6 +62,7 @@ void HostSideSOA::Allocate(int pts_capacity)
     {
         const char *description = cudaGetErrorString(err);
         LOGR("allocating host buffer of size {}: {}",allocation_size,description);
+        LOGR("nPtsArrays {}; sizeof(t_PointReal) {}", SimParams::nPtsArrays, sizeof(t_PointReal));
         throw std::runtime_error("allocating host buffer for points");
     }
     size = 0;

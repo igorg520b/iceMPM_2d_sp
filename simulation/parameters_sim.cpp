@@ -6,6 +6,7 @@
 
 void SimParams::Reset()
 {
+    nPartitions = 1;
     UseWindData = false;
     UseCurrentData = false;
     SimulationStartUnixTime = 0;
@@ -110,6 +111,9 @@ std::map<std::string,std::string> SimParams::ParseFile(std::string fileName)
     if(doc.HasMember("tpb_P2G")) tpb_P2G = doc["tpb_P2G"].GetInt();
     if(doc.HasMember("tpb_Upd")) tpb_Upd = doc["tpb_Upd"].GetInt();
     if(doc.HasMember("tpb_G2P")) tpb_G2P = doc["tpb_G2P"].GetInt();
+    if(doc.HasMember("nPartitions")) nPartitions = doc["nPartitions"].GetUint();
+
+
 
     spdlog::info("SimParams::ParseFile done");
     return result;

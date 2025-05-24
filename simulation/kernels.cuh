@@ -144,7 +144,14 @@ __global__ void partition_kernel_update_nodes(const t_PointReal simulation_time)
         t_GridReal vcy = partition_buffer_grid[SimParams::grid_idx_current_vy*partition_pitch_grid + idx];
 
         GridVector2r v_w(vcx, vcy);
-        v_w *= (1+min(simulation_time/(3600*2), 2.));
+        if(simulation_time < 300000)
+        {
+            v_w *= (1+min(simulation_time/(3600*2), 2.));
+        }
+        else
+        {
+            v_w *= (3+min((simulation_time-300000)/(3600*10), 2.));
+        }
         const double &h = gprms.cellsize;                       // cell size
         const double &rho_w = gprms.sea_water_density;     // water density
         const double &dt = gprms.InitialTimeStep;               // time step
