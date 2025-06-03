@@ -1,6 +1,12 @@
 #include "host_side_soa.h"
 
 
+HostSideSOA::~HostSideSOA()
+{
+    delete[] host_buffer;
+}
+
+
 std::pair<PointVector2r, PointVector2r> HostSideSOA::getBlockDimensions()
 {
     PointVector2r result[2];
@@ -15,19 +21,9 @@ std::pair<PointVector2r, PointVector2r> HostSideSOA::getBlockDimensions()
     return {result[0], result[1]};
 }
 
-void HostSideSOA::offsetBlock(PointVector2r offset)
-{
-    for(SOAIterator it = begin(); it!=end(); ++it)
-    {
-        ProxyPoint &p = *it;
-        PointVector2r pos = p.getPos() + offset;
-        p.setValue(SimParams::posx, pos.x());
-        p.setValue(SimParams::posx+1, pos.y());
-    }
-}
-
 void HostSideSOA::convertToIntegerCellFormat(t_PointReal h)
 {
+    LOGV("HostSideSOA::convertToIntegerCellFormat");
     for(SOAIterator it = begin(); it!=end(); ++it)
     {
         ProxyPoint &p = *it;
@@ -54,9 +50,16 @@ void HostSideSOA::RemoveDisabledAndSort(int GridY)
 void HostSideSOA::Allocate(int pts_capacity)
 {
     LOGR("HostSideSOA::Allocate; pts {}", pts_capacity);
-    cudaFreeHost(host_buffer);
-    this->capacity = pts_capacity;
+    capacity = pts_capacity;
+    size = 0;
     size_t allocation_size = sizeof(t_PointReal)*capacity*SimParams::nPtsArrays;
+    size_t allocation_elems = capacity*SimParams::nPtsArrays;
+
+    delete[] host_buffer;
+    host_buffer = new t_PointReal[allocation_elems];
+
+/*
+    cudaFreeHost(host_buffer);
     cudaError_t err = cudaMallocHost(&host_buffer, allocation_size);
     if(err != cudaSuccess)
     {
@@ -65,9 +68,9 @@ void HostSideSOA::Allocate(int pts_capacity)
         LOGR("nPtsArrays {}; sizeof(t_PointReal) {}", SimParams::nPtsArrays, sizeof(t_PointReal));
         throw std::runtime_error("allocating host buffer for points");
     }
-    size = 0;
-    memset(host_buffer, 0, allocation_size);
+*/
 
+    memset(host_buffer, 0, allocation_size);
     LOGR("HSSOA allocate capacity {} pt; toal {} Gb", capacity, (double)allocation_size/(1024.*1024.*1024.));
 }
 

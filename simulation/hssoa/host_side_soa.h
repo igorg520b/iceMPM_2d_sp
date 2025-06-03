@@ -51,6 +51,9 @@ public:
 class HostSideSOA
 {
 public:
+    HostSideSOA() = default;
+    ~HostSideSOA();
+
     t_PointReal *host_buffer = nullptr; // buffer in page-locked memory for transferring the data between device and host
     unsigned capacity;  // max number of points that the host-side buffer can hold
     unsigned size = 0;      // the number of points, including "disabled" ones, in the host buffer (may fluctuate)
@@ -61,12 +64,9 @@ public:
     void Allocate(int pts_capacity);
     void RemoveDisabledAndSort(int GridY);
 
-    t_PointReal* getPointerToPosX() {return host_buffer + capacity*SimParams::posx;}
-    t_PointReal* getPointerToPosY() {return host_buffer + capacity*(SimParams::posx+1);}
     t_PointReal* getPointerToLine(int idxLine) {return host_buffer + capacity*idxLine;}
 
     std::pair<PointVector2r, PointVector2r> getBlockDimensions();
-    void offsetBlock(PointVector2r offset);
     void convertToIntegerCellFormat(t_PointReal h);
 
     // debugging / testing

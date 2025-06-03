@@ -23,6 +23,9 @@ namespace icy { class Model; }
 class GPU_Implementation5
 {
 public:
+    GPU_Implementation5() = default;
+    ~GPU_Implementation5() = default;
+
     icy::Model *model;
     std::vector<GPU_Partition> partitions;
     HostSideSOA hssoa;  // mainly stores host-side points
